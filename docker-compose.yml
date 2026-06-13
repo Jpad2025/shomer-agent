@@ -1,0 +1,25 @@
+services:
+  shomer-agent:
+    build:
+      context: .
+      network: host
+    image: shomer-agent:latest
+    container_name: shomer-agent
+    restart: unless-stopped
+    network_mode: host          # acceso directo a la LAN del cliente
+    env_file: .env
+    volumes:
+      - ./core:/app/core        # código Python — cambios en disco sin rebuild
+      - ./data:/app/data        # devices.json persiste aquí
+      - ./data/agent_restart_key:/app/data/agent_restart_key:ro
+      - /storage/db:/storage/db:ro  # BDs Shomer (tracker, network_monitor) solo lectura
+      - /opt/network_monitor/SITE.md:/app/docs/SITE.md:ro
+      # ── Solo laboratorio (AGENT_TECHNICIAN_ONLY=0): docs developer USB ─────
+      # Descomenta si existen estos archivos en el host (Bogotá normalmente NO):
+      # - /opt/network_monitor/CLAUDE.md:/app/docs/developer/CLAUDE.md:ro
+      # - /opt/network_monitor/SISTEMA_SHOMER.md:/app/docs/developer/SISTEMA_SHOMER.md:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

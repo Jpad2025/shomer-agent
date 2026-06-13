@@ -1,0 +1,1873 @@
+"""
+Bot Telegram del Agente Shomer — reescritura limpia.
+- Formato HTML en todos los mensajes del bot.
+- Respuestas Groq en Markdown (Llama genera Markdown por defecto).
+- Sin duplicados: _estado_impl / _equipos_impl compartidos.
+- Bugs corregidos: msg_photo con try/except, cb_restaurar eliminado,
+  rate-limit aplica también cuando el bot está pausado.
+"""
+import os
+import random
+import logging
+import asyncio
+from functools import partial
+from datetime import datetime
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram.constants import ChatAction
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler,
+    CallbackQueryHandler, ContextTypes, filters,
+)
+
+from core.groq_helper import explain as _groq_explain, chat as _groq_chat
+from core import memory as _memory
+from core import maintenance as _mnt
+from core import device_manager as dm
+from core import shomer_api
+from core import monitor
+from core import access as acc
+from core import repair
+from core import changelog
+from core import backup_manager
+from core.identity import SITE_NAME
+from core import fmt
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+for _s in ("httpx", "httpcore", "httpcore.connection", "httpcore.http11"):
+    logging.getLogger(_s).setLevel(logging.WARNING)
+log = logging.getLogger("shomer-agent")
+
+TELEGRAM_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT   = os.environ.get("TELEGRAM_CHAT_ID", "")
+BOT_AUTO_REBOOT = os.environ.get("BOT_AUTO_REBOOT", "true").lower() != "false"
+LOGO_PATH       = "/app/data/shomer_logo.jpg"
+
+_GREETINGS = {
+    "hola", "holas", "buenos dias", "buenos días", "buen dia", "buen día",
+    "buenas tardes", "buenas noches", "buenas", "hey", "hi", "hello",
+    "saludos", "qué tal", "que tal", "ey", "cómo estás", "como estas",
+    "cómo van", "como van", "qué hay", "que hay",
+}
+
+_GREETING_RESPONSES = [
+    "👁️ <b>Shomer</b> — <code>{site}</code>\n📋 /instalar · ✔️ /verificar · 🏥 /salud\n<i>Escribí tu consulta en texto libre — el asistente usa datos reales del sistema.</i>",
+    "👁️ <b>Shomer campo activo</b> en <code>{site}</code>.\nInstalación: /instalar — chequeo: /verificar",
+    "👁️ Aquí Shomer para <code>{site}</code>.\n¿Problema puntual? Probá /salud o /diagnostico IP",
+    "👁️ Centinela activo en <code>{site}</code>. Comandos: /ayuda",
+]
+
+PM = "HTML"  # parse_mode global para mensajes del bot
+
+
+def _is_greeting(text: str) -> bool:
+    t = text.lower().strip().rstrip("!?. ")
+    return any(kw in t for kw in _GREETINGS) and len(t.split()) <= 5
+
+
+# ── Helpers internos ──────────────────────────────────────────────────────────
+
+async def _guard(update: Update) -> str | None:
+    """Retorna nivel ('developer'|'tecnico') o None si no autorizado."""
+    level = acc.get_level(update)
+    if level == "none":
+        log.warning("Mensaje ignorado de user=%s chat=%s",
+                    update.effective_user.id if update.effective_user else "?",
+                    update.effective_chat.id if update.effective_chat else "?")
+        msg = getattr(update, "message", None)
+        if msg:
+            try:
+                await msg.reply_text(
+                    "⛔ Chat no autorizado para este bot.\n"
+                    "Verifica que <code>TELEGRAM_CHAT_ID</code> coincida con este chat.",
+                    parse_mode=PM,
+                )
+            except Exception:
+                pass
+        return None
+    return level
+
+
+async def _typing(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await ctx.bot.send_chat_action(
+        chat_id=update.effective_chat.id, action=ChatAction.TYPING
+    )
+
+
+async def _typing_q(query, ctx) -> None:
+    await ctx.bot.send_chat_action(
+        chat_id=query.message.chat_id, action=ChatAction.TYPING
+    )
+
+
+# ── /start ────────────────────────────────────────────────────────────────────
+
+async def _send_start(msg, level: str):
+    fecha = datetime.now().strftime("%d/%m/%Y · %H:%M")
+    rol   = "🔑 Developer" if level == "developer" else "🔵 Técnico"
+    text  = (
+        f"{fmt.SEP_WIDE}\n"
+        f"👁️ <b>{fmt.e(SITE_NAME)}</b>\n"
+        f"{fmt.SEP_WIDE}\n"
+        f"<b>Shomer Sentinel 2.0</b> — herramienta de campo\n"
+        f"{rol} · {fecha}\n\n"
+        f"📋 /instalar — guía paso a paso\n"
+        f"✔️ /verificar — check final instalación\n"
+        f"🏥 /salud — servicios, disco y red\n"
+        f"❓ /ayuda — todos los comandos\n\n"
+        f"<i>También podés escribir en texto libre — el asistente usa datos reales del sistema.</i>"
+    )
+    if os.path.exists(LOGO_PATH):
+        try:
+            with open(LOGO_PATH, "rb") as f:
+                await msg.reply_photo(photo=f, caption=text, parse_mode=PM)
+            return
+        except Exception:
+            pass
+    await msg.reply_text(text, parse_mode=PM)
+
+
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+
+    if acc.technician_only_mode() or level == "developer":
+        await _send_start(update.message, level)
+        return
+
+    # modo lab: pedir contraseña developer
+    user_id = update.effective_user.id
+    acc.request_dev_auth(user_id)
+    await update.message.reply_text(
+        "🔑 <b>Acceso developer</b>\n\n"
+        "Ingresa la contraseña para acceso interno.\n"
+        "<i>Si eres técnico de campo, escribe cualquier saludo.</i>",
+        parse_mode=PM,
+    )
+
+
+# ── /ayuda ────────────────────────────────────────────────────────────────────
+
+def _ayuda_text(level: str) -> str:
+    base = (
+        f"{fmt.SEP_WIDE}\n"
+        f"👁️ <b>Shomer — herramienta de campo</b>\n"
+        f"{fmt.SEP_WIDE}\n\n"
+
+        f"📋 <b>Instalación y entrega</b>\n"
+        f"/instalar — guía paso a paso (10 pasos)\n"
+        f"/verificar — check final de instalación\n\n"
+
+        f"🖥️ <b>Info del servidor</b>\n"
+        f"/salud — servicios, disco y red\n"
+        f"/resumen — resumen del sistema en este momento\n"
+        f"/monitores — estado de los 20 monitores automáticos\n\n"
+
+        f"👁️ <b>Guardian — monitoreo de red</b>\n"
+        f"/equipos — nodos monitoreados y su estado\n"
+        f"/diagnostico &lt;ip&gt; — diagnóstico de un equipo\n"
+        f"/reiniciar &lt;ip&gt; — reiniciar AP (con confirmación)\n"
+        f"/ping &lt;ip&gt; — ¿responde la IP?\n"
+        f"/clientes &lt;ip&gt; — clientes WiFi conectados al AP\n"
+        f"/info &lt;ip&gt; — firmware y uptime del equipo\n"
+        f"/mantenimiento on/off — pausar reboots automáticos\n"
+        f"/sitio &lt;ip&gt; [30m|1h|2h] — silenciar alertas en obra\n\n"
+
+        f"🎯 <b>Hunter — seguridad</b>\n"
+        f"/alertas — últimas alertas de seguridad\n"
+        f"/bloquear &lt;ip&gt; — bloquear IP en el firewall\n"
+        f"/desbloquear &lt;ip&gt; — liberar IP bloqueada\n\n"
+
+        f"🔍 <b>Tracker · 🛡️ Protector</b>\n"
+        f"<i>Se configuran desde el panel web — sin comandos directos en el bot.</i>\n\n"
+
+        f"⚙️ <b>Agente</b>\n"
+        f"/agregar — registrar equipo en el agente\n"
+        f"/eliminar &lt;ip&gt; — quitar equipo\n"
+        f"/historial — últimos cambios registrados\n"
+        f"/revertir &lt;id&gt; — deshacer un cambio\n"
+        f"/nuevo — reiniciar conversación con la IA\n\n"
+
+        f"🤖 <b>Texto libre</b>\n"
+        f"<i>Escribí tu consulta — el asistente usa datos reales del servidor.</i>\n"
+    )
+    dev_extra = (
+        f"\n🔑 <b>Solo laboratorio USB</b>\n"
+        f"/doc · /backup · /restaurar · /pause · /resume · /botstatus · /logout\n"
+    )
+    if acc.technician_only_mode():
+        return base
+    return base + (dev_extra if level == "developer" else "")
+
+
+async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    level = acc.get_level(update)
+    await update.message.reply_text(_ayuda_text(level), parse_mode=PM)
+
+
+# ── /equipos — impl compartida ────────────────────────────────────────────────
+
+async def _equipos_impl(message, ctx, level: str):
+    await ctx.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
+
+    sections = []
+
+    nodes = shomer_api.get_guardian_nodes()
+    if nodes:
+        lines = []
+        for n in nodes:
+            ip     = n.get("ip") or n.get("ip_address", "?")
+            nombre = n.get("name", ip)
+            st     = n.get("status", "?")
+            method = n.get("reboot_method", "")
+            icon   = fmt.status_icon(st)
+            method_tag = f" <code>{fmt.e(method)}</code>" if method else ""
+            lines.append(
+                f"  {icon} <code>{fmt.e(ip)}</code> — {fmt.e(nombre)}{method_tag} — <code>{fmt.e(st)}</code>"
+            )
+        sections.append(fmt.section("🛡️", "Guardian — nodos con failsafe", lines))
+
+    devices = dm.list_devices()
+    if devices:
+        lines = []
+        for d in devices:
+            icon = fmt.status_icon(d.get("status", "unknown"))
+            role = " <i>(no reiniciar)</i>" if d.get("no_reboot") else ""
+            lines.append(
+                f"  {icon} <code>{fmt.e(d['ip'])}</code> — {fmt.e(d['name'])} "
+                f"({fmt.e(d.get('vendor_hint','?'))}){role}"
+            )
+        sections.append(fmt.section("🔌", "Agente — equipos registrados", lines))
+
+    if not sections:
+        await message.reply_text(
+            "No hay equipos registrados. Usa /agregar para añadir uno.", parse_mode=PM
+        )
+        return
+
+    header = f"{fmt.SEP_WIDE}\n👁️ <b>EQUIPOS — {fmt.e(SITE_NAME)}</b>\n{fmt.SEP_WIDE}"
+    texto  = header + "\n\n" + f"\n\n{fmt.SEP}\n\n".join(sections)
+    await message.reply_text(texto, parse_mode=PM)
+
+
+async def cmd_equipos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    await _equipos_impl(update.message, ctx, acc.get_level(update))
+
+
+# ── /alertas — impl compartida ────────────────────────────────────────────────
+
+async def _alertas_impl(message, ctx, level: str):
+    await ctx.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
+
+    data   = shomer_api.get_hunter_alerts(15)
+    alerts = (data.get("alerts", data) if isinstance(data, dict) else data) or []
+
+    if not alerts:
+        await message.reply_text(
+            fmt.alert_card("ALERTAS HUNTER", ["✅ No hay alertas recientes."], "ok"),
+            parse_mode=PM,
+        )
+        return
+
+    lines    = []
+    seen_ips = []
+    for a in alerts[:15]:
+        ip  = a.get("src_ip") or a.get("ip", "?")
+        sig = a.get("alert_signature") or a.get("signature", "sin firma")
+        sev = str(a.get("severity", "?"))
+        ts  = (a.get("timestamp") or a.get("ts", ""))[:16].replace("T", " ")
+        icon = "🔴" if sev in ("1", "2") else ("🟠" if sev in ("3", "4") else "🟡")
+        lines.append(f"  {icon} <code>{fmt.e(ip)}</code> — {fmt.e(sig[:50])}")
+        if ts:
+            lines.append(f"     <i>{fmt.e(ts)}</i>")
+        if ip not in seen_ips and ip != "?":
+            seen_ips.append(ip)
+
+    blocked = {item["ip"] for item in (shomer_api.get_blocked_ips() or [])}
+    buttons = []
+    for ip in seen_ips[:5]:
+        if ip not in blocked:
+            buttons.append([fmt.btn(f"🚫 Bloquear {ip}", f"block_confirm:{ip}")])
+
+    texto = fmt.card("🚨", f"ALERTAS HUNTER — {SITE_NAME}", lines)
+    kb    = InlineKeyboardMarkup(buttons) if buttons else None
+    await message.reply_text(texto, parse_mode=PM, reply_markup=kb)
+
+
+async def cmd_alertas(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    await _alertas_impl(update.message, ctx, acc.get_level(update))
+
+
+# ── /salud ────────────────────────────────────────────────────────────────────
+
+async def _salud_impl(message, ctx, level: str):
+    await ctx.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
+
+    parts = []
+
+    # Recursos servidor
+    metrics = shomer_api.get_server_metrics()
+    if metrics and metrics.get("success"):
+        now_m = metrics["now"]
+        cpu   = round(now_m.get("cpu", 0), 1)
+        ram   = round(now_m.get("ram", 0), 1)
+        temp  = now_m.get("temp", "?")
+        cpu_i = "✅" if cpu < 75 else ("⚠️" if cpu < 88 else "🔴")
+        ram_i = "✅" if ram < 80 else ("⚠️" if ram < 90 else "🔴")
+        parts.append(
+            fmt.section("💻", "Recursos", [
+                f"  {cpu_i} <b>CPU:</b> <code>{cpu}%</code>   "
+                f"{ram_i} <b>RAM:</b> <code>{ram}%</code>   🌡 <code>{fmt.e(temp)}°C</code>"
+            ])
+        )
+    else:
+        parts.append(fmt.section("💻", "Recursos", ["  <i>métricas no disponibles</i>"]))
+
+    # Servicios
+    svc_status = repair.check_services()
+    svc_lines  = []
+    for key, state in svc_status.items():
+        icon = "✅" if state == "active" else "❌"
+        svc_lines.append(f"  {icon} {fmt.e(repair.SERVICES[key]['label'])}")
+    parts.append(fmt.section("⚙️", "Servicios", svc_lines))
+
+    # Disco
+    disk = shomer_api.get_disk_usage()
+    if disk.get("ok") and disk.get("partitions"):
+        d_lines = []
+        for p in disk["partitions"]:
+            pct  = p["pct"]
+            icon = "✅" if pct < 75 else ("⚠️" if pct < 90 else "🔴")
+            d_lines.append(
+                f"  {icon} <code>{fmt.e(p['mount'])}</code> "
+                f"<b>{pct}%</b> — {fmt.e(p['free_gb'])} GB libres"
+            )
+        parts.append(fmt.section("💾", "Disco", d_lines))
+
+    # Guardian
+    nodes = shomer_api.get_guardian_nodes()
+    if nodes:
+        online = sum(1 for n in nodes if n.get("status") == "online")
+        g_icon = "✅" if online == len(nodes) else ("⚠️" if online > 0 else "🔴")
+        g_lines = [f"  {g_icon} <b>{online}/{len(nodes)}</b> APs online"]
+        for n in nodes:
+            if n.get("status") != "online":
+                g_lines.append(
+                    f"  🔴 {fmt.e(n.get('name', n.get('ip', '?')))} — "
+                    f"<code>{fmt.e(n.get('status','?'))}</code>"
+                )
+        parts.append(fmt.section("📡", "Guardian", g_lines))
+
+    # Hunter
+    pipeline = shomer_api.get_pipeline_health()
+    blocked  = shomer_api.get_blocked_ips()
+    h_lines  = []
+    if pipeline:
+        ok_p = pipeline.get("overall_ok", False)
+        h_lines.append(
+            f"  {'✅' if ok_p else '❌'} Pipeline Suricata — "
+            f"<b>{'OK' if ok_p else 'DEGRADADO'}</b>"
+        )
+        if not ok_p and level == "developer":
+            for k, v in pipeline.items():
+                if k != "overall_ok" and not v:
+                    h_lines.append(f"  ⚠️ {fmt.e(k)}: inactivo")
+    if blocked:
+        h_lines.append(f"  🚫 <b>{len(blocked)}</b> IP(s) bloqueadas actualmente")
+    if h_lines:
+        parts.append(fmt.section("🛡️", "Hunter", h_lines))
+
+    # Red
+    ifaces = shomer_api.get_interfaces()
+    if ifaces:
+        i_lines = []
+        for iface in ifaces:
+            st   = iface.get("state", "?")
+            icon = "🟢" if st == "UP" else ("🔴" if st == "DOWN" else "⚪")
+            i_lines.append(f"  {icon} <code>{fmt.e(iface['name'])}</code> — {fmt.e(st)}")
+        parts.append(fmt.section("🌐", "Red", i_lines))
+
+    header = f"{fmt.SEP_WIDE}\n🏥 <b>SALUD — {fmt.e(SITE_NAME)}</b>\n{fmt.SEP_WIDE}"
+    texto  = header + "\n\n" + f"\n\n{fmt.SEP}\n\n".join(parts)
+
+    # Botones de reparación (solo developer)
+    failing     = [k for k, s in svc_status.items() if s != "active"]
+    pipeline_ok = (pipeline or {}).get("overall_ok", True)
+
+    if level == "developer":
+        buttons = []
+        for k in failing:
+            buttons.append([fmt.btn(f"🔧 Reiniciar {repair.SERVICES[k]['label']}", f"repair:{k}")])
+        if not pipeline_ok:
+            buttons.append([fmt.btn("🦁 Reiniciar Suricata", "repair:suricata")])
+        warn_rules = [r for r in repair.DISK_CLEANUP_RULES if r["level"] == "warn"]
+        for r in warn_rules:
+            buttons.append([fmt.btn(f"🗑️ {r['label']}", f"repair:disk_{r['id']}")])
+        if buttons:
+            await message.reply_text(texto, parse_mode=PM,
+                                     reply_markup=InlineKeyboardMarkup(buttons))
+            return
+
+    await message.reply_text(texto, parse_mode=PM)
+
+
+async def cmd_salud(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    await _salud_impl(update.message, ctx, level)
+
+
+# ── /ping ─────────────────────────────────────────────────────────────────────
+
+async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /ping <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await update.message.reply_text(
+        f"⏳ Haciendo ping a <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    result = dm.ping_device(ip)
+    icon   = "✅" if result["ok"] else "❌"
+    await update.message.reply_text(
+        f"{icon} <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+    )
+
+
+# ── /reiniciar ────────────────────────────────────────────────────────────────
+
+async def cmd_reiniciar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /reiniciar <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip     = ctx.args[0]
+    dev    = dm.get_device(ip)
+    nombre = dev["name"] if dev else ip
+
+    if dev and dev.get("no_reboot"):
+        await update.message.reply_text(
+            f"⛔ <b>{fmt.e(nombre)}</b> tiene <code>no_reboot=true</code>.\n"
+            f"<i>Este equipo no debe reiniciarse desde el bot (firewall/sonda activa).</i>",
+            parse_mode=PM,
+        )
+        return
+
+    await update.message.reply_text(
+        f"⚠️ ¿Confirmas reiniciar <b>{fmt.e(nombre)}</b> (<code>{fmt.e(ip)}</code>)?\n"
+        f"<i>El AP estará fuera ~60 segundos.</i>",
+        parse_mode=PM,
+        reply_markup=fmt.kb(
+            [fmt.btn("✅ Sí, reiniciar", f"reboot_confirm:{ip}"),
+             fmt.btn("❌ Cancelar", "reboot_cancel")]
+        ),
+    )
+
+
+async def cb_reboot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+
+    if query.data == "reboot_cancel":
+        await query.edit_message_text("❌ Reinicio cancelado.")
+        return
+
+    ip = query.data.split(":", 1)[1]
+    await query.edit_message_text(
+        f"⏳ Reiniciando <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    changelog.log_change(
+        query.from_user.id, level, "reboot", ip,
+        details="Reinicio manual via bot", reverse_data=None
+    )
+    result = dm.reboot_device(ip)
+    icon   = "✅" if result["ok"] else "❌"
+    await query.edit_message_text(
+        f"{icon} <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+    )
+
+
+# ── /clientes ─────────────────────────────────────────────────────────────────
+
+async def cmd_clientes(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /clientes <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await update.message.reply_text(
+        f"⏳ Consultando clientes en <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    result = dm.get_clients(ip)
+    if result["ok"]:
+        clients = result["data"].get("clients", [])
+        count   = result["data"].get("count", len(clients))
+        if clients:
+            lines = [f"  • <code>{fmt.e(c.get('ip','?'))}</code> — {fmt.e(c.get('mac','?'))} {fmt.e(c.get('hostname',''))}"
+                     for c in clients[:20]]
+            await update.message.reply_text(
+                fmt.card("👥", f"Clientes en {ip} ({count})", lines), parse_mode=PM
+            )
+        else:
+            await update.message.reply_text(
+                f"📊 <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+            )
+    else:
+        await update.message.reply_text(
+            f"❌ <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+        )
+
+
+# ── /info ─────────────────────────────────────────────────────────────────────
+
+async def cmd_info(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /info <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await _typing(update, ctx)
+    result = dm.get_info(ip)
+    if result["ok"]:
+        raw    = result["data"].get("raw", "")[:500]
+        vendor = result["data"].get("vendor", "?")
+        await update.message.reply_text(
+            fmt.card("ℹ️", f"{ip} ({vendor})", [fmt.pre(raw)]),
+            parse_mode=PM,
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+        )
+
+
+# ── /agregar ──────────────────────────────────────────────────────────────────
+
+async def cmd_agregar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if len(ctx.args or []) < 4:
+        await update.message.reply_text(
+            "Uso: /agregar <code>&lt;ip&gt; &lt;nombre&gt; &lt;usuario&gt; &lt;password&gt; [vendor] [puerto]</code>\n\n"
+            "Vendors: <code>mikrotik ubiquiti aruba cisco tplink_eap linux openwrt</code>\n"
+            "Ejemplo: /agregar <code>192.168.1.10 AP-Lobby ubnt Admin123 ubiquiti</code>",
+            parse_mode=PM,
+        )
+        return
+    args   = ctx.args
+    ip, name, user, pwd = args[0], args[1], args[2], args[3]
+    vendor = args[4] if len(args) > 4 else ""
+    port   = int(args[5]) if len(args) > 5 else 22
+
+    dm.add_device(ip, name, user, pwd, vendor, port)
+    changelog.log_change(
+        update.effective_user.id, level, "add_device", ip,
+        details=f"nombre={name} vendor={vendor}",
+        reverse_data={"type": "remove_device", "ip": ip},
+    )
+    await update.message.reply_text(
+        fmt.card("✅", f"Equipo registrado — {name}", [
+            fmt.row_code("🌐", "IP", ip),
+            fmt.row("🔌", "Vendor", vendor or "auto-detect"),
+            fmt.row("🔢", "Puerto", str(port)),
+            "<i>⏳ Probando conexión...</i>",
+        ]),
+        parse_mode=PM,
+    )
+    result = dm.ping_device(ip)
+    icon   = "✅" if result["ok"] else "⚠️"
+    await update.message.reply_text(
+        f"{icon} Ping <code>{fmt.e(ip)}</code>: {fmt.e(result['message'])}", parse_mode=PM
+    )
+
+
+# ── /eliminar ─────────────────────────────────────────────────────────────────
+
+async def cmd_eliminar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /eliminar <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip      = ctx.args[0]
+    old_dev = dm.get_device(ip)
+    if dm.remove_device(ip):
+        changelog.log_change(
+            update.effective_user.id, level, "remove_device", ip,
+            details=f"nombre={old_dev.get('name','?') if old_dev else '?'}",
+            reverse_data={"type": "add_device", "device": old_dev} if old_dev else None,
+        )
+        await update.message.reply_text(
+            f"🗑️ Equipo <code>{fmt.e(ip)}</code> eliminado.", parse_mode=PM
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ No encontré <code>{fmt.e(ip)}</code> en el registro.", parse_mode=PM
+        )
+
+
+# ── /desbloquear / /bloquear ──────────────────────────────────────────────────
+
+async def cmd_desbloquear(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /desbloquear <code>192.168.1.45</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await update.message.reply_text(
+        f"🔓 Desbloqueando <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    ok, msg = shomer_api.unblock_ip(ip)
+    if ok:
+        changelog.log_change(
+            update.effective_user.id, level, "unblock", ip,
+            details="Desbloqueo manual via bot",
+            reverse_data={"type": "block", "ip": ip},
+        )
+        await update.message.reply_text(
+            f"✅ <code>{fmt.e(ip)}</code> desbloqueada.", parse_mode=PM
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ No se pudo desbloquear <code>{fmt.e(ip)}</code>:\n{fmt.e(msg)}", parse_mode=PM
+        )
+
+
+async def cmd_bloquear(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /bloquear <code>192.168.1.45</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await update.message.reply_text(
+        f"⚠️ ¿Confirmas bloquear <code>{fmt.e(ip)}</code> en Hunter?\n"
+        f"<i>Si te equivocas, usa /historial y luego /revertir &lt;id&gt;.</i>",
+        parse_mode=PM,
+        reply_markup=fmt.kb(
+            [fmt.btn("✅ Sí, bloquear", f"block_confirm:{ip}"),
+             fmt.btn("❌ Cancelar", "block_cancel")]
+        ),
+    )
+
+
+async def cb_block(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+
+    if query.data == "block_cancel":
+        await query.edit_message_text("❌ Bloqueo cancelado.")
+        return
+
+    ip = query.data.split(":", 1)[1]
+    await query.edit_message_text(
+        f"⏳ Bloqueando <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    ok, msg = shomer_api.block_ip(ip)
+    if ok:
+        changelog.log_change(
+            query.from_user.id, level, "block", ip,
+            details="Bloqueo manual via bot",
+            reverse_data={"type": "unblock", "ip": ip},
+        )
+    icon = "✅" if ok else "❌"
+    await query.edit_message_text(
+        f"{icon} <code>{fmt.e(ip)}</code>: {fmt.e(msg)}", parse_mode=PM
+    )
+
+
+# ── /historial ────────────────────────────────────────────────────────────────
+
+async def cmd_historial(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    rows = changelog.get_recent(10)
+    if not rows:
+        await update.message.reply_text("📋 No hay cambios registrados aún.")
+        return
+
+    lines = []
+    for r in rows:
+        cid, ts, ulevel, action, target, details, reverted = r
+        estado = " ↩️ revertido" if reverted else ""
+        lines.append(
+            f"  <code>#{cid}</code> [{fmt.e(ts[5:16])}] <b>{fmt.e(action)}</b> "
+            f"<code>{fmt.e(target)}</code> ({fmt.e(ulevel)}){fmt.e(estado)}"
+        )
+        if details and details != "None":
+            lines.append(f"     <i>{fmt.e(details[:60])}</i>")
+
+    if level == "developer":
+        lines.append("\n<i>Usa /revertir &lt;id&gt; para deshacer un cambio reversible.</i>")
+
+    await update.message.reply_text(
+        fmt.card("📜", f"Cambios recientes — {SITE_NAME}", lines), parse_mode=PM
+    )
+
+
+# ── /revertir ─────────────────────────────────────────────────────────────────
+
+async def cmd_revertir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args or not ctx.args[0].isdigit():
+        await update.message.reply_text(
+            "Uso: /revertir <code>&lt;id&gt;</code>\nObtén el ID con /historial.",
+            parse_mode=PM,
+        )
+        return
+    change_id = int(ctx.args[0])
+
+    if level == "tecnico":
+        row = changelog.get_change_full(change_id)
+        if not row:
+            await update.message.reply_text("❌ Cambio no encontrado.")
+            return
+        _, _, action, target, _, _, owner_id = row
+        if str(update.effective_user.id) != str(owner_id):
+            await update.message.reply_text("⛔ Solo puedes revertir tus propios cambios.")
+            return
+        if action not in ("block", "unblock"):
+            await update.message.reply_text(
+                "⛔ Como técnico solo puedes revertir bloqueos y desbloqueos.\n"
+                "<i>Contacta al developer para otros cambios.</i>",
+                parse_mode=PM,
+            )
+            return
+
+    await update.message.reply_text(f"⏳ Revirtiendo cambio #{change_id}...")
+    ok, msg = changelog.revert(change_id)
+    icon    = "✅" if ok else "❌"
+    await update.message.reply_text(f"{icon} #{change_id}: {fmt.e(msg)}", parse_mode=PM)
+
+
+# ── /backup / /restaurar ──────────────────────────────────────────────────────
+
+async def cmd_backup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text(
+            "⛔ Solo <b>soporte USB interno</b> puede crear backups desde Telegram.",
+            parse_mode=PM,
+        )
+        return
+    await _typing(update, ctx)
+    await update.message.reply_text(
+        "⏳ Creando backup completo del sistema...\n<i>Puede tardar 1-2 minutos.</i>",
+        parse_mode=PM,
+    )
+    ok, msg, _ = backup_manager.create_backup()
+    icon = "✅" if ok else "❌"
+    await update.message.reply_text(
+        fmt.card(icon, "Backup", [fmt.e(msg)]), parse_mode=PM
+    )
+
+
+async def cmd_restaurar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text(
+            "⛔ Solo <b>soporte USB interno</b> puede listar backups aquí.", parse_mode=PM
+        )
+        return
+    backups = backup_manager.list_backups()
+    if not backups:
+        await update.message.reply_text(
+            "📦 No hay backups disponibles. Usa /backup para crear uno."
+        )
+        return
+    lines = []
+    for b in backups:
+        lines.append(
+            f"  📦 <code>{fmt.e(b['name'])}</code>\n"
+            f"     {fmt.e(b['ts'])} — {fmt.e(b['size_mb'])} MB"
+        )
+    lines.append("\n<i>Restauración: procedimiento interno soporte USB — operación destructiva.</i>")
+    await update.message.reply_text(
+        fmt.card("📦", f"Backups disponibles — {SITE_NAME}", lines), parse_mode=PM
+    )
+
+
+# ── /instalar — Wizard ────────────────────────────────────────────────────────
+
+INSTALL_STEPS = [
+    {
+        "title": "1/10 — Este bot es tu herramienta de campo",
+        "text": (
+            "👁️ <b>Estás hablando con el agente Shomer</b>\n\n"
+            "Este bot es tu asistente durante toda la instalación y después de ella. "
+            "Te avisa si algo falla, te deja reiniciar APs y revisar el estado del sistema "
+            "sin necesidad de abrir el panel.\n\n"
+            "📋 <b>Lo que vas a necesitar en papel (te lo entrega USB):</b>\n"
+            "  • IP de fábrica: <code>192.168.1.205</code>\n"
+            "  • Usuario inicial: <code>root</code>\n"
+            "  • Contraseña inicial: <code>shomer2026</code>\n\n"
+            "📱 <b>Tu Chat ID de Telegram</b> — lo vas a necesitar en el paso 6.\n"
+            "Para verlo: escríbele a <b>@userinfobot</b> en Telegram y te lo muestra.\n"
+            "Anótalo ahora.\n\n"
+            "<i>Cuando estés listo presiona ➡️ Siguiente.</i>"
+        ),
+    },
+    {
+        "title": "2/10 — Verificar hardware",
+        "text": (
+            "🖥️ <b>Confirmar que el mini PC tiene 2 puertos de red</b>\n\n"
+            "Conecta teclado y monitor al mini PC y ejecuta:\n"
+            "<pre>ip link show</pre>\n"
+            "Debes ver <b>al menos 2 interfaces</b> además del loopback (<code>lo</code>):\n"
+            "  • Una para conectar al switch del cliente (gestión)\n"
+            "  • Otra para recibir el tráfico espejo (Hunter)\n\n"
+            "⚠️ Si solo aparece una interfaz, para aquí y llama a <b>soporte USB</b>."
+        ),
+    },
+    {
+        "title": "3/10 — Cableado físico",
+        "text": (
+            "🔌 <b>Conectar los cables de red</b>\n\n"
+            "  • <b>Puerto de gestión</b> → cable al switch principal del cliente\n"
+            "  • <b>Puerto espejo</b> → cable al puerto SPAN del switch\n\n"
+            "El puerto SPAN duplica todo el tráfico de la red hacia el Shomer para que "
+            "Hunter pueda detectar amenazas.\n\n"
+            "<i>¿Todavía no tienes acceso al switch? Conecta solo el puerto de gestión "
+            "y configura el SPAN después. El resto de la instalación puede continuar.</i>"
+        ),
+    },
+    {
+        "title": "4/10 — Primer acceso al panel",
+        "text": (
+            "🌐 <b>Abrir el panel por primera vez</b>\n\n"
+            "Conecta tu laptop al mismo switch y abre en el navegador:\n"
+            "<pre>https://192.168.1.205</pre>\n"
+            "<i>Acepta el aviso de certificado — es normal en el primer acceso.</i>\n\n"
+            "Ingresa con:\n"
+            "  • Usuario: <code>root</code>\n"
+            "  • Contraseña: <code>shomer2026</code>\n\n"
+            "El panel te lleva directo al <b>wizard de instalación</b>. "
+            "Completa los 3 pasos que aparecen:\n\n"
+            "  1️⃣ Escanea la red → selecciona las IPs del cliente → guarda\n"
+            "  2️⃣ Elige la zona horaria del sitio\n"
+            "  3️⃣ Crea el usuario administrador del cliente\n\n"
+            "Al terminar, el Shomer queda con la IP definitiva del sitio.\n"
+            "⚠️ <b>Anota esa IP nueva</b> — la necesitas para todo lo que sigue."
+        ),
+    },
+    {
+        "title": "5/10 — Verificar que arrancó bien",
+        "text": (
+            "✔️ <b>Check automático — aquí mismo en Telegram</b>\n\n"
+            "Reconecta tu laptop con la nueva IP del Shomer, luego escribe "
+            "<b>aquí en este mismo chat</b>:\n"
+            "<pre>/verificar</pre>\n"
+            "El bot se conecta al servidor y te muestra el resultado:\n"
+            "  ✅ Verde → OK\n"
+            "  ⚠️ Naranja → revisar antes de continuar\n\n"
+            "También abre el panel en el navegador con la nueva IP y confirma "
+            "que los módulos cargan sin pantalla de error.\n\n"
+            "<i>Si algo sale en rojo, copia el mensaje y mándalo a soporte USB.</i>"
+        ),
+    },
+    {
+        "title": "6/10 — Módulos y contraseña del panel",
+        "text": (
+            "🔒 <b>Activar módulos y cambiar contraseña</b>\n\n"
+            "En el panel: <b>Administración</b>\n\n"
+            "1️⃣ <b>Módulos:</b> activa solo los que el cliente contrató\n"
+            "  • Guardian — monitoreo de red (siempre activo)\n"
+            "  • Hunter — detección de intrusos\n"
+            "  • 🔍 Tracker — inventario de equipos\n"
+            "  • 🛡️ Protector — respaldos automáticos\n\n"
+            "2️⃣ <b>Contraseña:</b> cambia la contraseña de <code>root</code> por una segura\n\n"
+            "⚠️ No continúes con la contraseña de fábrica — cualquiera en la red "
+            "del cliente podría entrar al panel."
+        ),
+    },
+    {
+        "title": "7/10 — Guardian: registrar los APs y Telegram",
+        "text": (
+            "🛡️ <b>Agregar los APs y routers del cliente</b>\n\n"
+            "En el panel: <b>Guardian → Nodos → Agregar nodo</b>\n\n"
+            "Por cada AP o router ingresa:\n"
+            "  • IP del equipo\n"
+            "  • Usuario y contraseña de acceso\n"
+            "  • Tipo de reboot (SSH para routers, SNMP para TP-Link EAP)\n\n"
+            "Presiona <b>Probar conexión</b> → debe aparecer <code>online</code> en verde.\n\n"
+            "📱 <b>Configurar Telegram en Guardian:</b>\n"
+            "Panel → <b>Guardian → Configuración → Chat ID</b>\n"
+            "Ingresa el Chat ID que anotaste en el paso 1 y presiona <b>Probar</b>.\n"
+            "Debes recibir un mensaje de prueba <b>aquí en este mismo chat</b>."
+        ),
+    },
+    {
+        "title": "8/10 — Hunter: confirmar el espejo",
+        "text": (
+            "🦁 <b>Verificar que Hunter ve el tráfico</b>\n\n"
+            "En el panel: <b>Hunter → Pipeline</b>\n\n"
+            "Si el puerto SPAN del switch está bien conectado, el pipeline "
+            "debe mostrar estado <b>activo</b> y comenzar a aparecer alertas.\n\n"
+            "Prueba rápida: desde cualquier PC de la red del cliente, abre "
+            "un navegador o haz un ping. Espera 1-2 minutos y recarga Hunter.\n\n"
+            "Si el pipeline aparece vacío o sin actividad:\n"
+            "  • Verifica que el cable del puerto espejo está bien conectado\n"
+            "  • Confirma con el cliente que el SPAN está configurado en su switch\n"
+            "  • Llama a soporte USB si no logras verlo activo"
+        ),
+    },
+    {
+        "title": "9/10 — 🛡️ Protector: equipos de respaldo",
+        "text": (
+            "🛡️ <b>Configurar backups automáticos</b>\n\n"
+            "<i>Solo si el cliente contrató el módulo Protector.</i>\n\n"
+            "En el panel: <b>🛡️ Protector → Agregar dispositivo</b>\n\n"
+            "Por cada equipo a respaldar:\n"
+            "  • Nombre del equipo y su IP\n"
+            "  • Tipo: <b>SSH</b> (Linux/Mac) o <b>SMB</b> (Windows)\n"
+            "  • Usuario y contraseña del equipo\n\n"
+            "Presiona <b>Probar conexión</b> → verde = listo.\n"
+            "Activa el <b>horario automático</b> para que el backup corra solo cada noche.\n\n"
+            "☁️ Si el cliente tiene respaldo en la nube: ingresa las credenciales "
+            "B2 en <b>🛡️ Protector → Configuración B2</b> y presiona <b>Probar</b>."
+        ),
+    },
+    {
+        "title": "10/10 — Check final de entrega",
+        "text": (
+            "✅ <b>Criterios de aprobación antes de entregar</b>\n\n"
+            "☐ /verificar muestra todo en verde\n"
+            "☐ Módulos contratados visibles y sin errores en el panel\n"
+            "☐ Guardian: al menos un AP en <code>online</code>\n"
+            "☐ Telegram: recibiste el mensaje de prueba de Guardian\n"
+            "☐ Hunter: pipeline activo (si tiene SPAN)\n"
+            "☐ 🛡️ Protector: backup de prueba exitoso (si aplica)\n"
+            "☐ Contraseña de fábrica cambiada\n\n"
+            "📸 <i>Toma una foto del panel con los módulos activos para el archivo de entrega.</i>\n\n"
+            "🎉 <b>Instalación completa.</b>\n"
+            "Deja anotado al cliente: IP del Shomer, usuario y teléfono de soporte USB."
+        ),
+    },
+]
+
+
+def _instalar_keyboard(step: int) -> InlineKeyboardMarkup:
+    buttons = []
+    if step > 0:
+        buttons.append(fmt.btn("⬅️ Anterior", f"instalar:{step-1}"))
+    if step < len(INSTALL_STEPS) - 1:
+        buttons.append(fmt.btn("➡️ Siguiente", f"instalar:{step+1}"))
+    else:
+        buttons.append(fmt.btn("✅ Instalación completa", "instalar_done"))
+    return InlineKeyboardMarkup([buttons])
+
+
+def _instalar_text(step_n: int) -> str:
+    step = INSTALL_STEPS[step_n]
+    return (
+        f"{fmt.SEP_WIDE}\n"
+        f"📋 <b>Guía de instalación Shomer Sentinel</b>\n"
+        f"{fmt.SEP_WIDE}\n\n"
+        f"<b>{fmt.e(step['title'])}</b>\n\n"
+        f"{step['text']}"
+    )
+
+
+async def cmd_usuario(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    txt = (
+        f"👤 <b>Crear usuario de servicio Shomer</b>\n"
+        f"─────────────────────\n"
+        f"Este usuario se crea en cada equipo (PC/Mac/servidor) antes de registrarlo "
+        f"en Tracker y Protector. El nombre y contraseña deben coincidir con lo que configuraste "
+        f"en el panel → Instalación → Usuario de servicio.\n\n"
+        f"Elige el sistema operativo del equipo:"
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🐧 Linux",   callback_data="usuario:linux")],
+        [InlineKeyboardButton("🍎 macOS",   callback_data="usuario:mac")],
+        [InlineKeyboardButton("🪟 Windows", callback_data="usuario:windows")],
+    ])
+    await update.message.reply_text(txt, parse_mode=PM, reply_markup=kb)
+
+
+async def cb_usuario(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(query.from_user.id, query.message.chat.id)
+    if not level:
+        return
+    _, os_key = query.data.split(":", 1)
+
+    if os_key == "linux":
+        txt = (
+            f"🐧 <b>Linux — crear usuario shomer</b>\n"
+            f"─────────────────────\n"
+            f"Ejecuta en el equipo objetivo:\n\n"
+            f"<pre>sudo adduser shomer</pre>\n"
+            f"Cuando pida contraseña, escribe la misma que configuraste en el panel.\n\n"
+            f"Luego crea la carpeta de backup:\n"
+            f"<pre>mkdir -p /home/shomer/backups</pre>\n\n"
+            f"Si necesitas que acceda a carpetas del sistema, agrégalo al grupo:\n"
+            f"<pre>sudo usermod -aG sudo shomer</pre>\n"
+            f"<i>✅ Verificar: <code>id shomer</code></i>"
+        )
+    elif os_key == "mac":
+        txt = (
+            f"🍎 <b>macOS — crear usuario shomer</b>\n"
+            f"─────────────────────\n"
+            f"<b>Opción 1 — Interfaz gráfica:</b>\n"
+            f"Preferencias del sistema → Usuarios y grupos → <b>+</b> → tipo Estándar → nombre: <code>shomer</code>\n\n"
+            f"<b>Opción 2 — Terminal:</b>\n"
+            f"<pre>sudo dscl . -create /Users/shomer\n"
+            f"sudo dscl . -create /Users/shomer UserShell /bin/bash\n"
+            f"sudo dscl . -create /Users/shomer RealName shomer\n"
+            f"sudo dscl . -create /Users/shomer UniqueID 502\n"
+            f"sudo dscl . -create /Users/shomer PrimaryGroupID 20\n"
+            f"sudo dscl . -passwd /Users/shomer TU_CONTRASENA\n"
+            f"sudo mkdir -p /Users/shomer/backups\n"
+            f"sudo chown shomer /Users/shomer/backups</pre>\n"
+            f"Habilita SSH: Preferencias → Compartir → <b>Inicio de sesión remoto ✓</b>\n"
+            f"<i>✅ Verificar: <code>ssh shomer@IP_MAC</code></i>"
+        )
+    else:
+        txt = (
+            f"🪟 <b>Windows — crear usuario shomer</b>\n"
+            f"─────────────────────\n"
+            f"En CMD como Administrador:\n"
+            f"<pre>net user shomer TU_CONTRASENA /add</pre>\n\n"
+            f"Crear carpeta de backup y compartirla:\n"
+            f"<pre>mkdir C:\\backups</pre>\n"
+            f"Clic derecho en <code>C:\\backups</code> → Propiedades → Compartir → nombre del share: <code>backups</code>\n"
+            f"Permisos: usuario <code>shomer</code> con control total.\n\n"
+            f"<b>Active Directory:</b> crea el usuario en el AD con la misma contraseña — se aplica a todos los equipos del dominio automáticamente.\n\n"
+            f"<i>✅ Verificar desde el Shomer: ping al equipo Windows y credenciales en Tracker → Credenciales.</i>"
+        )
+    await query.edit_message_text(txt, parse_mode=PM)
+
+
+async def cmd_instalar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    await update.message.reply_text(
+        _instalar_text(0), parse_mode=PM, reply_markup=_instalar_keyboard(0)
+    )
+
+
+async def cb_instalar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "instalar_done":
+        await query.edit_message_text(
+            f"{fmt.SEP_WIDE}\n✅ <b>Guía de instalación finalizada.</b>\n{fmt.SEP_WIDE}\n\n"
+            f"Repetir un paso: /instalar\n"
+            f"Chequeo del equipo: /verificar\n"
+            f"Soporte: contacto <b>USB</b> según contrato del sitio.",
+            parse_mode=PM,
+        )
+        return
+    step_n = int(query.data.split(":")[1])
+    await query.edit_message_text(
+        _instalar_text(step_n), parse_mode=PM, reply_markup=_instalar_keyboard(step_n)
+    )
+
+
+# ── /diagnostico ──────────────────────────────────────────────────────────────
+
+async def cmd_diagnostico(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            f"Uso: /diagnostico <code>192.168.1.1</code>", parse_mode=PM
+        )
+        return
+    ip = ctx.args[0]
+    await _typing(update, ctx)
+
+    lines = []
+
+    # Ping
+    ping = dm.ping_device(ip)
+    icon = "✅" if ping["ok"] else "🔴"
+    lines.append(f"  {icon} <b>Ping:</b> {fmt.e(ping['message'])}")
+
+    # Estado Guardian
+    nodes = shomer_api.get_guardian_nodes()
+    node  = next((n for n in (nodes or []) if n.get("ip") == ip or n.get("ip_address") == ip), None)
+    if node:
+        st     = node.get("status", "?")
+        nombre = node.get("name", ip)
+        st_i   = fmt.status_icon(st)
+        lines.append(f"  {st_i} <b>Guardian:</b> {fmt.e(nombre)} — <code>{fmt.e(st)}</code>")
+        if node.get("latency_ms"):
+            lines.append(f"     Latencia: <code>{fmt.e(node['latency_ms'])} ms</code>")
+    else:
+        lines.append("  ⚪ <b>Guardian:</b> nodo no registrado")
+
+    # Fallos y último reboot
+    data = shomer_api.get_node_failures(ip)
+    if data:
+        fails = data.get("failures", 0)
+        ago   = data.get("last_reboot_ago")
+        f_i   = "✅" if fails == 0 else ("⚠️" if fails < 3 else "🔴")
+        lines.append(f"  {f_i} <b>Fallos acumulados:</b> {fmt.e(fails)}")
+        if ago is not None:
+            h, m = divmod(ago // 60, 60)
+            lines.append(f"     Último reboot: hace <code>{h}h {m}m</code>")
+        elif node:
+            lines.append("     Sin reboots registrados")
+
+    # Uptime SNMP
+    snmp_community = (node or {}).get("snmp_community", "shomer2026") or "shomer2026"
+    if ping["ok"]:
+        uptime = shomer_api.get_snmp_uptime(ip, snmp_community)
+        if uptime:
+            lines.append(f"  ⏱️ <b>Uptime SNMP:</b> <code>{fmt.e(uptime)}</code>")
+
+    # Modo mantenimiento
+    if shomer_api.get_maintenance():
+        lines.append("  🔧 <b>Mantenimiento:</b> ACTIVO — reboots automáticos pausados")
+
+    texto = fmt.card("🔍", f"Diagnóstico {ip}", lines)
+    kb    = None
+    if node and node.get("status") in ("offline", "no-internet") and BOT_AUTO_REBOOT:
+        kb = fmt.kb([fmt.btn(f"⚡ Reiniciar {node.get('name', ip)}", f"reboot_confirm:{ip}")])
+
+    await update.message.reply_text(texto, parse_mode=PM, reply_markup=kb)
+
+
+# ── /mantenimiento ────────────────────────────────────────────────────────────
+
+async def _mantenimiento_set(message, on: bool):
+    ok = shomer_api.set_maintenance(on)
+    if ok:
+        if on:
+            await message.reply_text(
+                fmt.card("🔧", "Mantenimiento ACTIVADO", [
+                    "Guardian sigue monitoreando pero <b>no reiniciará APs</b> automáticamente.",
+                    "<i>Desactívalo cuando termines.</i>",
+                ]),
+                parse_mode=PM,
+                reply_markup=fmt.kb([fmt.btn("✅ Desactivar cuando termine", "maint:off")]),
+            )
+        else:
+            await message.reply_text(
+                fmt.alert_card("Mantenimiento desactivado",
+                               ["Guardian reanuda reboots automáticos normalmente."], "ok"),
+                parse_mode=PM,
+            )
+    else:
+        await message.reply_text("❌ No se pudo cambiar. Verifica que Redis esté activo.")
+
+
+async def cmd_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if ctx.args and ctx.args[0].lower() in ("on", "off"):
+        await _mantenimiento_set(update.message, ctx.args[0].lower() == "on")
+        return
+    activo = shomer_api.get_maintenance()
+    estado = "🔧 <b>ACTIVO</b> — reboots automáticos pausados" if activo else "✅ <b>Inactivo</b> — reboots normales"
+    boton  = fmt.btn("✅ Desactivar mantenimiento", "maint:off") if activo \
+             else fmt.btn("🔧 Activar mantenimiento", "maint:on")
+    await update.message.reply_text(
+        fmt.card("🔧", "Modo mantenimiento", [
+            estado,
+            "<i>Activarlo siempre que vayas a trabajar físicamente en los equipos.</i>",
+        ]),
+        parse_mode=PM,
+        reply_markup=fmt.kb([boton]),
+    )
+
+
+async def cb_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not await _guard(update):
+        return
+    on = query.data.split(":")[1] == "on"
+    await query.edit_message_reply_markup(reply_markup=None)
+    await _mantenimiento_set(query.message, on)
+
+
+# ── /doc ──────────────────────────────────────────────────────────────────────
+
+async def cmd_doc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if acc.technician_only_mode():
+        await update.message.reply_text(
+            "📋 <b>Pasos exactos</b>\n\n"
+            "/instalar — instalación paso a paso\n"
+            "/verificar — chequeo automático\n"
+            "/ayuda — todos los comandos\n\n"
+            "<i>Para preguntas sobre este servidor, escribe en texto libre.</i>",
+            parse_mode=PM,
+        )
+        return
+    if level != "developer":
+        await update.message.reply_text("⛔ Comando reservado para soporte técnico.")
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            "📖 <b>Consulta técnica interna</b>\n\n"
+            "Uso: /doc <code>&lt;pregunta&gt;</code>\n"
+            "Ejemplo: /doc ¿qué hace el módulo casador_blocking?",
+            parse_mode=PM,
+        )
+        return
+    pregunta = " ".join(ctx.args)
+    await _typing(update, ctx)
+    respuesta = _groq_explain(pregunta, include_doc=True, level="developer")
+    await update.message.reply_text(f"📖 {respuesta}", parse_mode="Markdown")
+
+
+# ── cb_repair ────────────────────────────────────────────────────────────────
+
+async def cb_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+    if level != "developer":
+        await query.edit_message_text("⛔ Solo el developer puede ejecutar reparaciones.")
+        return
+
+    action = query.data.split(":", 1)[1]
+
+    if action == "cancel":
+        await query.edit_message_text("❌ Reparación cancelada.")
+
+    elif action.startswith("zombie_"):
+        port = int(action.split("_")[1])
+        await query.edit_message_text(f"⏳ Matando proceso zombie en :{port}...")
+        ok, out = repair.kill_zombie(port)
+        changelog.log_change(query.from_user.id, level, "kill_zombie", f":{port}", out[:80])
+        icon = "✅" if ok else "❌"
+        await query.edit_message_text(
+            f"{icon} Zombie :{port}: <code>{fmt.e(out)}</code>", parse_mode=PM
+        )
+
+    elif action == "suricata":
+        await query.edit_message_text("⏳ Reiniciando Suricata...")
+        ok, out = repair.restart_suricata()
+        await asyncio.sleep(4)
+        pipeline = shomer_api.get_pipeline_health()
+        estado   = "✅ pipeline OK" if (pipeline or {}).get("overall_ok") else "⚠️ pipeline aún degradado"
+        changelog.log_change(query.from_user.id, level, "restart_suricata", "suricata", out[:80])
+        icon = "✅" if ok else "❌"
+        await query.edit_message_text(
+            f"{icon} Suricata: {fmt.e(out or 'OK')}\n{estado}", parse_mode=PM
+        )
+
+    elif action.startswith("disk_"):
+        rule_id = action[5:]
+        rule    = next((r for r in repair.DISK_CLEANUP_RULES if r["id"] == rule_id), None)
+        label   = rule["label"] if rule else rule_id
+        await query.edit_message_text(f"⏳ Ejecutando: {fmt.e(label)}...", parse_mode=PM)
+        ok, out = repair.run_cleanup_rule(rule_id)
+        disk    = shomer_api.get_disk_usage()
+        free    = disk.get("free_gb", "?") if disk and disk.get("ok") else "?"
+        changelog.log_change(query.from_user.id, level, "disk_cleanup", rule_id, out[:80])
+        icon = "✅" if ok else "❌"
+        await query.edit_message_text(
+            f"{icon} {fmt.e(label)}: {fmt.e(out[:100] or 'OK')}\nDisco libre: <code>{fmt.e(free)} GB</code>",
+            parse_mode=PM,
+        )
+
+    elif action in repair.SERVICES:
+        label = repair.SERVICES[action]["label"]
+        await query.edit_message_text(f"⏳ Reiniciando {fmt.e(label)}...", parse_mode=PM)
+        ok, out = repair.restart_service(action)
+        changelog.log_change(query.from_user.id, level, f"restart_{action}", action, out[:80])
+        await asyncio.sleep(3)
+        status       = repair.check_services()
+        nuevo_estado = status.get(action, "?")
+        icon         = "✅" if ok else "❌"
+        await query.edit_message_text(
+            f"{icon} <b>{fmt.e(label)}</b>: {fmt.e(out or 'OK')}\n"
+            f"Estado actual: <code>{fmt.e(nuevo_estado)}</code>",
+            parse_mode=PM,
+        )
+
+    else:
+        await query.edit_message_text("❓ Acción no reconocida.")
+
+
+# ── /sitio ────────────────────────────────────────────────────────────────────
+
+async def cmd_sitio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    args = ctx.args or []
+
+    if not args:
+        supresiones = monitor.get_site_suppressions()
+        if not supresiones:
+            await update.message.reply_text(
+                fmt.alert_card("Modo en sitio", [
+                    "No hay supresiones activas.",
+                    "<i>Usa /sitio &lt;ip&gt; 30m para suprimir alertas de un AP.</i>",
+                ], "info"),
+                parse_mode=PM,
+            )
+        else:
+            lines = []
+            for ip, info in supresiones.items():
+                lines.append(
+                    f"  🔧 <code>{fmt.e(ip)}</code> — {fmt.e(info.get('name', ip))} "
+                    f"· {fmt.e(info.get('mins_left', 0))} min restantes"
+                )
+            await update.message.reply_text(
+                fmt.card("🏗️", "Supresiones activas", lines), parse_mode=PM
+            )
+        return
+
+    ip = args[0]
+    if len(args) >= 2 and args[1].lower() == "off":
+        monitor.cancel_suppression(ip)
+        await update.message.reply_text(
+            f"✅ Supresión cancelada para <code>{fmt.e(ip)}</code>. Alertas activas normalmente.",
+            parse_mode=PM,
+        )
+        return
+
+    duracion_min = 30
+    if len(args) >= 2:
+        d = args[1].lower()
+        if d in ("1h", "60m", "60"):
+            duracion_min = 60
+        elif d in ("2h", "120m", "120"):
+            duracion_min = 120
+
+    node   = next((n for n in (shomer_api.get_guardian_nodes() or [])
+                   if n.get("ip") == ip or n.get("ip_address") == ip), None)
+    nombre = (node or {}).get("name", ip)
+    status = (node or {}).get("status", "desconocido")
+    monitor.set_suppression(ip, nombre, duracion_min)
+
+    await update.message.reply_text(
+        fmt.card("🔧", f"Modo en sitio — {nombre}", [
+            fmt.row_code("📍", "IP", ip),
+            fmt.row("📶", "Estado actual", f"{fmt.status_icon(status)} {status}"),
+            fmt.row("⏱️", "Supresión", f"{duracion_min} minutos"),
+            "<i>Guardian sigue monitoreando. Al terminar recibirás el estado final.</i>",
+        ]),
+        parse_mode=PM,
+        reply_markup=fmt.kb([fmt.btn("🔕 Cancelar supresión", f"sitio_cancel:{ip}")]),
+    )
+
+
+async def cb_sitio_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not await _guard(update):
+        return
+    ip = query.data.split(":", 1)[1]
+    monitor.cancel_suppression(ip)
+    await query.edit_message_text(
+        f"✅ Supresión cancelada para <code>{fmt.e(ip)}</code>.", parse_mode=PM
+    )
+
+
+# ── /verificar ────────────────────────────────────────────────────────────────
+
+async def cmd_verificar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    await _typing(update, ctx)
+    check    = shomer_api.run_install_check()
+    results  = check["results"]
+    ok_count = check["ok"]
+    total    = check["total"]
+    warnings = check["warnings"]
+
+    resumen_icon = "✅" if warnings == 0 else "⚠️"
+    resumen_txt  = f"Todo OK — {ok_count}/{total}" if warnings == 0 \
+                   else f"{ok_count}/{total} OK — {warnings} pendiente(s)"
+
+    lines = []
+    failing = [r for r in results if not r["ok"]]
+    passing = [r for r in results if r["ok"]]
+
+    if failing:
+        lines.append("<b>Requiere atención:</b>")
+        for r in failing:
+            detail = f"\n     <i>{fmt.e(r['detail'])}</i>" if r.get("detail") else ""
+            lines.append(f"  ⚠️ {fmt.e(r['label'])}{detail}")
+        lines.append("")
+
+    lines.append("<b>Completado:</b>")
+    for r in passing:
+        detail = f" — <i>{fmt.e(r['detail'])}</i>" if r.get("detail") else ""
+        lines.append(f"  ✅ {fmt.e(r['label'])}{detail}")
+
+    lines.append(f"\n<i>{fmt.e(resumen_txt)}</i>")
+
+    await update.message.reply_text(
+        fmt.card(resumen_icon, f"Verificación — {SITE_NAME}", lines), parse_mode=PM
+    )
+
+
+# ── /pause · /resume · /botstatus ────────────────────────────────────────────
+
+async def cmd_pause(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text(
+            "🔧 Comando solo para <b>soporte interno USB</b>.\n"
+            "En campo usa /salud, /verificar.",
+            parse_mode=PM,
+        )
+        return
+    secs = int(ctx.args[0]) if ctx.args else _mnt.COOLDOWN_SECS
+    _mnt.pause(secs)
+    await update.message.reply_text(
+        f"🔴 <b>Bot pausado</b> — asistente IA ignorará mensajes por ~{secs}s.\n"
+        f"<i>Los comandos directos siguen activos.</i>",
+        parse_mode=PM,
+    )
+
+
+async def cmd_resume(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text(
+            "🔧 Comando solo para <b>soporte interno USB</b>.", parse_mode=PM
+        )
+        return
+    _mnt.resume()
+    await update.message.reply_text(
+        "🟢 <b>Bot reactivado.</b> El asistente IA responde normalmente.", parse_mode=PM
+    )
+
+
+# ── /resumen ──────────────────────────────────────────────────────────────────
+
+async def cmd_resumen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    await _typing(update, ctx)
+    from core.groq_helper import explain
+    ctx_data = shomer_api.summary_text()
+    devices  = dm.list_devices()
+    if devices:
+        online = sum(1 for d in devices if d.get("status") == "online")
+        ctx_data += f"\n\nEquipos agente: {online}/{len(devices)} online"
+    resumen = explain(
+        "Genera un resumen del estado actual de la red. "
+        "Sé conciso, máximo 5 líneas. Indica si hay algo urgente.",
+        ctx_data
+    )
+    await update.message.reply_text(
+        fmt.card("☀️", "Resumen del sistema", [resumen]),
+        parse_mode=PM
+    )
+
+
+# ── /monitores ────────────────────────────────────────────────────────────────
+
+async def cmd_monitores(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+
+    from core.monitor import get_monitor_status
+    import time as _t
+
+    LABELS = {
+        "watch_hunter":           "🎯 IPs bloqueadas (Hunter)",
+        "watch_devices":          "👁️ Estado equipos del agente",
+        "daily_summary":          "☀️ Resumen diario 7:00 AM",
+        "watch_resources":        "🖥️ CPU / RAM",
+        "watch_backups":          "🛡️ Backups sin ejecutar",
+        "watch_wan_outage":       "🌐 Caída WAN",
+        "watch_disk":             "🖥️ Disco del servidor",
+        "watch_pipeline":         "🎯 Pipeline Suricata",
+        "watch_services":         "🖥️ Servicios del sistema",
+        "watch_guardian_nodes":   "👁️ Estado nodos Guardian",
+        "preventive_reboot":      "👁️ Reboot preventivo 4:00 AM",
+        "weekly_backup":          "🛡️ Backup semanal Dom 2:00 AM",
+        "watch_protector_retry":  "🛡️ Reintentos Protector",
+        "watch_hunter_verify":    "🎯 Verificación bloqueo firewall",
+        "watch_docker":           "⚙️ Reinicios del container",
+        "watch_connectivity":     "🌐 Conectividad del servidor",
+        "watch_groq":             "⚙️ API Groq",
+        "watch_security":         "🎯 Firewall Linux/OpenWrt",
+        "watch_mikrotik_security":"🎯 Firewall MikroTik",
+        "auto_unblock":           "🎯 Desbloqueo automático",
+    }
+
+    now    = _t.time()
+    status = get_monitor_status()
+    lines  = []
+
+    for name, label in LABELS.items():
+        entry = status.get(name)
+        if not entry:
+            lines.append(f"  ⚪ {label} — <i>sin datos aún</i>")
+            continue
+        if entry.get("error"):
+            err = fmt.e(entry["error"][:60])
+            lines.append(f"  🔴 {label}\n      <code>{err}</code>")
+        else:
+            last_ok = entry.get("last_ok")
+            if last_ok:
+                mins = int((now - last_ok) / 60)
+                ago  = f"{mins}m" if mins < 60 else f"{mins//60}h{mins%60:02d}m"
+            else:
+                ago = "?"
+            last_alert = entry.get("last_alert")
+            alert_tag  = ""
+            if last_alert:
+                am = int((now - last_alert) / 60)
+                alert_ago = f"{am}m" if am < 60 else f"{am//60}h{am%60:02d}m"
+                alert_tag = f" · ⚡ alerta hace {alert_ago}"
+            lines.append(f"  ✅ {label} — {fmt.e(ago)}{alert_tag}")
+
+    await update.message.reply_text(
+        fmt.card("📡", "Monitores automáticos", lines),
+        parse_mode=PM
+    )
+
+
+async def cmd_botstatus(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text(
+            "🔧 Estado interno del bot: solo <b>soporte USB</b>.\n"
+            "Tu chequeo operativo es /salud o /verificar.",
+            parse_mode=PM,
+        )
+        return
+    estado = _mnt.paused_until_str()
+    nodes  = shomer_api.get_guardian_nodes() or []
+    online = sum(1 for n in nodes if n.get("status") == "online")
+    tokens_hoy = _memory.get_tokens_today()
+    budget_st  = _memory.check_token_budget()
+    budget_icon = {"ok": "✅", "warn": "⚠️", "exceeded": "🔴"}.get(budget_st, "❓")
+    warn_k  = _memory.TOKEN_WARN_DAILY  // 1000
+    limit_k = _memory.TOKEN_LIMIT_DAILY // 1000
+    await update.message.reply_text(
+        fmt.card("📊", "Bot Status", [
+            f"  🤖 <b>Asistente IA:</b> <code>{fmt.e(estado)}</code>",
+            f"  🛡️ <b>Guardian:</b> {online}/{len(nodes)} nodos online",
+            f"  📦 <b>Modelo:</b> Llama 3.3 70B (Groq)",
+            f"  💾 <b>Memoria:</b> SQLite por usuario activa",
+            f"  {budget_icon} <b>Tokens hoy:</b> {tokens_hoy:,} / {limit_k}k (aviso {warn_k}k)",
+        ]),
+        parse_mode=PM,
+    )
+
+
+# ── /tokens ───────────────────────────────────────────────────────────────────
+
+async def cmd_tokens(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Estadísticas de consumo de tokens IA — solo developer."""
+    level = await _guard(update)
+    if not level:
+        return
+    if level != "developer":
+        await update.message.reply_text("Solo disponible para soporte USB.", parse_mode=PM)
+        return
+    stats   = _memory.get_token_stats(days=7)
+    today   = _memory.get_tokens_today()
+    budget  = _memory.check_token_budget()
+    warn_k  = _memory.TOKEN_WARN_DAILY  // 1000
+    limit_k = _memory.TOKEN_LIMIT_DAILY // 1000
+    icon    = {"ok": "✅", "warn": "⚠️", "exceeded": "🔴"}.get(budget, "❓")
+    lines   = [f"  {icon} <b>Hoy:</b> {today:,} tokens (límite {limit_k}k / aviso {warn_k}k)", ""]
+    for row in stats:
+        bar_len = min(10, int(row["tokens"] / max(limit_k * 100, 1)))
+        bar = "█" * bar_len + "░" * (10 - bar_len)
+        lines.append(f"  {row['date']} <code>[{bar}]</code> {row['tokens']:,}")
+    await update.message.reply_text(
+        fmt.card("🔢", "Consumo tokens IA", lines),
+        parse_mode=PM,
+    )
+
+
+# ── /nuevo ────────────────────────────────────────────────────────────────────
+
+async def cmd_nuevo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    _memory.clear_history(update.effective_user.id)
+    await update.message.reply_text(
+        "🧹 <b>Conversación reiniciada.</b>\n<i>El asistente empieza desde cero.</i>",
+        parse_mode=PM,
+    )
+
+
+# ── /logout ───────────────────────────────────────────────────────────────────
+
+async def cmd_logout(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if acc.technician_only_mode():
+        await update.message.reply_text(
+            "Este bot está en <b>modo solo técnico de campo</b>. No hay sesión developer.",
+            parse_mode=PM,
+        )
+        return
+    acc.logout_dev(update.effective_user.id)
+    await update.message.reply_text(
+        "🔓 Sesión developer cerrada. Ahora estás en modo <b>técnico de soporte</b>.\n"
+        "<i>Escribe cualquier saludo para ver el panel técnico.</i>",
+        parse_mode=PM,
+    )
+
+
+# ── Lenguaje natural ──────────────────────────────────────────────────────────
+
+async def msg_natural(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+
+    text    = update.message.text or ""
+    user_id = update.effective_user.id
+
+    if acc.technician_only_mode():
+        acc.clear_pending_dev_auth(user_id)
+
+    # Rate-limit siempre, incluso cuando el bot está pausado
+    if not acc.is_pending_auth(user_id) and not _mnt.check_user_rate(user_id):
+        await update.message.reply_text("⏳ Vas muy rápido — espera unos segundos.")
+        return
+
+    # Modo mantenimiento global (solo bloquea texto libre, no comandos)
+    if _mnt.is_paused() and level != "developer":
+        await update.message.reply_text(
+            "🛠️ <b>Asistente en pausa</b> — cuota Groq en enfriamiento.\n"
+            "<i>Usa /salud · /alertas mientras tanto.</i>",
+            parse_mode=PM,
+        )
+        return
+
+    # Flujo contraseña developer
+    if acc.is_pending_auth(user_id):
+        if acc.verify_dev_password(user_id, text):
+            await update.message.reply_text(
+                "✅ <b>Contraseña correcta.</b> Sesión developer activada.", parse_mode=PM
+            )
+            await _send_start(update.message, "developer")
+        else:
+            await update.message.reply_text(
+                "❌ Contraseña incorrecta. Accediendo como <b>técnico de soporte</b>.", parse_mode=PM
+            )
+            await _send_start(update.message, "tecnico")
+        return
+
+    # Saludos → respuesta corta sin Groq
+    if _is_greeting(text):
+        resp = random.choice(_GREETING_RESPONSES).format(site=fmt.e(SITE_NAME))
+        await update.message.reply_text(resp, parse_mode=PM)
+        return
+
+    # Lenguaje natural con tool calling y memoria
+    await _typing(update, ctx)
+    _memory.add_message(user_id, "user", text, level)
+    history = _memory.get_history(user_id)
+
+    loop = asyncio.get_running_loop()
+    try:
+        respuesta = await asyncio.wait_for(
+            loop.run_in_executor(None, partial(_groq_chat, history, level=level)),
+            timeout=25.0,
+        )
+    except asyncio.TimeoutError:
+        respuesta = "⏱ La consulta tardó demasiado. Intenta de nuevo con una pregunta más concreta."
+    except Exception as ex:
+        log.warning("Groq ejecutor: %s", ex)
+        respuesta = "⚠️ No pude contactar el asistente. Usa /salud · /ayuda."
+
+    respuesta = (respuesta or "").strip() or \
+        "Sin respuesta del asistente. Usa /salud para datos del servidor."
+
+    _memory.add_message(user_id, "assistant", respuesta, level)
+    # Groq genera Markdown — enviarlo con parse_mode Markdown
+    await update.message.reply_text(respuesta[:4096], parse_mode="Markdown")
+
+
+# ── Foto → logo (solo developer) ──────────────────────────────────────────────
+
+async def msg_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if acc.technician_only_mode() or level != "developer":
+        await update.message.reply_text(
+            "El cambio de logo lo gestiona <b>soporte USB</b>.", parse_mode=PM
+        )
+        return
+    if not update.message.photo:
+        await update.message.reply_text("Envía una imagen JPG.")
+        return
+    try:
+        photo = update.message.photo[-1]
+        file  = await ctx.bot.get_file(photo.file_id)
+        await file.download_to_drive(LOGO_PATH)
+        await update.message.reply_text("✅ Logo actualizado. Usa /start para verlo.", parse_mode=PM)
+    except Exception as ex:
+        await update.message.reply_text(
+            f"❌ Error descargando imagen: {fmt.e(str(ex))}", parse_mode=PM
+        )
+
+
+# ── Arranque ──────────────────────────────────────────────────────────────────
+
+def run():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    # Comandos
+    for cmd, fn in [
+        ("start",         cmd_start),
+        ("ayuda",         cmd_ayuda),
+        ("salud",         cmd_salud),
+        ("equipos",       cmd_equipos),
+        ("alertas",       cmd_alertas),
+        ("ping",          cmd_ping),
+        ("reiniciar",     cmd_reiniciar),
+        ("clientes",      cmd_clientes),
+        ("info",          cmd_info),
+        ("agregar",       cmd_agregar),
+        ("eliminar",      cmd_eliminar),
+        ("usuario",       cmd_usuario),
+        ("instalar",      cmd_instalar),
+        ("diagnostico",   cmd_diagnostico),
+        ("mantenimiento", cmd_mantenimiento),
+        ("doc",           cmd_doc),
+        ("desbloquear",   cmd_desbloquear),
+        ("bloquear",      cmd_bloquear),
+        ("historial",     cmd_historial),
+        ("revertir",      cmd_revertir),
+        ("backup",        cmd_backup),
+        ("restaurar",     cmd_restaurar),
+        ("nuevo",         cmd_nuevo),
+        ("resumen",       cmd_resumen),
+        ("monitores",     cmd_monitores),
+        ("pause",         cmd_pause),
+        ("resume",        cmd_resume),
+        ("botstatus",     cmd_botstatus),
+        ("tokens",        cmd_tokens),
+        ("logout",        cmd_logout),
+        ("sitio",         cmd_sitio),
+        ("verificar",     cmd_verificar),
+    ]:
+        app.add_handler(CommandHandler(cmd, fn))
+
+    # Callbacks
+    app.add_handler(CallbackQueryHandler(cb_reboot,        pattern="^reboot_"))
+    app.add_handler(CallbackQueryHandler(cb_mantenimiento, pattern="^maint:"))
+    app.add_handler(CallbackQueryHandler(cb_instalar,      pattern="^instalar"))
+    app.add_handler(CallbackQueryHandler(cb_repair,        pattern="^repair:"))
+    app.add_handler(CallbackQueryHandler(cb_block,         pattern="^block_"))
+    app.add_handler(CallbackQueryHandler(cb_sitio_cancel,  pattern="^sitio_cancel:"))
+    app.add_handler(CallbackQueryHandler(cb_usuario,       pattern="^usuario:"))
+
+    # Mensajes
+    app.add_handler(MessageHandler(filters.PHOTO, msg_photo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, msg_natural))
+
+    log.info("Agente Shomer iniciado — modo %s — sitio: %s",
+             "solo_tecnico" if acc.technician_only_mode() else "laboratorio", SITE_NAME)
+
+    async def post_init(application):
+        monitor.start_all(application.bot)
+        cmds = [
+            # Instalación
+            BotCommand("instalar",      "📋 Guía de instalación paso a paso"),
+            BotCommand("usuario",       "👤 Crear usuario de servicio en el equipo"),
+            BotCommand("verificar",     "✔️ Check final de instalación"),
+            # Servidor
+            BotCommand("salud",         "🖥️ Info del servidor"),
+            # 👁️ Guardian
+            BotCommand("equipos",       "👁️ Nodos monitoreados"),
+            BotCommand("diagnostico",   "👁️ Diagnóstico de un equipo"),
+            BotCommand("reiniciar",     "👁️ Reiniciar AP"),
+            BotCommand("ping",          "👁️ Ping a una IP"),
+            BotCommand("clientes",      "👁️ Clientes WiFi del AP"),
+            BotCommand("info",          "👁️ Firmware y uptime del equipo"),
+            BotCommand("mantenimiento", "👁️ Pausar reboots automáticos"),
+            BotCommand("sitio",         "👁️ Silenciar alertas en obra"),
+            # 🎯 Hunter
+            BotCommand("alertas",       "🎯 Alertas de seguridad"),
+            BotCommand("bloquear",      "🎯 Bloquear IP en el firewall"),
+            BotCommand("desbloquear",   "🎯 Liberar IP bloqueada"),
+            # Agente
+            BotCommand("agregar",       "➕ Registrar equipo en el agente"),
+            BotCommand("eliminar",      "🗑️ Quitar equipo"),
+            BotCommand("historial",     "📜 Últimos cambios"),
+            BotCommand("revertir",      "↩️ Deshacer un cambio"),
+            BotCommand("nuevo",          "🧹 Reiniciar conversación IA"),
+            BotCommand("resumen",        "☀️ Resumen del sistema ahora"),
+            BotCommand("monitores",      "📡 Estado de los 20 monitores"),
+        ]
+        if not acc.technician_only_mode():
+            cmds.extend([
+                BotCommand("doc",       "📖 Consulta técnica interna"),
+                BotCommand("botstatus", "📊 Estado interno del bot"),
+                BotCommand("pause",     "🔴 Pausar asistente IA"),
+                BotCommand("resume",    "🟢 Reactivar asistente IA"),
+                BotCommand("logout",    "🚪 Cerrar sesión developer"),
+            ])
+        cmds.extend([
+            BotCommand("ayuda", "❓ Todos los comandos"),
+            BotCommand("start", "🏠 Inicio"),
+        ])
+        await application.bot.set_my_commands(cmds)
+
+    app.post_init = post_init
+    app.run_polling(drop_pending_updates=True)
