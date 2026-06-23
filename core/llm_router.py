@@ -174,18 +174,10 @@ def _chat_inner(enriched: list[dict], level: str, user_id, history: list[dict]) 
 def chat(history: list[dict], level: str = "tecnico", user_id: int | str = "") -> str:
     enriched = _inject_snapshot(history)
     out, engine_used = _chat_inner(enriched, level, user_id, history)
-    # Log para display NOC
-    try:
-        user_q = ""
-        for m in reversed(history):
-            if m.get("role") == "user":
-                user_q = str(m.get("content", "")).strip()[:80]
-                break
-        if user_q and len(user_q) > 5:
-            from core.shomer_api import log_ia_action
-            log_ia_action(engine_used, f"Consulta: {user_q}", "chat")
-    except Exception:
-        pass
+    # NO se loguea al NOC -- el NOC es una pantalla pública sin login (TV del hotel)
+    # y esto exponía el texto literal de las preguntas privadas del técnico
+    # (ej. detalles de backups, nombres de servidores) a cualquiera que la viera.
+    # El feed del NOC queda solo con explicaciones de monitores via explain().
     return out
 
 
