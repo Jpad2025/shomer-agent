@@ -11,6 +11,7 @@ from telegram.error import TelegramError
 log = logging.getLogger("shomer-access")
 
 _TECNICO_CHAT = str(os.environ.get("TELEGRAM_CHAT_ID", ""))
+_DEV_ID = str(os.environ.get("AGENT_DEVELOPER_ID", "")).strip()
 
 
 def technician_only_mode() -> bool:
@@ -19,9 +20,13 @@ def technician_only_mode() -> bool:
 
 
 def get_level(update: Update) -> str:
-    """Retorna 'tecnico' si el chat coincide con TELEGRAM_CHAT_ID, si no 'none'."""
+    """'tecnico' si el chat coincide con TELEGRAM_CHAT_ID (grupo) o si quien escribe
+    es AGENT_DEVELOPER_ID por DM (cualquier chat privado) -- si no, 'none'."""
     chat_id = str(update.effective_chat.id) if update.effective_chat else ""
-    if _TECNICO_CHAT and str(chat_id) == str(_TECNICO_CHAT):
+    if _TECNICO_CHAT and chat_id == str(_TECNICO_CHAT):
+        return "tecnico"
+    user_id = str(update.effective_user.id) if update.effective_user else ""
+    if _DEV_ID and user_id == _DEV_ID:
         return "tecnico"
     return "none"
 

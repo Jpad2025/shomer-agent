@@ -307,6 +307,7 @@ async def watch_hunter(bot: Bot) -> None:
                         reply_markup=keyboard,
                     )
                 _blocked_ips = current
+            _tick("watch_hunter")
         except Exception as e:
             _tick("watch_hunter", error=str(e)); log.debug("watch_hunter error: %s", e)
         await asyncio.sleep(60)
@@ -354,6 +355,7 @@ async def watch_devices(bot: Bot) -> None:
 
                 _device_status[ip] = nuevo
                 dm.update_status(ip, nuevo)
+            _tick("watch_devices")
         except Exception as e:
             _tick("watch_devices", error=str(e)); log.debug("watch_devices error: %s", e)
         await asyncio.sleep(120)
@@ -471,7 +473,7 @@ async def watch_resources(bot: Bot) -> None:
                             ),
                         )
                     _cpu_high_ticks = 0
-
+                _tick("watch_resources")
         except Exception as e:
             _tick("watch_resources", error=str(e)); log.debug("watch_resources error: %s", e)
         await asyncio.sleep(180)
@@ -1065,6 +1067,7 @@ _guardian_verify_pending: Dict[str, float] = {} # ip -> when to verify (epoch)
 _guardian_down_streak: Dict[str, int] = {}  # ip -> polls consecutivos offline/no-internet (bot)
 _guardian_down_alerted: Set[str] = set()    # IPs con alerta caída ya enviada (incidente actual)
 _GUARDIAN_ALERT_CYCLES = max(1, int(os.environ.get("BOT_GUARDIAN_ALERT_CYCLES", "2")))
+_GUARDIAN_REBOOT_VERIFY_MAX_AGE = max(60, int(os.environ.get("BOT_GUARDIAN_REBOOT_VERIFY_MAX_AGE", "600")))
 _AUTO_UNBLOCK_HOURS = int(os.environ.get("BOT_AUTO_UNBLOCK_HOURS", "0"))
 
 
@@ -1075,8 +1078,8 @@ async def watch_guardian_nodes(bot: Bot) -> None:
       polls consecutivos malos (default 2 ≈ 60 s) — evita falso positivo en microcortes.
       Guardian no se modifica.
     - Degradado: orienta con causa probable, sin botón de reboot
-    - Recuperación: avisa al volver online (igual que antes)
-    - Reboot detectado (Guardian automático): agenda verificación 3 min después
+    - Recuperación: avisa al volver online solo si hubo alerta de caída previa
+    - Reboot detectado (Guardian automático): agenda verificación 3 min después (solo reboot reciente)
     - Post-reboot: confirma que AP está online o escala si sigue caído
     - Patrón recurrente: alerta si AP se reinicia 3+ veces en el día
     """
@@ -1092,9 +1095,10 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                 continue
 
             now_ts = _time_module.time()
-            today = datetime.now().date().toordinal()
+            recoveries: list[tuple[str, str]] = []
 
             # Procesar verificaciones post-reboot pendientes
+            verify_ok: list[str] = []
             for ip, verify_at in list(_guardian_verify_pending.items()):
                 if now_ts < verify_at:
                     continue
@@ -1106,11 +1110,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                 nombre = node.get("name", ip)
                 status = node.get("status", "unknown")
                 if status == "online":
-                    await _emit_guardian(
-                        bot, ip,
-                        [_a("✅", "Nodo recuperado", f"{_html.escape(str(nombre))} tras reinicio", raw=True)],
-                        reply_markup=_save_kb_after_reboot(ip),
-                    )
+                    verify_ok.append(nombre)
                     _guardian_status[ip] = "online"
                 else:
                     icon = "🔴" if status == "offline" else "🟠"
@@ -1127,6 +1127,19 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         bypass_buffer=True,
                         critical=True,
                     )
+            if len(verify_ok) == 1:
+                await _emit_guardian(
+                    bot, "batch",
+                    [_a("✅", "Nodo recuperado", f"{_html.escape(verify_ok[0])} tras reinicio", raw=True)],
+                )
+            elif len(verify_ok) > 1:
+                txt = ", ".join(_html.escape(n) for n in verify_ok[:6])
+                if len(verify_ok) > 6:
+                    txt += f" (+{len(verify_ok) - 6})"
+                await _send(
+                    bot,
+                    _a("✅", f"{len(verify_ok)} nodos recuperados tras reinicio", txt, raw=True),
+                )
 
             for n in nodes:
                 ip     = n.get("ip") or n.get("ip_address", "?")
@@ -1148,35 +1161,26 @@ async def watch_guardian_nodes(bot: Bot) -> None:
 
                 if last_reboot_now and last_reboot_now != last_reboot_prev:
                     _guardian_last_reboot[ip] = last_reboot_now
-                    # Registrar en historial del día
+                    reboot_age = now_ts - last_reboot_now
                     hoy_reboots = [t for t in _guardian_reboot_count.get(ip, [])
                                    if (now_ts - t) < 86400]
                     hoy_reboots.append(now_ts)
                     _guardian_reboot_count[ip] = hoy_reboots
 
-                    # Agendar verificación 3 minutos después
-                    _guardian_verify_pending[ip] = now_ts + 180
-                    fails = data.get("failures", 0)
-                    clientes = ""
-                    try:
-                        cli_data = shomer_api._get(f"/nodes/{ip}/clients")
-                        count = (cli_data or {}).get("count", 0)
-                        if count:
-                            clientes = f" · {count} clientes"
-                    except Exception:
-                        pass
-
-                    await _emit_guardian(
-                        bot, ip,
-                        [
-                            _a(
-                                "⚡", "Reinicio automático Guardian",
-                                f"{_html.escape(str(nombre))} — {fails} alertas{clientes}",
-                                raw=True,
-                            ),
-                        ],
-                        severity="warn",
-                    )
+                    if reboot_age <= _GUARDIAN_REBOOT_VERIFY_MAX_AGE:
+                        _guardian_verify_pending[ip] = now_ts + 180
+                        fails = data.get("failures", 0)
+                        await _emit_guardian(
+                            bot, ip,
+                            [
+                                _a(
+                                    "⚡", "Reinicio automático Guardian",
+                                    f"{_html.escape(str(nombre))} — {fails} alertas",
+                                    raw=True,
+                                ),
+                            ],
+                            severity="warn",
+                        )
 
                     # Patrón recurrente: 3+ reboots en 24h
                     if len(hoy_reboots) >= 3:
@@ -1232,6 +1236,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             reply_markup=markup,
                         )
                         _guardian_down_alerted.add(ip)
+                        _guardian_down_since[ip] = now_ts
 
                 elif status == "degraded" and prev not in ("degraded",) and not _is_suppressed(ip):
                     _guardian_down_streak[ip] = 0
@@ -1248,12 +1253,12 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                     )
 
                 elif status == "online":
-                    if prev in ("offline", "no-internet") and ip in _guardian_down_alerted and not _is_suppressed(ip):
-                        await _emit_guardian(
-                            bot, ip,
-                            [_a("✅", "Nodo recuperado", msgfmt.host(nombre, ip), raw=True)],
-                            reply_markup=_save_kb_recovery(ip),
-                        )
+                    if (
+                        prev in ("offline", "no-internet")
+                        and ip in _guardian_down_alerted
+                        and not _is_suppressed(ip)
+                    ):
+                        recoveries.append((ip, nombre))
                     _guardian_down_streak[ip] = 0
                     _guardian_down_alerted.discard(ip)
 
@@ -1261,6 +1266,13 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                     _guardian_down_streak[ip] = 0
 
                 _guardian_status[ip] = status
+
+            for ip, nombre in recoveries:
+                await _emit_guardian(
+                    bot, ip,
+                    [_a("✅", "Nodo recuperado", msgfmt.host(nombre, ip), raw=True)],
+                    reply_markup=_save_kb_recovery(ip),
+                )
 
             _tick("watch_guardian_nodes")
         except Exception as e:
@@ -1311,6 +1323,7 @@ async def preventive_reboot(bot: Bot) -> None:
                                 raw=True,
                             ),
                         )
+            _tick("preventive_reboot")
         except Exception as e:
             _tick("preventive_reboot", error=str(e)); log.debug("preventive_reboot error: %s", e)
         await asyncio.sleep(60)
@@ -1522,7 +1535,7 @@ async def watch_hunter_verify(bot: Bot) -> None:
                             raw=True,
                         ),
                     )
-
+            _tick("watch_hunter_verify")
         except Exception as e:
             _tick("watch_hunter_verify", error=str(e)); log.debug("watch_hunter_verify error: %s", e)
         await asyncio.sleep(60)
@@ -1532,64 +1545,46 @@ async def watch_hunter_verify(bot: Bot) -> None:
 
 _docker_restart_count_prev: Optional[int] = None
 _docker_alerted = False
+_AGENT_RESTART_MARKER = os.environ.get("AGENT_RESTART_MARKER", "/app/data/.agent_last_start")
 
 async def watch_docker(bot: Bot) -> None:
     """
-    Cada 5 min verifica salud del container shomer-agent:
-    - Reinicios inesperados → alerta developer
-    - RAM/CPU del container
+    Detecta reinicios del propio agente comparando un marcador de arranque
+    persistido en /app/data (volumen Docker, sobrevive reinicios). No usa
+    `docker inspect`/docker.sock -- el agente no tiene el socket de Docker
+    montado por seguridad (un bot con acceso a docker.sock podría controlar
+    cualquier container del host) y el binario `docker` ni siquiera existe
+    dentro de la imagen, así que ese chequeo nunca pudo funcionar (fallaba
+    siempre con "[Errno 2] No such file or directory: 'docker'").
     """
-    global _docker_restart_count_prev, _docker_alerted
-    import subprocess, json
-    await asyncio.sleep(120)
-
-    while True:
-        try:
-            r = subprocess.run(
-                ["docker", "inspect", "--format",
-                 '{"restarts":{{.RestartCount}},"status":"{{.State.Status}}",'
-                 '"started":"{{.State.StartedAt}}"}',
-                 "shomer-agent"],
-                capture_output=True, text=True, timeout=10
+    await asyncio.sleep(5)
+    try:
+        now_ts = _time_module.time()
+        prev_ts = None
+        if os.path.exists(_AGENT_RESTART_MARKER):
+            try:
+                with open(_AGENT_RESTART_MARKER) as f:
+                    prev_ts = float(f.read().strip())
+            except Exception:
+                prev_ts = None
+        with open(_AGENT_RESTART_MARKER, "w") as f:
+            f.write(str(now_ts))
+        if prev_ts:
+            mins = int((now_ts - prev_ts) / 60)
+            ago = f"{mins} min" if mins < 60 else f"{mins // 60} h"
+            await _send(
+                bot,
+                _a("⚠️", "Agente reiniciado", f"último arranque hace {ago}", raw=True),
             )
-            if r.returncode != 0:
-                await asyncio.sleep(300)
-                continue
+        _tick("watch_docker")
+    except Exception as e:
+        _tick("watch_docker", error=str(e)); log.debug("watch_docker error: %s", e)
 
-            info = json.loads(r.stdout.strip())
-            restarts = info.get("restarts", 0)
-            status   = info.get("status", "unknown")
-
-            if status != "running" and not _docker_alerted:
-                _docker_alerted = True
-                await _send(
-                    bot,
-                    _a(
-                        "🔴", "Agente detenido",
-                        f"estado {status} — systemctl restart shomer-agent",
-                        raw=True,
-                    ),
-                )
-            elif status == "running" and _docker_alerted:
-                _docker_alerted = False
-
-            if _docker_restart_count_prev is None:
-                _docker_restart_count_prev = restarts
-            elif restarts > _docker_restart_count_prev:
-                diff = restarts - _docker_restart_count_prev
-                _docker_restart_count_prev = restarts
-                await _send(
-                    bot,
-                    _a(
-                        "⚠️", "Agente reiniciado",
-                        f"{restarts} reinicios totales (+{diff})",
-                        raw=True,
-                    ),
-                )
-
-        except Exception as e:
-            _tick("watch_docker", error=str(e)); log.debug("watch_docker error: %s", e)
+    # Vivo = sigue corriendo. No hay más que chequear sin docker.sock --
+    # este tick periódico solo confirma que el loop del agente no se colgó.
+    while True:
         await asyncio.sleep(300)
+        _tick("watch_docker")
 
 
 # ── Conectividad: interfaces y WAN del servidor ───────────────────────────────
@@ -1660,7 +1655,7 @@ async def watch_connectivity(bot: Bot) -> None:
             elif wan_ok and _server_wan_alert:
                 _server_wan_alert = False
                 await _send(bot, _a("✅", "Internet recuperada", "servidor Shomer online"))
-
+            _tick("watch_connectivity")
         except Exception as e:
             _tick("watch_connectivity", error=str(e)); log.debug("watch_connectivity error: %s", e)
         await asyncio.sleep(180)
@@ -1737,6 +1732,7 @@ async def watch_groq(bot: Bot) -> None:
                 _groq_ok = True
                 _groq_alerted = False
                 _groq_fail_since = None
+            _tick("watch_groq")
         except Exception as e:
             _tick("watch_groq", error=str(e)); log.debug("watch_groq error: %s", e)
         await asyncio.sleep(300)
@@ -1979,6 +1975,7 @@ async def watch_security(bot: Bot) -> None:
             except Exception:
                 pass
 
+            _tick("watch_security")
         except Exception as e:
             _tick("watch_security", error=str(e)); log.debug("watch_security error: %s", e)
         await asyncio.sleep(120)
@@ -2010,6 +2007,7 @@ async def watch_mikrotik_security(bot: Bot) -> None:
         try:
             data = shomer_api.get_firewall_security_log()
             if not data.get("ok"):
+                _tick("watch_mikrotik_security", error=data.get("error", "firewall no configurado o sin credenciales"))
                 await asyncio.sleep(POLL)
                 continue
 
@@ -2060,7 +2058,7 @@ async def watch_mikrotik_security(bot: Bot) -> None:
 
             for msg in msgs:
                 await _send_critical(bot, msg)
-
+            _tick("watch_mikrotik_security")
         except Exception as e:
             _tick("watch_mikrotik_security", error=str(e)); log.debug("watch_mikrotik_security error: %s", e)
         await asyncio.sleep(POLL)
@@ -2099,6 +2097,7 @@ async def auto_unblock(bot: Bot) -> None:
                             log.info("Auto-unblock: %s (bloqueada hace %.0fh)", ip, horas)
                 except Exception as e:
                     log.debug("auto_unblock parse error %s: %s", ip, e)
+            _tick("auto_unblock")
         except Exception as e:
             _tick("auto_unblock", error=str(e)); log.debug("auto_unblock error: %s", e)
         await asyncio.sleep(1800)  # revisar cada 30 min
@@ -2114,7 +2113,9 @@ _infra_tcp_down: Set[str] = set()
 _infra_loc_alert_ts: Dict[str, float] = {}
 _infra_flap_times: Dict[str, list] = {}
 _infra_flap_alerted: Set[str] = set()
+_infra_offline_streak: Dict[str, int] = {}  # chequeos consecutivos vistos "offline" sin confirmar aun
 _infra_snmp_ports_alerted: Dict[str, Set[str]] = {}
+_infra_snmp_ports_up: Dict[str, Set[str]] = {}
 _infra_seed_done = False
 
 _INFRA_TONER_WARN = int(os.environ.get("INFRA_TONER_WARN_PCT", "15"))
@@ -2123,7 +2124,14 @@ _INFRA_STALE_MINS = int(os.environ.get("INFRA_STALE_REMINDER_MINS", "120"))
 _INFRA_GROUP_COOLDOWN = int(os.environ.get("INFRA_GROUP_COOLDOWN_SEC", "1800"))
 _INFRA_FLAP_WINDOW = int(os.environ.get("INFRA_FLAP_WINDOW_SEC", "21600"))  # 6 h
 _INFRA_FLAP_MIN = int(os.environ.get("INFRA_FLAP_MIN_CHANGES", "4"))
+# Chequeos consecutivos "offline" (~120s c/u, ciclo de este watcher) antes de avisar
+# caída real -- evita que un blip de unos segundos (cola de hilos, ping perdido)
+# dispare "Equipo Infra caído" + "recuperado" sin que haya pasado nada real.
+_INFRA_OFFLINE_CONFIRM = int(os.environ.get("INFRA_OFFLINE_CONFIRM_CHECKS", "2"))
 _INFRA_SNMP_TYPES = {"switch", "router", "server", "nas", "controller"}
+_INFRA_SNMP_PORT_ALERTS = os.environ.get("INFRA_SNMP_PORT_ALERTS", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 
 
 def _infra_duration_mins(label: Optional[str]) -> int:
@@ -2150,7 +2158,7 @@ async def watch_infra(bot: Bot) -> None:
     - Caída / recuperación de equipos (Telegram unificado desde el agente)
     - Varios equipos caídos en la misma ubicación (switch/energía)
     - Flapping (muchos cambios de estado en pocas horas)
-    - Puertos SNMP DOWN con ping OK (uplink)
+    - Puertos SNMP: solo alerta UP→DOWN (no puertos vacíos eternamente apagados)
     - Recordatorio si lleva >2 h caído
     - Tóner y papel bajo en impresoras/POS
     - Ping OK pero puerto TCP caído (servicio desconectado)
@@ -2167,6 +2175,8 @@ async def watch_infra(bot: Bot) -> None:
             if not _infra_seed_done:
                 for d in devices:
                     _infra_prev_status[d["ip"]] = d.get("status", "unknown")
+                    ip = d["ip"]
+                    _infra_snmp_ports_up[ip] = set(d.get("snmp_up_ports") or [])
                 _infra_seed_done = True
                 log.info("watch_infra: %d equipos cargados (sin alerta inicial)", len(devices))
                 _tick("watch_infra_equipment")
@@ -2194,33 +2204,37 @@ async def watch_infra(bot: Bot) -> None:
                     # Reflejo de Guardian — ya cubierto por watch_guardian_nodes, evita duplicados
                     continue
 
-                prev = _infra_prev_status.get(ip)
+                confirmed_prev = _infra_prev_status.get(ip)  # último estado CONFIRMADO (alertado)
 
-                # ── Transición online ↔ offline ───────────────────────────────
-                if prev is not None and prev != status:
-                    flaps = _infra_flap_times.setdefault(ip, [])
-                    flaps.append(now_ts)
-                    _infra_flap_times[ip] = [
-                        t for t in flaps if now_ts - t <= _INFRA_FLAP_WINDOW
-                    ]
-                    if (
-                        len(_infra_flap_times[ip]) >= _INFRA_FLAP_MIN
-                        and ip not in _infra_flap_alerted
-                    ):
-                        window_h = max(1, _INFRA_FLAP_WINDOW // 3600)
-                        await _send(
-                            bot,
-                            _a(
-                                "⚠️", "Flapping detectado",
-                                f"{msgfmt.host(name, ip)} — "
-                                f"{len(_infra_flap_times[ip])} cambios en {window_h} h",
-                                raw=True,
-                            ),
-                        )
-                        _infra_flap_alerted.add(ip)
-                        flap_alert = True
+                # ── Transición online ↔ offline, con confirmación anti-blip ────
+                if status == "offline":
+                    streak = _infra_offline_streak.get(ip, 0) + 1
+                    _infra_offline_streak[ip] = streak
 
-                    if status == "offline":
+                    if confirmed_prev != "offline" and streak >= _INFRA_OFFLINE_CONFIRM:
+                        # Confirmado tras N chequeos seguidos -- recién aquí es "caída real"
+                        flaps = _infra_flap_times.setdefault(ip, [])
+                        flaps.append(now_ts)
+                        _infra_flap_times[ip] = [
+                            t for t in flaps if now_ts - t <= _INFRA_FLAP_WINDOW
+                        ]
+                        if (
+                            len(_infra_flap_times[ip]) >= _INFRA_FLAP_MIN
+                            and ip not in _infra_flap_alerted
+                        ):
+                            window_h = max(1, _INFRA_FLAP_WINDOW // 3600)
+                            await _send(
+                                bot,
+                                _a(
+                                    "⚠️", "Flapping detectado",
+                                    f"{msgfmt.host(name, ip)} — "
+                                    f"{len(_infra_flap_times[ip])} cambios en {window_h} h",
+                                    raw=True,
+                                ),
+                            )
+                            _infra_flap_alerted.add(ip)
+                            flap_alert = True
+
                         if dtype in ("printer", "pos"):
                             msg = _a(
                                 "🔴", "Impresora fuera de línea",
@@ -2235,7 +2249,13 @@ async def watch_infra(bot: Bot) -> None:
                         await _send(bot, msg)
                         eq_alert = True
                         _infra_stale_reminded.discard(ip)
-                    elif status == "online" and prev == "offline":
+                        _infra_prev_status[ip] = "offline"
+                    # streak < umbral y aún no confirmado offline → blip silencioso, no se avisa
+
+                else:  # status == "online"
+                    _infra_offline_streak[ip] = 0
+                    if confirmed_prev == "offline":
+                        # Estaba confirmado caído -- aviso de recuperación inmediato
                         dur = d.get("state_duration") or ""
                         detail = msgfmt.host(name, ip)
                         if dur:
@@ -2246,10 +2266,7 @@ async def watch_infra(bot: Bot) -> None:
                             reply_markup=_save_kb_recovery(ip),
                         )
                         eq_alert = True
-
-                _infra_prev_status[ip] = status
-
-                if status == "online":
+                    _infra_prev_status[ip] = "online"
                     _infra_stale_reminded.discard(ip)
                     last_flap = max(_infra_flap_times.get(ip) or [0])
                     if ip in _infra_flap_alerted and now_ts - last_flap > _INFRA_FLAP_WINDOW:
@@ -2260,26 +2277,30 @@ async def watch_infra(bot: Bot) -> None:
             if len(offline) >= 2:
                 by_loc: Dict[str, list] = {}
                 for d in offline:
-                    loc = (d.get("location") or "").strip() or "Sin ubicación"
-                    by_loc.setdefault(loc, []).append(d)
-                for loc, devs in by_loc.items():
+                    loc = (d.get("location") or "").strip()
+                    by_loc.setdefault(loc or "_sin_loc", []).append(d)
+                for loc_key, devs in by_loc.items():
                     if len(devs) < 2:
                         continue
-                    if (now_ts - _infra_loc_alert_ts.get(loc, 0)) < _INFRA_GROUP_COOLDOWN:
+                    if (now_ts - _infra_loc_alert_ts.get(loc_key, 0)) < _INFRA_GROUP_COOLDOWN:
                         continue
                     names = ", ".join(
                         _html.escape(str(x.get("name", x["ip"]))) for x in devs[:5]
                     )
                     extra = f" (+{len(devs) - 5})" if len(devs) > 5 else ""
+                    if loc_key == "_sin_loc":
+                        subtitulo = names + extra
+                    else:
+                        subtitulo = f"{_html.escape(loc_key)}: {names}{extra}"
                     await _send(
                         bot,
                         _a(
                             "🔴", f"{len(devs)} equipos Infra sin respuesta",
-                            f"{_html.escape(loc)}: {names}{extra}",
+                            subtitulo,
                             raw=True,
                         ),
                     )
-                    _infra_loc_alert_ts[loc] = now_ts
+                    _infra_loc_alert_ts[loc_key] = now_ts
                     eq_alert = True
 
             # ── Sigue caído > N minutos (un aviso por caída) ─────────────────
@@ -2389,41 +2410,52 @@ async def watch_infra(bot: Bot) -> None:
                     )
                     svc_alert = True
 
-            # ── Puertos SNMP DOWN (equipo online, ping OK) ───────────────────
-            for d in devices:
-                ip = d["ip"]
-                name = d.get("name", ip)
-                if d.get("status") != "online" or d.get("snmp_ok") != 1:
-                    _infra_snmp_ports_alerted.pop(ip, None)
-                    continue
-                if d.get("device_type") not in _INFRA_SNMP_TYPES:
-                    continue
-                down_ports = set(d.get("snmp_down_ports") or [])
-                prev_ports = _infra_snmp_ports_alerted.get(ip, set())
-                for port in down_ports - prev_ports:
-                    await _send(
-                        bot,
-                        _a(
-                            "⚠️", f"{_html.escape(str(name))} responde ping",
-                            f"{_html.escape(port)} DOWN (uplink)",
-                            raw=True,
-                        ),
-                    )
-                    snmp_alert = True
-                for port in prev_ports - down_ports:
-                    await _send(
-                        bot,
-                        _a(
-                            "✅", "Puerto recuperado",
-                            f"{_html.escape(str(name))} — {_html.escape(port)} UP",
-                            raw=True,
-                        ),
-                    )
-                    snmp_alert = True
-                if down_ports:
-                    _infra_snmp_ports_alerted[ip] = down_ports
-                else:
-                    _infra_snmp_ports_alerted.pop(ip, None)
+            # ── Puertos SNMP: solo transición UP → DOWN (ignora vacíos siempre apagados)
+            if _INFRA_SNMP_PORT_ALERTS:
+                for d in devices:
+                    ip = d["ip"]
+                    name = d.get("name", ip)
+                    if d.get("status") != "online" or d.get("snmp_ok") != 1:
+                        _infra_snmp_ports_up.pop(ip, None)
+                        _infra_snmp_ports_alerted.pop(ip, None)
+                        continue
+                    if d.get("device_type") not in _INFRA_SNMP_TYPES:
+                        continue
+                    current_up = set(d.get("snmp_up_ports") or [])
+                    prev_up = _infra_snmp_ports_up.get(ip, set())
+                    # Poll SNMP incompleto: muchos puertos UP desaparecen de golpe → no alertar
+                    if prev_up and len(current_up) < max(1, len(prev_up) // 2):
+                        log.debug(
+                            "watch_infra: snmp ports %s omitido (poll incompleto %d→%d up)",
+                            ip, len(prev_up), len(current_up),
+                        )
+                        continue
+                    for port in prev_up - current_up:
+                        await _send(
+                            bot,
+                            _a(
+                                "⚠️", f"{_html.escape(str(name))} — puerto sin enlace",
+                                _html.escape(port),
+                                raw=True,
+                            ),
+                        )
+                        snmp_alert = True
+                        _infra_snmp_ports_alerted.setdefault(ip, set()).add(port)
+                    for port in current_up - prev_up:
+                        if port in _infra_snmp_ports_alerted.get(ip, set()):
+                            await _send(
+                                bot,
+                                _a(
+                                    "✅", "Puerto recuperado",
+                                    f"{_html.escape(str(name))} — {_html.escape(port)} UP",
+                                    raw=True,
+                                ),
+                            )
+                            snmp_alert = True
+                            _infra_snmp_ports_alerted[ip].discard(port)
+                    _infra_snmp_ports_up[ip] = current_up
+                    if not _infra_snmp_ports_alerted.get(ip):
+                        _infra_snmp_ports_alerted.pop(ip, None)
 
             _tick("watch_infra_equipment", alerted=eq_alert)
             _tick("watch_infra_printer", alerted=pr_alert)
@@ -2561,6 +2593,136 @@ async def watch_network_audit(bot: Bot) -> None:
         await asyncio.sleep(_CHECK_INTERVAL)
 
 
+_PORT_ERRORS_BASELINE: Dict[str, Dict[str, int]] = {}  # {ip -> {port_name -> in_errors+out_errors}}
+_PORT_ERRORS_BASELINE_FILE = "/app/data/port_errors_baseline.json"
+
+_PORT_CAUSES = [
+    "Cable dañado o conector RJ45 mal crimpado",
+    "Duplex mismatch (un lado forzado, el otro en auto)",
+    "Tarjeta de red defectuosa en el equipo conectado",
+    "Interferencia eléctrica (cable cerca de alimentación eléctrica o A/C)",
+    "Puerto del switch degradado",
+]
+
+
+def _load_port_baseline() -> None:
+    import json as _json
+    global _PORT_ERRORS_BASELINE
+    try:
+        with open(_PORT_ERRORS_BASELINE_FILE) as f:
+            _PORT_ERRORS_BASELINE = _json.load(f)
+    except Exception:
+        _PORT_ERRORS_BASELINE = {}
+
+
+def _save_port_baseline(data: Dict[str, Dict[str, int]]) -> None:
+    import json as _json
+    global _PORT_ERRORS_BASELINE
+    _PORT_ERRORS_BASELINE = data
+    try:
+        with open(_PORT_ERRORS_BASELINE_FILE, "w") as f:
+            _json.dump(data, f)
+    except Exception:
+        pass
+
+
+async def watch_port_errors(bot: Bot) -> None:
+    """
+    Informe diario de errores de puerto en switches/routers con SNMP.
+    Corre a las 08:00 hora local. Compara contadores actuales contra el
+    baseline del día anterior — reporta solo los incrementos nuevos.
+    Causas y recomendación generadas por IA (Groq).
+    Solo al técnico.
+    """
+    _load_port_baseline()
+    # Esperar hasta las 08:00 del día siguiente para el primer ciclo
+    await asyncio.sleep(120)
+    while True:
+        try:
+            now = datetime.now()
+            # Calcular segundos hasta las 08:00
+            target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            if now >= target:
+                target = target.replace(day=target.day + 1)
+            wait_sec = (target - now).total_seconds()
+            await asyncio.sleep(wait_sec)
+        except Exception:
+            await asyncio.sleep(3600)
+            continue
+
+        try:
+            switches = shomer_api.get_switch_port_errors()
+            if not switches:
+                _tick("watch_port_errors")
+                continue
+
+            # Construir snapshot actual {ip -> {port -> total_errors}}
+            current: Dict[str, Dict[str, int]] = {}
+            for sw in switches:
+                current[sw["ip"]] = {
+                    p["name"]: p["in_errors"] + p["out_errors"]
+                    for p in sw["ports"]
+                }
+
+            # Calcular deltas respecto al baseline
+            _ERROR_THRESHOLD = 10  # errores nuevos en 24h para reportar
+            report_lines = []
+            for sw in switches:
+                ip = sw["ip"]
+                prev = _PORT_ERRORS_BASELINE.get(ip, {})
+                deltas = []
+                for p in sw["ports"]:
+                    total = p["in_errors"] + p["out_errors"]
+                    prev_total = prev.get(p["name"], total)  # si no hay baseline, asumir igual (no alarmar)
+                    delta = total - prev_total
+                    if delta >= _ERROR_THRESHOLD:
+                        speed = f" ({p['speed_mbps']}M)" if p.get("speed_mbps") else ""
+                        deltas.append(f"  {p['name']}{speed} → +{delta:,} errores")
+                if deltas:
+                    report_lines.append(f"<b>{sw['name']}</b>")
+                    report_lines.extend(deltas)
+
+            # Actualizar baseline siempre (para el día siguiente)
+            _save_port_baseline(current)
+
+            if not report_lines:
+                _tick("watch_port_errors")
+                continue
+
+            # Generar diagnóstico con IA
+            causes_txt = "\n".join(f"• {c}" for c in _PORT_CAUSES)
+            diag_prompt = (
+                f"Un switch de red tiene errores nuevos en puertos de red hoy:\n"
+                f"{chr(10).join(report_lines)}\n\n"
+                f"Las causas más comunes son:\n{causes_txt}\n\n"
+                f"En una sola oración corta: ¿cuál es la causa más probable y qué debe revisar primero el técnico? "
+                f"Responde solo en español, sin listas, máximo 25 palabras."
+            )
+            try:
+                diagnosis = explain(diag_prompt, level="tecnico")
+            except Exception:
+                diagnosis = "Revisar cables físicos en los puertos con errores, comenzando por el de mayor incremento."
+
+            # Armar mensaje
+            site = os.environ.get("SITE_NAME", "")
+            header = f"📊 <b>INFORME PUERTOS{' — ' + site if site else ''}</b>"
+            body = "\n".join(report_lines)
+            msg = (
+                f"{header}\n"
+                f"<code>{datetime.now().strftime('%d/%m/%Y')}</code>\n\n"
+                f"{body}\n\n"
+                f"💡 <i>{diagnosis}</i>\n\n"
+                f"➡️ Empezar por el puerto con más errores nuevos. "
+                f"Cambiar cable físico primero (causa más frecuente)."
+            )
+            await _send(bot, msg, target="tecnico")
+            _tick("watch_port_errors", alerted=True)
+
+        except Exception as e:
+            _tick("watch_port_errors", error=str(e))
+            log.debug("watch_port_errors error: %s", e)
+
+
 def start_all(bot: Bot) -> None:
     triage.init(bot, _send)
     loop = asyncio.get_event_loop()
@@ -2590,9 +2752,10 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_log_truncate(bot))
     loop.create_task(watch_infra(bot))
     loop.create_task(watch_active_threats(bot))
+    loop.create_task(watch_port_errors(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (26 tasks) — triage=%s auto_tasks=%s",
+        "Monitores iniciados (27 tasks) — triage=%s auto_tasks=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
     )

@@ -75,9 +75,10 @@ MONITOR_LABELS = {
     "watch_infra_equipment":   "Infra — caídas y recuperaciones",
     "watch_infra_printer":     "Infra — tóner y papel",
     "watch_infra_service":     "Infra — servicio TCP desconectado",
-    "watch_infra_snmp":        "Infra — puertos SNMP DOWN",
+    "watch_infra_snmp":        "Infra — puerto perdió enlace (UP→DOWN)",
     "watch_infra_flap":        "Infra — flapping (cable/PoE)",
     "watch_active_threats":    "Hunter — resumen IPs contenidas",
+    "watch_port_errors":       "Infra — informe diario errores de puerto (08:00)",
 }
 
 MONITOR_GROUPS = [
@@ -90,7 +91,7 @@ MONITOR_GROUPS = [
     ("🛡️ Protector", ["watch_backups", "watch_protector_retry", "watch_protector_sample", "weekly_backup"]),
     ("🏗️ Infra", [
         "watch_infra_equipment", "watch_infra_printer", "watch_infra_service",
-        "watch_infra_snmp", "watch_infra_flap",
+        "watch_infra_snmp", "watch_infra_flap", "watch_port_errors",
     ]),
     ("🖥️ Servidor", [
         "watch_services", "watch_disk", "watch_resources", "watch_wan_outage",
@@ -269,9 +270,11 @@ def _ayuda_text() -> str:
 
         f"<b>🎯 Hunter</b> (seguridad, firewall)\n"
         f"/alertas — últimas alertas y IPs bloqueadas\n"
+        f"/seguro — activar/desactivar bloqueo automático Hunter (<i>/seguro on|off</i>)\n"
+        f"/liberar — ver IPs bloqueadas y liberar con botón\n"
         f"/bloquear &lt;ip&gt; — bloquear IP en firewall\n"
         f"/desbloquear &lt;ip&gt; — liberar IP bloqueada\n"
-        f"<i>Alias:</i> /hunter_alertas · /hunter_bloquear · /hunter_desbloquear\n\n"
+        f"<i>Alias:</i> /autobloqueo · /hunter_alertas · /hunter_bloquear · /hunter_desbloquear\n\n"
 
         f"<b>🛡️ Protector</b> (backups)\n"
         f"Panel web <code>/backups</code> — programar, sync B2, restaurar\n"
@@ -652,7 +655,10 @@ async def _alertas_impl(message, ctx, level: str):
     await ctx.bot.send_chat_action(chat_id=message.chat_id, action=ChatAction.TYPING)
 
     data   = shomer_api.get_hunter_alerts(15)
-    alerts = (data.get("alerts", data) if isinstance(data, dict) else data) or []
+    # get_hunter_alerts() retorna {"recent_blocks": [...], ...} -- nunca una clave
+    # "alerts". El fallback a `data` aquí causaba "unhashable type: slice" al hacer
+    # alerts[:15] sobre el dict completo.
+    alerts = (data.get("recent_blocks", []) if isinstance(data, dict) else data) or []
 
     if not alerts:
         await message.reply_text(
@@ -1593,7 +1599,161 @@ async def cmd_bloquear(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [fmt.btn("✅ Sí, bloquear", f"block_confirm:{ip}"),
              fmt.btn("❌ Cancelar", "block_cancel")]
         ),
+        )
+
+
+# ── /seguro — autobloqueo Hunter ─────────────────────────────────────────────
+
+async def _seguro_set(message, on: bool, user_id: int, level: str):
+    ok, err = shomer_api.set_hunter_autoblock(on)
+    if ok:
+        changelog.log_change(
+            user_id, level, "hunter_autoblock", "on" if on else "off",
+            details="Autobloqueo Hunter via bot (/seguro)",
+        )
+        if on:
+            await message.reply_text(
+                "✅ Seguro Hunter activado.\n"
+                "<i>Guía enviada al chat del equipo.</i>",
+                parse_mode=PM,
+                reply_markup=fmt.kb([fmt.btn("⏸ Desactivar autobloqueo", "seguro:off")]),
+            )
+        else:
+            await message.reply_text(
+                "⏸ Seguro Hunter desactivado.\n"
+                "<i>Aviso enviado al chat del equipo.</i>",
+                parse_mode=PM,
+                reply_markup=fmt.kb([fmt.btn("🛡️ Activar autobloqueo", "seguro:on")]),
+            )
+    else:
+        await message.reply_text(
+            f"❌ No se pudo cambiar el autobloqueo.\n➡️ {fmt.e(str(err)[:200])}",
+            parse_mode=PM,
+        )
+
+
+async def cmd_seguro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    arg = (ctx.args[0].lower() if ctx.args else "")
+    if arg in ("on", "off", "activar", "desactivar", "si", "no"):
+        on = arg in ("on", "activar", "si")
+        await _seguro_set(
+            update.message, on, update.effective_user.id, level,
+        )
+        return
+
+    activo = shomer_api.get_hunter_autoblock()
+    if activo:
+        estado = "🛡️ <b>ACTIVO</b> — amenazas externas se bloquean solas"
+        boton = fmt.btn("⏸ Desactivar autobloqueo", "seguro:off")
+    else:
+        estado = "⏸ <b>Desactivado</b> — solo bloqueo manual"
+        boton = fmt.btn("🛡️ Activar autobloqueo", "seguro:on")
+
+    blocked = shomer_api.get_blocked_ips() or []
+    extra = f"\n🔒 {len(blocked)} IP(s) bloqueada(s) ahora mismo." if blocked else ""
+
+    await update.message.reply_text(
+        fmt.card("🛡️", "Seguro Hunter — autobloqueo", [
+            estado + extra,
+            "<i>Panel Hunter → botón Seguro ON/OFF (header)</i>",
+            "<code>/seguro on</code> · <code>/seguro off</code>",
+        ]),
+        parse_mode=PM,
+        reply_markup=fmt.kb([boton]),
     )
+
+
+async def cb_seguro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+    if not level:
+        return
+    on = query.data.split(":")[1] == "on"
+    await query.edit_message_reply_markup(reply_markup=None)
+    await _seguro_set(query.message, on, query.from_user.id, level)
+
+
+async def cmd_liberar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Lista IPs bloqueadas con botón de liberar, o /liberar IP."""
+    level = await _guard(update)
+    if not level:
+        return
+    if ctx.args:
+        await cmd_desbloquear(update, ctx)
+        return
+
+    blocked = shomer_api.get_blocked_ips() or []
+    if not blocked:
+        await update.message.reply_text(
+            fmt.alert_card("IPs BLOQUEADAS", ["✅ Ninguna IP bloqueada — todo normal."], "ok"),
+            parse_mode=PM,
+        )
+        return
+
+    lines = []
+    buttons = []
+    for item in blocked[:10]:
+        ip = item.get("ip") or "?"
+        when = (item.get("blocked_at") or "")[:16].replace("T", " ")
+        line = f"  🔒 <code>{fmt.e(ip)}</code>"
+        if when:
+            line += f" · <i>{fmt.e(when)}</i>"
+        lines.append(line)
+        if ip != "?":
+            buttons.append([fmt.btn(f"🔓 Liberar {ip}", f"unblock_confirm:{ip}")])
+
+    lines.append("")
+    lines.append("Tocá <b>Liberar</b> arriba o escribí <code>/desbloquear IP</code>")
+
+    await update.message.reply_text(
+        fmt.card("🛡️", f"Seguro Hunter — {len(blocked)} bloqueada(s)", lines),
+        parse_mode=PM,
+        reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
+    )
+
+
+async def cb_unblock(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+
+    if query.data == "unblock_cancel":
+        await query.edit_message_text("Entendido — la IP sigue bloqueada.")
+        return
+
+    ip = query.data.split(":", 1)[1]
+    await query.edit_message_text(
+        f"⏳ Liberando <code>{fmt.e(ip)}</code>...", parse_mode=PM
+    )
+    ok, _msg = shomer_api.unblock_ip(ip)
+    if ok:
+        changelog.log_change(
+            query.from_user.id, level, "unblock", ip,
+            details="Desbloqueo seguro via bot (/liberar)",
+            reverse_data={"type": "block", "ip": ip},
+        )
+        shomer_api.log_technician_action(query.from_user.id, "unblock", ip)
+        await query.edit_message_text(
+            f"✅ <code>{fmt.e(ip)}</code> liberada — ya puede navegar.\n\n"
+            f"¿Fue falso positivo?",
+            parse_mode=PM,
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("💾 Falso positivo", callback_data=f"save_know:u:{ip}"),
+                    InlineKeyboardButton("No guardar", callback_data="save_know:x:0"),
+                ],
+            ]),
+        )
+    else:
+        await query.edit_message_text(
+            f"❌ No se pudo liberar <code>{fmt.e(ip)}</code>.\n"
+            f"➡️ Revisá firewall Hunter en el panel.",
+            parse_mode=PM,
+        )
 
 
 async def cb_block(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2380,6 +2540,9 @@ def run():
         ("mantenimiento",  cmd_mantenimiento),
         # Seguridad
         ("alertas",        cmd_alertas),
+        ("seguro",         cmd_seguro),
+        ("autobloqueo",    cmd_seguro),
+        ("liberar",        cmd_liberar),
         ("bloquear",       cmd_bloquear),
         ("desbloquear",    cmd_desbloquear),
         # Instalación
@@ -2403,6 +2566,8 @@ def run():
         ("guardian_clientes",      cmd_clientes),
         ("guardian_mantenimiento", cmd_mantenimiento),
         ("hunter_alertas",         cmd_alertas),
+        ("hunter_seguro",          cmd_seguro),
+        ("hunter_liberar",         cmd_liberar),
         ("hunter_bloquear",        cmd_bloquear),
         ("hunter_desbloquear",     cmd_desbloquear),
         ("instalar_usuario",       cmd_usuario),
@@ -2415,10 +2580,12 @@ def run():
     app.add_handler(CallbackQueryHandler(cb_diag_fix,        pattern="^diag_fix:"))
     app.add_handler(CallbackQueryHandler(cb_reboot,          pattern="^reboot_"))
     app.add_handler(CallbackQueryHandler(cb_mantenimiento,   pattern="^maint:"))
+    app.add_handler(CallbackQueryHandler(cb_seguro,           pattern="^seguro:"))
     app.add_handler(CallbackQueryHandler(cb_instalar,        pattern="^instalar"))
     app.add_handler(CallbackQueryHandler(cb_repair,          pattern="^repair:"))
     app.add_handler(CallbackQueryHandler(cb_dismiss,         pattern="^dismiss:"))
     app.add_handler(CallbackQueryHandler(cb_block,           pattern="^block_"))
+    app.add_handler(CallbackQueryHandler(cb_unblock,         pattern="^unblock_"))
     app.add_handler(CallbackQueryHandler(cb_usuario,         pattern="^usuario:"))
     app.add_handler(CallbackQueryHandler(cb_save_knowledge,  pattern="^save_know:"))
     app.add_handler(CallbackQueryHandler(cb_save_task_feedback, pattern="^save_task:"))
@@ -2447,6 +2614,8 @@ def run():
             BotCommand("infra", "Infra — lista o detalle por IP"),
             BotCommand("puertos", "SNMP — puertos switch/server"),
             BotCommand("alertas", "Hunter — alertas y bloqueos"),
+            BotCommand("seguro", "Autobloqueo Hunter on/off"),
+            BotCommand("liberar", "Ver y liberar IPs bloqueadas"),
             BotCommand("bloquear", "Bloquear IP en firewall"),
             BotCommand("desbloquear", "Liberar IP bloqueada"),
             BotCommand("guardar", "Guardar solución en historial"),

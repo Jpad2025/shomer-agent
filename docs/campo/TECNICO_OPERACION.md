@@ -59,6 +59,19 @@ Si el AP reinicia solo: es normal, Guardian hizo su trabajo.
 3. Desde Guardian → nodo → "Descubrir" para re-escanear
 4. Si sigue igual: SSH al AP manualmente y verificar conectividad
 
+### Seguro Hunter — autobloqueo automático (16 jun 2026)
+
+**Dos formas** de encender/apagar (mismo estado):
+
+| Canal | Acción |
+|-------|--------|
+| **Panel** | Botón **Seguro ON/OFF** (arriba a la derecha) **o** Config → *Habilitado* → Guardar |
+| **Telegram** | `/seguro on` · `/seguro off` · `/seguro` (ver estado) |
+
+Al cambiar → llega **guía al chat** con cómo desactivar. Ópera: autobloqueo **activo** desde 16/jun (autorización JP).
+
+**Telegram sonidos:** el bot solo puede enviar **con sonido** (normal) o **silencioso** — no tonos distintos por alerta/info; el técnico configura un sonido por chat en la app.
+
 ### Hunter con MikroTik RouterOS (sin OpenWrt)
 
 Shomer agrega la IP a la lista `shomer-blocked` en el router. **Eso solo no bloquea** hasta que exista una regla DROP en el firewall del MikroTik (se hace **una vez** en el hotel, manual o desde panel en laboratorio).
@@ -68,9 +81,9 @@ Shomer agrega la IP a la lista `shomer-blocked` en el router. **Eso solo no bloq
 - El bot **no** repite avisos cada 6 h por una IP ya bloqueada; solo avisa bloqueos **nuevos**
 
 ### Hunter bloqueó una IP que no debería
-1. Panel → Hunter → lista de bloqueados
-2. Seleccionar la IP → Desbloquear
-3. Reportar al developer qué IP y por qué se desbloqueó
+1. Panel → Hunter → lista de bloqueados → Desbloquear
+2. Telegram → `/liberar` (lista + botón) o `/desbloquear IP`
+3. Reportar qué IP y por qué
 
 ### El backup de un equipo falló
 1. Panel → Protector → ver el equipo con error
@@ -123,6 +136,8 @@ Texto libre: OpenAI (si está en `.env`) o Groq como respaldo. **Monitores autom
 | `/reboot <IP>` | Reiniciar equipo — pide confirmación (`/reiniciar` igual) |
 | `/clientes <IP>` | Dispositivos WiFi conectados al AP |
 | `/modo on` / `/modo off` | Pausar reboots automáticos — Telegram al activar/desactivar (`/mantenimiento` igual) |
+| `/seguro on` / `/seguro off` | **Autobloqueo Hunter** — activar/desactivar (`/autobloqueo` igual) |
+| `/liberar` | Ver IPs bloqueadas + botón liberar |
 | `/alertas` | Alertas Hunter e IPs bloqueadas |
 | `/bloquear <IP>` | Bloquear IP en firewall |
 | `/desbloquear <IP>` | Liberar IP bloqueada |

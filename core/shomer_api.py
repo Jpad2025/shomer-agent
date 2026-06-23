@@ -346,6 +346,25 @@ def set_maintenance(on: bool) -> bool:
         r.delete("shomer_maintenance")
     return True
 
+def log_ia_action(engine: str, msg: str, action_type: str = "auto") -> None:
+    """Registra acción IA en Redis noc:ia_log para display NOC (máx 20 entradas)."""
+    from datetime import datetime
+    import json as _json
+    r = _redis()
+    if not r:
+        return
+    try:
+        entry = _json.dumps({
+            "at": datetime.utcnow().strftime("%H:%M:%S"),
+            "engine": engine,
+            "msg": str(msg).strip()[:110],
+            "type": action_type,
+        }, ensure_ascii=False)
+        r.lpush("noc:ia_log", entry)
+        r.ltrim("noc:ia_log", 0, 19)
+    except Exception:
+        pass
+
 def get_interfaces() -> list:
     """Estado de interfaces de red del host vía /proc (funciona sin comando 'ip')."""
     import os
@@ -405,7 +424,7 @@ def get_node_failures(ip: str) -> dict:
 
 def get_config(key: str) -> Optional[str]:
     """Lee un valor de system_state en network_monitor.db."""
-    DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
+    DB = "file:/storage/db/network_monitor.db?mode=ro"
     try:
         con = _sq.connect(DB, timeout=5, uri=True)
         try:
@@ -417,6 +436,38 @@ def get_config(key: str) -> Optional[str]:
             con.close()
     except Exception:
         return None
+
+
+def _config_bool(val) -> bool:
+    if val is None:
+        return False
+    if isinstance(val, bool):
+        return val
+    s = str(val).strip().lower()
+    if s in ("1", "true", "yes", "on"):
+        return True
+    if s in ("0", "false", "no", "off"):
+        return False
+    try:
+        import json as _json
+        parsed = _json.loads(s)
+        return parsed is True
+    except Exception:
+        return False
+
+
+def get_hunter_autoblock() -> bool:
+    return _config_bool(get_config("hunter.auto_block_enabled"))
+
+
+def set_hunter_autoblock(enabled: bool) -> tuple[bool, str]:
+    ok, body = _post("/config/system", {"hunter": {"auto_block_enabled": enabled}})
+    if not ok:
+        return False, str(body)
+    if isinstance(body, dict) and not body.get("success", True):
+        errs = body.get("errors") or []
+        return False, ", ".join(errs) if errs else "error al guardar"
+    return True, "ok"
 
 
 def get_pc_credentials(ip: str) -> dict:
@@ -668,6 +719,65 @@ def get_infra_device(ip: str) -> dict:
         if d.get("ip") == ip:
             return d
     return {}
+
+
+def get_switch_port_errors() -> list:
+    """
+    Lee contadores de errores SNMP por puerto de todos los switches/routers
+    con SNMP activo en Inframonitor.
+    Retorna lista de dicts:
+      {ip, name, device_type, ports: [{name, oper, in_errors, out_errors, speed_mbps}]}
+    Solo incluye dispositivos que tienen interfaces con datos de errores.
+    """
+    import sqlite3 as _sqlite3
+    import json as _json
+    DB = "/storage/db/network_monitor.db"
+    results = []
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        rows = conn.execute("""
+            SELECT d.ip, d.name, d.device_type, s.snmp_data
+            FROM infra_devices d
+            JOIN infra_status s ON s.ip = d.ip
+            WHERE d.device_type IN ('switch', 'router')
+              AND d.active = 1
+              AND s.snmp_ok = 1
+              AND s.snmp_data IS NOT NULL
+              AND length(s.snmp_data) > 20
+            ORDER BY s.checked_at DESC
+        """).fetchall()
+        conn.close()
+        seen = set()
+        for r in rows:
+            if r["ip"] in seen:
+                continue
+            seen.add(r["ip"])
+            try:
+                sd = _json.loads(r["snmp_data"])
+                ifaces = sd.get("interfaces", [])
+                if not ifaces:
+                    continue
+                ports = []
+                for i in ifaces:
+                    ports.append({
+                        "name":       i.get("name", "?"),
+                        "oper":       i.get("oper", "unknown"),
+                        "in_errors":  int(i.get("in_errors") or 0),
+                        "out_errors": int(i.get("out_errors") or 0),
+                        "speed_mbps": i.get("speed_mbps"),
+                    })
+                results.append({
+                    "ip":          r["ip"],
+                    "name":        r["name"],
+                    "device_type": r["device_type"],
+                    "ports":       ports,
+                })
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return results
 
 
 def knowledge_hint(ip: str, max_len: int = 55) -> str:

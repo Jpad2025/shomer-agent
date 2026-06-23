@@ -143,31 +143,49 @@ def _groq_chat_safe(enriched: list[dict], level: str, history: list[dict]) -> st
     return out
 
 
-def chat(history: list[dict], level: str = "tecnico", user_id: int | str = "") -> str:
-    enriched = _inject_snapshot(history)
+def _chat_inner(enriched: list[dict], level: str, user_id, history: list[dict]) -> tuple:
+    """Resuelve la llamada LLM y devuelve (out, engine_used)."""
     if not _openai_enabled():
-        return _groq_chat_safe(enriched, level, history)
+        return _groq_chat_safe(enriched, level, history), "Groq"
 
     try:
         from core import openai_helper as _oai
     except Exception as e:
         log.warning("openai_helper import error: %s — usando Groq", e)
-        return _groq_chat_safe(enriched, level, history)
+        return _groq_chat_safe(enriched, level, history), "Groq"
 
     if not _oai.is_available():
         log.warning("OpenAI no disponible (%s) — fallback a Groq", _oai.availability_error())
-        return _groq_chat_safe(enriched, level, history)
+        return _groq_chat_safe(enriched, level, history), "Groq"
 
     allowed, reason = _memory.check_openai_caps(user_id)
     if not allowed:
         log.warning("Cap OpenAI alcanzado (%s) — fallback a Groq", reason)
-        return _groq_chat_safe(enriched, level, history)
+        return _groq_chat_safe(enriched, level, history), "Groq"
 
     out = _oai.chat(enriched, level=level, user_id=user_id)
     if out is None:
         log.info("OpenAI devolvió None — fallback a Groq")
-        return _groq_chat_safe(enriched, level, history)
+        return _groq_chat_safe(enriched, level, history), "Groq"
 
+    return out, "OpenAI"
+
+
+def chat(history: list[dict], level: str = "tecnico", user_id: int | str = "") -> str:
+    enriched = _inject_snapshot(history)
+    out, engine_used = _chat_inner(enriched, level, user_id, history)
+    # Log para display NOC
+    try:
+        user_q = ""
+        for m in reversed(history):
+            if m.get("role") == "user":
+                user_q = str(m.get("content", "")).strip()[:80]
+                break
+        if user_q and len(user_q) > 5:
+            from core.shomer_api import log_ia_action
+            log_ia_action(engine_used, f"Consulta: {user_q}", "chat")
+    except Exception:
+        pass
     return out
 
 
@@ -177,7 +195,16 @@ def _openai_enabled() -> bool:
 
 def explain(prompt: str, context: str = "", include_doc: bool = False,
             level: str = "tecnico") -> str:
-    return _groq.explain(prompt, context=context, include_doc=include_doc, level=level)
+    out = _groq.explain(prompt, context=context, include_doc=include_doc, level=level)
+    # Log para display NOC (solo si generó contenido real)
+    try:
+        first = (out or "").split('\n')[0].strip()
+        if len(first) > 20 and "No pude" not in first and not first.startswith("⚠️"):
+            from core.shomer_api import log_ia_action
+            log_ia_action("Groq", first, "monitor")
+    except Exception:
+        pass
+    return out
 
 
 def active_provider() -> str:
