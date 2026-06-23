@@ -58,6 +58,7 @@ def _save_kb_recovery(ip: str) -> InlineKeyboardMarkup:
     ]])
 
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+_DEV_CHAT_ID = os.environ.get("AGENT_DEVELOPER_CHAT_ID", "").strip()
 
 # Estado interno — detectar cambios
 _blocked_ips: Set[str] = set()
@@ -147,14 +148,24 @@ def _get_top_processes(n: int = 5) -> list[dict]:
 async def _send(bot: Bot, text: str, reply_markup=None) -> None:
     if not CHAT_ID:
         return
+    prefix = alert_prefix()
+    msg = f"<b>{_html.escape(prefix)}</b>\n{text}" if prefix else text
     try:
-        prefix = alert_prefix()
-        msg = f"<b>{_html.escape(prefix)}</b>\n{text}" if prefix else text
         await bot.send_message(
             chat_id=CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
         )
     except TelegramError as e:
         log.warning("Telegram send error: %s", e)
+        # Decisión permanente (jun 2026): el bot no vuelve al grupo de Hotel Ópera
+        # (ruido a los socios). Sin este fallback, CHAT_ID roto = cero alertas a
+        # cualquiera, incluido el developer -- _send() solo le hablaba al grupo.
+        if _DEV_CHAT_ID and _DEV_CHAT_ID != CHAT_ID:
+            try:
+                await bot.send_message(
+                    chat_id=_DEV_CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
+                )
+            except TelegramError as e2:
+                log.warning("Telegram send error (fallback developer): %s", e2)
 
 
 async def _send_critical(bot: Bot, text: str, reply_markup=None) -> None:
