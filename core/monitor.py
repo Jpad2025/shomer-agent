@@ -299,15 +299,17 @@ async def watch_hunter(bot: Bot) -> None:
                         InlineKeyboardButton("🔓 Desbloquear", callback_data=f"block_unblock_{ip}"),
                     ]])
                     sig_short = (sig or "sin firma")[:50]
-                    detail = (
-                        f"Actividad sospechosa bloqueada — la red está protegida. "
-                        f"<code>{_html.escape(str(ip))}</code> — "
-                        f"{_html.escape(sig_short)}{_html.escape(str(recurrencia))}"
+                    accion = (
+                        f"Hunter bloqueó {ip} en el firewall"
+                        if fw_blocked
+                        else f"Hunter registró {ip} en el panel — firewall sin confirmar, revisar Hunter"
                     )
-                    if not fw_blocked:
-                        detail += " · Registrada en panel — verificar firewall en Hunter"
-                    detail += _kn(ip)
-                    msg_text = _a("🛡️", "Amenaza contenida — Hunter actuó", detail, raw=True)
+                    msg_text = msgfmt.executive_alert(
+                        "alto", "Hunter",
+                        impacto=f"Tráfico sospechoso desde {ip} ({sig_short}){recurrencia}",
+                        accion_automatica=accion,
+                        sugerencia="Confirmar en el panel Hunter si es ataque real o falso positivo" + _kn(ip),
+                    )
                     await _emit(
                         bot,
                         origen="watch_hunter",
@@ -671,24 +673,26 @@ async def watch_wan_outage(bot: Bot) -> None:
                     if _wan_outage_start is None:
                         _wan_outage_start = now_ts
                     duracion = int((now_ts - _wan_outage_start) / 60)
-                    sufijo = f" <i>(lleva {duracion} min)</i>" if duracion > 0 else ""
+                    sufijo = f" (lleva {duracion} min)" if duracion > 0 else ""
 
                     if not wan_ok:
                         await _send_critical(
                             bot,
-                            _a(
-                                "🔴", "Cliente sin internet",
-                                f"{total_offline}/{total_equipos} equipos caídos{sufijo}",
-                                raw=True,
+                            msgfmt.executive_alert(
+                                "crítico", "Conectividad WAN",
+                                impacto=f"{total_offline}/{total_equipos} equipos sin servicio{sufijo}",
+                                accion_automatica="Ninguna — la caída es del proveedor de internet, no de Shomer",
+                                sugerencia="Contactar al ISP del hotel",
                             ),
                         )
                     else:
                         await _send_critical(
                             bot,
-                            _a(
-                                "🟠", "Varios equipos sin respuesta",
-                                f"{total_offline}/{total_equipos} — WAN del servidor OK{sufijo}",
-                                raw=True,
+                            msgfmt.executive_alert(
+                                "alto", "Red interna",
+                                impacto=f"{total_offline}/{total_equipos} equipos sin respuesta{sufijo} (WAN del servidor OK)",
+                                accion_automatica="Ninguna automática — Guardian seguirá reintentando por equipo",
+                                sugerencia="Revisar switch/cableado del sector afectado",
                             ),
                         )
 
@@ -763,10 +767,11 @@ async def watch_disk(bot: Bot) -> None:
                         warn_rules = [r for r in repair.DISK_CLEANUP_RULES if r["level"] == "warn"]
                         await _send_critical(
                             bot,
-                            _a(
-                                "🔴", "Disco casi lleno",
-                                f"{tag} {pct}% — limpieza OK, quedan {free2}GB",
-                                raw=True,
+                            msgfmt.executive_alert(
+                                "crítico", "Servidor Shomer",
+                                impacto=f"Disco {tag} al {pct}% — riesgo de fallas en BD/logs si se llena",
+                                accion_automatica=f"Limpieza automática ejecutada — quedan {free2}GB libres",
+                                sugerencia="Si vuelve a subir pronto, revisar journal/logs grandes manualmente",
                             ),
                         )
 
@@ -1234,14 +1239,20 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                                 callback_data=f"reboot_confirm:{ip}",
                             )
                         ]])
+                        accion_g = (
+                            f"Guardian reintentó {fails} veces; reiniciará automáticamente si cumple el umbral"
+                            if status == "offline"
+                            else "Guardian seguirá monitoreando — sin reboot (solo degrada WAN, no LAN)"
+                        )
                         await _emit_guardian(
                             bot, ip,
                             [
-                                _a(
-                                    icon, f"{nombre} sin respuesta",
-                                    f"{motivo} · {fails} alertas{_kn(ip)}",
-                                    raw=True,
-                                ),
+                                msgfmt.executive_alert(
+                                    "crítico" if status == "offline" else "alto", "Guardian",
+                                    impacto=f"{nombre} {motivo} — usuarios sin servicio en ese equipo",
+                                    accion_automatica=accion_g,
+                                    sugerencia="Revisar cableado/alimentación física",
+                                ) + _kn(ip),
                             ],
                             severity="critical" if status == "offline" else "warn",
                             reply_markup=markup,
@@ -2247,16 +2258,20 @@ async def watch_infra(bot: Bot) -> None:
                             flap_alert = True
 
                         if dtype in ("printer", "pos"):
-                            msg = _a(
-                                "🔴", "Impresora fuera de línea",
-                                msgfmt.host(name, ip) + _kn(ip), raw=True,
-                            )
+                            msg = msgfmt.executive_alert(
+                                "alto", "Inframonitor",
+                                impacto=f"Impresora {name} no responde — sin imprimir",
+                                accion_automatica="Ninguna — Inframonitor solo monitorea, no reinicia equipos de terceros",
+                                sugerencia="Verificar alimentación/cable físicamente",
+                            ) + _kn(ip)
                         else:
-                            detail = msgfmt.host(name, ip)
-                            if loc:
-                                detail += f" · {_html.escape(loc)}"
-                            detail += _kn(ip)
-                            msg = _a("🔴", "Equipo Infra caído", detail, raw=True)
+                            ubic = f" — {loc}" if loc else ""
+                            msg = msgfmt.executive_alert(
+                                "alto", "Inframonitor",
+                                impacto=f"Equipo {name}{ubic} no responde",
+                                accion_automatica="Ninguna — Inframonitor solo monitorea, no reinicia equipos de terceros",
+                                sugerencia="Verificar alimentación/cable físicamente",
+                            ) + _kn(ip)
                         await _send(bot, msg)
                         eq_alert = True
                         _infra_stale_reminded.discard(ip)
@@ -2734,6 +2749,56 @@ async def watch_port_errors(bot: Bot) -> None:
             log.debug("watch_port_errors error: %s", e)
 
 
+# ── Análisis de patrones — Groq correlaciona eventos reales del sitio ───────
+
+PATTERN_ANALYSIS_INTERVAL = int(os.environ.get("PATTERN_ANALYSIS_INTERVAL_SEC", str(6 * 3600)))
+
+
+async def watch_pattern_analysis(bot: Bot) -> None:
+    """Cada N horas (default 6h): busca correlaciones reales en auto_task_runs +
+    status_events (Guardian) + infra_events (Inframonitor). Sin Telegram propio
+    a propósito — solo guarda en BD; se consulta vía chat (L5) o /salud futuro."""
+    from core import pattern_analysis
+
+    await asyncio.sleep(300)
+    while True:
+        try:
+            nuevos = await asyncio.to_thread(pattern_analysis.run_pattern_detection_sync)
+            if nuevos:
+                log.info("pattern_analysis: %d patrón(es) nuevo(s)", len(nuevos))
+            _tick("watch_pattern_analysis")
+        except Exception as e:
+            _tick("watch_pattern_analysis", error=str(e))
+            log.debug("watch_pattern_analysis error: %s", e)
+        await asyncio.sleep(PATTERN_ANALYSIS_INTERVAL)
+
+
+# ── Memoria unificada — sync incremental de solo lectura (réplica local) ────
+
+MEMORIA_SYNC_INTERVAL = int(os.environ.get("MEMORIA_SYNC_INTERVAL_SEC", "180"))
+
+
+async def watch_memoria_sync(bot: Bot) -> None:
+    """Cada 3 min (default): copia incidentes nuevos de Guardian/Infra/auto_task
+    a la memoria propia del bot. Solo lectura sobre las fuentes — nunca escribe
+    ahí. Todo el razonamiento futuro (vigilante, investigación, chat) debe leer
+    de memoria_central, no de las fuentes en vivo."""
+    from core import memoria_central
+
+    await asyncio.sleep(90)
+    while True:
+        try:
+            counts = await asyncio.to_thread(memoria_central.run_sync_once)
+            total = sum(counts.values())
+            if total:
+                log.info("memoria_sync: %d eventos nuevos %s", total, counts)
+            _tick("watch_memoria_sync")
+        except Exception as e:
+            _tick("watch_memoria_sync", error=str(e))
+            log.debug("watch_memoria_sync error: %s", e)
+        await asyncio.sleep(MEMORIA_SYNC_INTERVAL)
+
+
 def start_all(bot: Bot) -> None:
     triage.init(bot, _send)
     loop = asyncio.get_event_loop()
@@ -2761,12 +2826,14 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_network_audit(bot))
     loop.create_task(watch_protector_sample(bot))
     loop.create_task(watch_log_truncate(bot))
+    loop.create_task(watch_pattern_analysis(bot))
+    loop.create_task(watch_memoria_sync(bot))
     loop.create_task(watch_infra(bot))
     loop.create_task(watch_active_threats(bot))
     loop.create_task(watch_port_errors(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (27 tasks) — triage=%s auto_tasks=%s",
+        "Monitores iniciados (28 tasks) — triage=%s auto_tasks=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
     )

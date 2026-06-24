@@ -125,6 +125,14 @@ def _inject_snapshot(history: list[dict]) -> list[dict]:
             parts.append(learn)
     except Exception as e:
         log.debug("learning context: %s", e)
+    try:
+        from core import pattern_analysis
+
+        patterns = pattern_analysis.get_active_patterns()
+        if patterns:
+            parts.append(patterns)
+    except Exception as e:
+        log.debug("pattern context: %s", e)
     if not parts:
         return history
     injected = {"role": "system", "content": "\n\n".join(parts)}

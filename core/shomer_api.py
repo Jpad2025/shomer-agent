@@ -217,6 +217,43 @@ def get_tracker_summary() -> dict:
         return {"error": str(e)}
 
 
+def get_device_profile(identificador: str) -> dict:
+    """Perfil completo de Tracker para un equipo — por IP exacta o nombre (LIKE).
+    Para el modo investigación: trae todo el detalle real, no un resumen."""
+    DB = "file:/storage/db/inventory.db?mode=ro&immutable=1"
+    try:
+        con = _sq.connect(DB, timeout=5, uri=True)
+        try:
+            row = con.execute(
+                "SELECT ip, hostname, vendor, asset_type, os_family, os_version, cpu, ram, "
+                "storage_cap, serial_number, firmware_version, location, asset_model, "
+                "software_list, last_seen, status_audit, internal_notes "
+                "FROM assets WHERE ip = ? LIMIT 1",
+                (identificador,),
+            ).fetchone()
+            if not row:
+                row = con.execute(
+                    "SELECT ip, hostname, vendor, asset_type, os_family, os_version, cpu, ram, "
+                    "storage_cap, serial_number, firmware_version, location, asset_model, "
+                    "software_list, last_seen, status_audit, internal_notes "
+                    "FROM assets WHERE hostname LIKE ? LIMIT 1",
+                    (f"%{identificador}%",),
+                ).fetchone()
+            if not row:
+                return {}
+            keys = (
+                "ip", "hostname", "vendor", "asset_type", "os_family", "os_version", "cpu", "ram",
+                "storage_cap", "serial_number", "firmware_version", "location", "asset_model",
+                "software_list", "last_seen", "status_audit", "internal_notes",
+            )
+            return {k: v for k, v in zip(keys, row) if v not in (None, "")}
+        finally:
+            con.close()
+    except Exception as e:
+        log.debug("get_device_profile: %s", e)
+        return {}
+
+
 def get_recent_events(limit: int = 10) -> dict:
     """Últimos eventos del log de Guardian (event_log)."""
     DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"

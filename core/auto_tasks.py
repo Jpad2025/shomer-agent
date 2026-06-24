@@ -234,7 +234,7 @@ def _log_run(result: TaskRunResult, mode: str) -> None:
             ON CONFLICT(task_id) DO UPDATE SET
                 runs_total = runs_total + 1,
                 runs_ok = runs_ok + excluded.runs_ok,
-                green_ok_total = green_ok_total + excluded.green_ok,
+                green_ok_total = green_ok_total + excluded.green_ok_total,
                 last_run_at = datetime('now'),
                 last_mode = excluded.last_mode
             """,
@@ -248,7 +248,7 @@ def _log_run(result: TaskRunResult, mode: str) -> None:
         con.commit()
         con.close()
     except Exception as e:
-        log.debug("auto_task log_run: %s", e)
+        log.warning("auto_task log_run FALLÓ (task=%s, mode=%s): %s", result.task_id, mode, e)
 
 
 def _mark_suggested_promote(task_id: str) -> None:

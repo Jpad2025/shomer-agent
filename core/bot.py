@@ -257,6 +257,7 @@ def _ayuda_text() -> str:
         f"/diagnostico &lt;ip&gt; — ping, estado, uptime, fallos\n"
         f"/diagnostico &lt;ip&gt; reparar — diagnóstico + reparación automática\n"
         f"/reboot &lt;ip&gt; — reiniciar AP o equipo (<i>/reiniciar</i> igual)\n"
+        f"/investigar &lt;ip|nombre&gt; — reporte profundo: perfil Tracker + historial + patrones\n"
         f"/clientes &lt;ip&gt; — dispositivos WiFi conectados al AP\n"
         f"/modo on|off — pausar reboots automáticos (<i>/mantenimiento</i> igual)\n"
         f"<i>Alias:</i> /guardian_equipos · /guardian_diagnostico · /guardian_reiniciar · "
@@ -1133,6 +1134,40 @@ async def cmd_diagnostico(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ip = ctx.args[0]
     remediate = len(ctx.args) > 1 and ctx.args[1].lower() in ("reparar", "fix", "arreglar")
     await _diag_impl(update.message, ctx, level, ip, remediate=remediate)
+
+
+# ── /investigar — modo investigación profunda (sin límite de 4 líneas) ────────
+
+async def cmd_investigar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        await update.message.reply_text(
+            "🔬 <b>Investigación profunda de un equipo</b>\n\n"
+            "Junta el perfil real de Tracker + el historial real de eventos + "
+            "patrones ya detectados, y escribe un reporte completo — no las "
+            "4 líneas del chat rápido. Puede tardar unos segundos.\n\n"
+            "Ejemplo: <code>/investigar 192.168.1.210</code> o <code>/investigar AP_SISTEMAS</code>",
+            parse_mode=PM,
+        )
+        return
+    identificador = " ".join(ctx.args)
+    await update.message.reply_text(
+        f"🔬 Investigando <code>{fmt.e(identificador)}</code>…", parse_mode=PM
+    )
+    from core import investigacion
+    try:
+        reporte = await asyncio.to_thread(investigacion.investigar, identificador)
+    except Exception as e:
+        log.warning("cmd_investigar error: %s", e)
+        await update.message.reply_text("Hubo un error generando la investigación. Reintentá.")
+        return
+    # Sin parse_mode: el reporte es texto libre del LLM, no HTML controlado —
+    # forzar HTML acá podría romper el mensaje si el texto trae '<' o '&' sueltos.
+    # Telegram limita ~4096 chars por mensaje — partir si el reporte es largo.
+    for i in range(0, len(reporte), 3500):
+        await update.message.reply_text(reporte[i:i + 3500])
 
 
 # ── /reiniciar ────────────────────────────────────────────────────────────────
@@ -2533,6 +2568,7 @@ def run():
         ("puertos",        cmd_puertos),
         ("diagnostico",    cmd_diagnostico),
         ("diag",           cmd_diagnostico),
+        ("investigar",     cmd_investigar),
         ("reboot",         cmd_reiniciar),
         ("reiniciar",      cmd_reiniciar),
         ("clientes",       cmd_clientes),
@@ -2606,6 +2642,7 @@ def run():
             BotCommand("equipos", "Guardian — APs y nodos"),
             BotCommand("diagnostico", "Revisar IP (+ reparar)"),
             BotCommand("diag", "Atajo de /diagnostico"),
+            BotCommand("investigar", "Investigación profunda de un equipo"),
             BotCommand("reboot", "Reiniciar equipo por IP"),
             BotCommand("reiniciar", "Igual que /reboot"),
             BotCommand("clientes", "WiFi conectados a un AP"),

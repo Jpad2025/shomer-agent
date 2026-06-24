@@ -190,6 +190,28 @@ def alert_line(icon: str, event: str, detail: str = "", *, raw: bool = False) ->
     return f"{icon} <b>{e(event)}</b>"
 
 
+_CRIT_ICON = {"crítico": "🚨", "critico": "🚨", "alto": "🟠", "medio": "🟡", "info": "ℹ️"}
+
+
+def executive_alert(criticidad: str, servicio: str, impacto: str,
+                     accion_automatica: str = "", sugerencia: str = "") -> str:
+    """
+    Formato ejecutivo obligatorio para alertas con impacto real al usuario final:
+    🚨 CRÍTICO - Hunter
+    • Impacto: Piso 3 sin WiFi
+    • Acción Automática: Hunter bloqueó IP en MikroTik
+    • Sugerencia al Técnico: revisar el AP del piso 3 físicamente
+    """
+    icon = _CRIT_ICON.get(criticidad.strip().lower(), "⚠️")
+    lines = [f"{icon} <b>{e(criticidad.upper())}</b> - {e(servicio)}",
+             f"• Impacto: {e(impacto)}"]
+    if accion_automatica:
+        lines.append(f"• Acción Automática: {e(accion_automatica)}")
+    if sugerencia:
+        lines.append(f"• Sugerencia al Técnico: {e(sugerencia)}")
+    return "\n".join(lines)
+
+
 def host(name: str, ip: str = "") -> str:
     """Nombre legible + IP opcional: Cámara Lobby (192.168.1.57)"""
     if ip:
