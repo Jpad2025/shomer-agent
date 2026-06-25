@@ -440,6 +440,9 @@ async def _task_006_protector_sample(ctx: Dict[str, Any]) -> TaskRunResult:
         green_detail=f"{issues} problema(s) en {sample_size} equipos",
         context={
             "sample": [d.get("name") for d in picked],
+            "sample_devices": [
+                {"name": d.get("name") or "", "ip": d.get("ip") or ""} for d in picked
+            ],
             "issues": issues,
             "api_ok": api_ok,
             "lines": lines,

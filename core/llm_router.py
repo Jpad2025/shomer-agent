@@ -37,6 +37,7 @@ def _local_context_struct() -> dict:
         "online": [], "offline": [], "wan": None, "maintenance": False,
         "cpu": None, "ram": None, "disk": None,
         "blocked_ips": 0, "failed_backups": [],
+        "tracker_total": 0, "infra_total": 0, "infra_online": 0,
     }
     try:
         import redis as _redis
@@ -69,6 +70,22 @@ def _local_context_struct() -> dict:
             d["failed_backups"] = [r[0] for r in failed]
     except Exception:
         pass
+    try:
+        from core import shomer_api
+
+        tracker = shomer_api.get_tracker_summary()
+        if "error" not in tracker:
+            d["tracker_total"] = tracker.get("total_devices") or 0
+    except Exception:
+        pass
+    try:
+        from core import shomer_api
+
+        infra = shomer_api.get_infra_summary()
+        d["infra_total"] = infra.get("total") or 0
+        d["infra_online"] = infra.get("online") or 0
+    except Exception:
+        pass
     return d
 
 
@@ -90,6 +107,10 @@ def _local_context() -> str:
         lines.append(f"IPs bloqueadas activas: {d['blocked_ips']}")
     if d["failed_backups"]:
         lines.append(f"⚠️ Backups fallidos: {', '.join(d['failed_backups'])}")
+    if d.get("tracker_total"):
+        lines.append(f"Inventario Tracker: {d['tracker_total']} equipos registrados")
+    if d.get("infra_total"):
+        lines.append(f"Inframonitor: {d['infra_online']}/{d['infra_total']} equipos online")
     return "\n".join(lines) if lines else "Sin datos locales disponibles."
 
 

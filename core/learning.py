@@ -118,10 +118,22 @@ def on_task_completed(result, mode: str) -> None:
         title = fmt.TASK_TITLES.get(tid, tid)
         trigger = f"{title} — {result.action}"
         detail = getattr(result, "green_detail", "") or ""
+        ctx = getattr(result, "context", None) or {}
+        sample_devices = ctx.get("sample_devices") or []
+        device_ip = ""
+        if len(sample_devices) == 1:
+            # Solo se etiqueta con un device_ip cuando la TASK tocó exactamente
+            # un equipo -- con varios (muestreo TASK-006), forzar uno solo sería
+            # inventar el dato. Con varios, igual quedan visibles en `detail`.
+            device_ip = sample_devices[0].get("ip", "")
+        elif sample_devices:
+            nombres = ", ".join(d.get("name") or d.get("ip") or "?" for d in sample_devices)
+            detail = f"{detail} | Equipos: {nombres}".strip(" |")
         agente_skills.record_from_task(
             tid,
             trigger_label=trigger,
             action_label=result.action,
+            device_ip=device_ip,
             green_ok=bool(getattr(result, "green_ok", False)),
             detail=detail,
         )

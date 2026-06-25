@@ -24,6 +24,14 @@ MEMORIA_DB = os.environ.get("MEMORIA_DB_PATH", "/app/data/memoria.db")
 LOOKBACK_HOURS = int(os.environ.get("PATTERN_LOOKBACK_HOURS", "72"))
 MIN_OCURRENCIAS = int(os.environ.get("PATTERN_MIN_OCURRENCIAS", "3"))
 MAX_CANDIDATES = int(os.environ.get("PATTERN_MAX_CANDIDATES", "8"))
+# Sesion 61 cont. 3 (25 jun 2026) -- antes cada corrida insertaba una fila nueva por
+# entidad aunque ya hubiera un patron 'activo' identico detectado horas antes (visto
+# real en Opera: el mismo flapping de un AP redetectado 6 veces en 24h sin que el
+# sistema "recordara" haberlo visto). Si hay un patron activo de la misma entidad
+# dentro de esta ventana, se actualiza (sube ocurrencias, refresca fecha) en vez de
+# duplicar -- asi el chat (get_active_patterns) no repite el mismo hallazgo como si
+# fuera nuevo cada vez.
+PATTERN_DEDUP_HOURS = int(os.environ.get("PATTERN_DEDUP_HOURS", "24"))
 
 _PROMPT_TEMPLATE = (
     "Sos un analista de soporte IT. Te doy candidatos PRE-DETECTADOS (ya agrupados "
@@ -142,6 +150,7 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
         return []
 
     guardados = []
+    actualizados = 0
     con = sqlite3.connect(KNOWLEDGE_DB)
     for h in hallazgos:
         entidad = (h.get("entidad") or "").strip()
@@ -151,22 +160,38 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
             continue
         ocurrencias = len(candidatos[entidad])
         evidencia = json.dumps([e["ts"] for e in candidatos[entidad][:20]], ensure_ascii=False)
-        con.execute(
-            "INSERT INTO patrones_detectados "
-            "(entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica, evidencia) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                entidad, ocurrencias, desc,
-                (h.get("impacto") or "").strip(),
-                (h.get("sugerencia_tecnica") or "").strip(),
-                evidencia,
-            ),
-        )
-        guardados.append(h)
+        impacto = (h.get("impacto") or "").strip()
+        sugerencia = (h.get("sugerencia_tecnica") or "").strip()
+
+        existente = con.execute(
+            "SELECT id FROM patrones_detectados WHERE entidad=? AND estado='activo' "
+            "AND fecha_deteccion > datetime('now', ?) ORDER BY fecha_deteccion DESC LIMIT 1",
+            (entidad, f"-{PATTERN_DEDUP_HOURS} hours"),
+        ).fetchone()
+
+        if existente:
+            con.execute(
+                "UPDATE patrones_detectados SET ocurrencias=?, patron_descripcion=?, "
+                "impacto=?, sugerencia_tecnica=?, evidencia=?, fecha_deteccion=datetime('now') "
+                "WHERE id=?",
+                (ocurrencias, desc, impacto, sugerencia, evidencia, existente[0]),
+            )
+            actualizados += 1
+        else:
+            con.execute(
+                "INSERT INTO patrones_detectados "
+                "(entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica, evidencia) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (entidad, ocurrencias, desc, impacto, sugerencia, evidencia),
+            )
+            guardados.append(h)
     con.commit()
     con.close()
-    if guardados:
-        log.info("pattern_analysis: %d hallazgo(s) nuevo(s) con evidencia real", len(guardados))
+    if guardados or actualizados:
+        log.info(
+            "pattern_analysis: %d hallazgo(s) nuevo(s), %d actualizado(s) (mismo patrón, no duplicado)",
+            len(guardados), actualizados,
+        )
     return guardados
 
 
