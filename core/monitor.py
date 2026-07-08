@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from contextvars import ContextVar
 from datetime import datetime, time as dtime
 from typing import Any, Dict, Optional, Set
 
@@ -25,6 +26,14 @@ from core import auto_tasks
 from core import fmt as msgfmt
 
 log = logging.getLogger("shomer-monitor")
+
+_monitor_ctx: ContextVar[Optional[str]] = ContextVar("shomer_monitor", default=None)
+
+
+def _resolve_monitor(monitor: Optional[str]) -> str:
+    if monitor is not None:
+        return monitor
+    return _monitor_ctx.get() or "bot"
 
 
 def _a(icon: str, event: str, detail: str = "", *, raw: bool = False) -> str:
@@ -145,32 +154,46 @@ def _get_top_processes(n: int = 5) -> list[dict]:
         return []
 
 
-async def _send(bot: Bot, text: str, reply_markup=None) -> None:
+async def _send(
+    bot: Bot, text: str, reply_markup=None, *, monitor: Optional[str] = None, severity: str = "info",
+) -> None:
     if not CHAT_ID:
         return
+    mon = _resolve_monitor(monitor)
     prefix = alert_prefix()
     msg = f"<b>{_html.escape(prefix)}</b>\n{text}" if prefix else text
+
+    def _memoria_log(ok: bool) -> None:
+        try:
+            from core import memoria_central
+            memoria_central.log_telegram_alert(mon, msg, sent_ok=ok, severity=severity)
+        except Exception:
+            pass
+
     try:
         await bot.send_message(
             chat_id=CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
         )
+        _memoria_log(True)
     except TelegramError as e:
         log.warning("Telegram send error: %s", e)
-        # Decisión permanente (jun 2026): el bot no vuelve al grupo de Hotel Ópera
-        # (ruido a los socios). Sin este fallback, CHAT_ID roto = cero alertas a
-        # cualquiera, incluido el developer -- _send() solo le hablaba al grupo.
         if _DEV_CHAT_ID and _DEV_CHAT_ID != CHAT_ID:
             try:
                 await bot.send_message(
                     chat_id=_DEV_CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
                 )
+                _memoria_log(True)
             except TelegramError as e2:
                 log.warning("Telegram send error (fallback developer): %s", e2)
+                _memoria_log(False)
+        else:
+            _memoria_log(False)
 
 
-async def _send_critical(bot: Bot, text: str, reply_markup=None) -> None:
-    """Alerta crítica — mismo chat que TELEGRAM_CHAT_ID."""
-    await _send(bot, text, reply_markup=reply_markup)
+async def _send_critical(
+    bot: Bot, text: str, reply_markup=None, *, monitor: Optional[str] = None, severity: str = "critical",
+) -> None:
+    await _send(bot, text, reply_markup=reply_markup, monitor=monitor, severity=severity)
 
 
 async def _emit(
@@ -200,11 +223,67 @@ async def _emit(
 
     async def _dispatch(b: Bot, text: str, reply_markup=None) -> None:
         if critical:
-            await _send_critical(b, text, reply_markup=reply_markup)
+            await _send_critical(
+                b, text, reply_markup=reply_markup, monitor=origen, severity=severity,
+            )
         else:
-            await _send(b, text, reply_markup=reply_markup)
+            await _send(
+                b, text, reply_markup=reply_markup, monitor=origen, severity=severity,
+            )
 
     await triage.notify(bot, event, _dispatch)
+
+
+async def _diagnostico_degradando(bot: Bot, ip: str) -> None:
+    try:
+        from core import pattern_analysis as _pa
+        p = _pa.get_pattern_for_entity(entity_ip=ip)
+        if not p or p.get("tendencia") != "degradando":
+            return
+        nl = chr(10)
+        ctx = (
+            f"Equipo: {p['entidad']}{nl}"
+            f"Caídas última semana: {p['ocurrencias']}{nl}"
+            f"Tendencia: degradando{nl}"
+            f"Sugerencia: {p.get('sugerencia', '')}"
+        )
+        prompt = (
+            f"El AP {p['entidad']} acaba de caerse otra vez y viene degradándose. "
+            "Formato DIAGNÓSTICO / CAUSA PROBABLE / ACCIÓN, máximo 4 líneas."
+        )
+        loop = asyncio.get_event_loop()
+
+        def _ask_openai():
+            try:
+                from core import openai_helper as _oai
+                client = _oai._get_client()
+                if client is None:
+                    from core import groq_helper as _gh2
+                    return _gh2.explain(prompt, context=ctx, level="tecnico")
+                model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "Técnico de redes de hotel. Breve."},
+                        {"role": "user", "content": f"{ctx}{nl}{prompt}"},
+                    ],
+                    max_tokens=250,
+                    temperature=0.3,
+                )
+                return (resp.choices[0].message.content or "").strip()
+            except Exception as e:
+                from core import groq_helper as _gh2
+                log.warning("diagnostico OpenAI falló: %s", e)
+                return _gh2.explain(prompt, context=ctx, level="tecnico")
+
+        texto = await loop.run_in_executor(None, _ask_openai)
+        if texto:
+            await _send(
+                bot, f"🔬 Diagnóstico IA — {p['entidad']}{nl}{nl}{texto}",
+                monitor="ia_diagnostico", severity="info",
+            )
+    except Exception as e:
+        log.debug("diagnostico_degradando: %s", e)
 
 
 async def _emit_guardian(
@@ -216,7 +295,20 @@ async def _emit_guardian(
     reply_markup=None,
     bypass_buffer: bool = False,
     critical: bool = False,
+    allow_ia: bool = False,
 ) -> None:
+    try:
+        from core import pattern_analysis as _pa
+        _sfx = _pa.alert_suffix(entity_ip=ip)
+        if _sfx:
+            lines = list(lines) + [_sfx]
+        if allow_ia:
+            from core import pulse_correlate as _pc
+            p = _pa.get_pattern_for_entity(entity_ip=ip)
+            if p and p.get("tendencia") == "degradando" and _pc.ia_diagnostico_allowed(ip):
+                asyncio.create_task(_diagnostico_degradando(bot, ip))
+    except Exception:
+        pass
     await _emit(
         bot,
         origen="watch_guardian_nodes",
@@ -228,6 +320,8 @@ async def _emit_guardian(
         bypass_buffer=bypass_buffer,
         critical=critical,
     )
+
+
 
 
 # ── 1. Hunter: explicar nuevos bloqueos ──────────────────────────────────────
@@ -298,17 +392,21 @@ async def watch_hunter(bot: Bot) -> None:
                     keyboard = InlineKeyboardMarkup([[
                         InlineKeyboardButton("🔓 Desbloquear", callback_data=f"block_unblock_{ip}"),
                     ]])
-                    sig_short = (sig or "sin firma")[:50]
+                    from core.hunter_labels import humanize_hunter_signature
+                    h = humanize_hunter_signature(sig)
+                    criticidad = {"critico": "crítico", "alto": "alto", "medio": "medio"}.get(
+                        h.get("risk", "alto"), "alto"
+                    )
                     accion = (
                         f"Hunter bloqueó {ip} en el firewall"
                         if fw_blocked
                         else f"Hunter registró {ip} en el panel — firewall sin confirmar, revisar Hunter"
                     )
                     msg_text = msgfmt.executive_alert(
-                        "alto", "Hunter",
-                        impacto=f"Tráfico sospechoso desde {ip} ({sig_short}){recurrencia}",
+                        criticidad, "Hunter",
+                        impacto=f"{h['title']} — IP {ip}{recurrencia}. {h['detail']}",
                         accion_automatica=accion,
-                        sugerencia="Confirmar en el panel Hunter si es ataque real o falso positivo" + _kn(ip),
+                        sugerencia=h.get("action", "") + _kn(ip),
                     )
                     await _emit(
                         bot,
@@ -357,6 +455,7 @@ async def watch_devices(bot: Bot) -> None:
                             f"{msgfmt.host(nombre, ip)} — ~6 min",
                             raw=True,
                         ),
+                    monitor="watch_devices",
                     )
 
                 # Confirmación recuperación
@@ -364,6 +463,7 @@ async def watch_devices(bot: Bot) -> None:
                     await _send(
                         bot,
                         _a("✅", "Equipo recuperado", msgfmt.host(nombre, ip), raw=True),
+                    monitor="watch_devices",
                     )
 
                 _device_status[ip] = nuevo
@@ -387,6 +487,10 @@ async def daily_summary(bot: Bot) -> None:
             if now.hour == 7 and now.minute < 2 and _last_summary_day != now.day:
                 _last_summary_day = now.day
                 shomer_ctx = shomer_api.summary_text()
+                daily_health = shomer_api.get_daily_health()
+                visibility_block = ""
+                if daily_health.get("success") and daily_health.get("text_combined"):
+                    visibility_block = f"\n\n{daily_health['text_combined']}"
                 devices = dm.list_devices()
                 dev_ctx = ""
                 if devices:
@@ -411,7 +515,9 @@ async def daily_summary(bot: Bot) -> None:
                 _tick("daily_summary", alerted=True)
                 await _send(
                     bot,
-                    f"☀️ <b>Resumen diario</b>\n\n{resumen}\n\n" + "\n".join(ia_lines),
+                    f"☀️ <b>Resumen diario</b>\n\n{resumen}{visibility_block}\n\n"
+                    + "\n".join(ia_lines),
+                monitor="daily_summary",
                 )
         except Exception as e:
             _tick("daily_summary", error=str(e)); log.debug("daily_summary error: %s", e)
@@ -472,6 +578,7 @@ async def watch_resources(bot: Bot) -> None:
                     await _send_critical(
                         bot,
                         _a("⚠️", "Servidor bajo alta carga", detalle, raw=True),
+                    monitor="watch_resources",
                     )
 
                 elif cpu < (_CPU_THRESHOLD - 10) and ram < (_RAM_THRESHOLD - 10):
@@ -484,6 +591,7 @@ async def watch_resources(bot: Bot) -> None:
                                 f"CPU {cpu:.0f}% · RAM {ram:.0f}%",
                                 raw=True,
                             ),
+                        monitor="watch_resources",
                         )
                     _cpu_high_ticks = 0
                 _tick("watch_resources")
@@ -629,6 +737,7 @@ async def watch_wan_outage(bot: Bot) -> None:
                             f"{_html.escape(str(grupo))}: {lista}{extra}",
                             raw=True,
                         ),
+                    monitor="watch_wan_outage",
                     )
                 elif not todos_offline and _group_alerts.get(grupo):
                     _group_alerts[grupo] = False
@@ -639,6 +748,7 @@ async def watch_wan_outage(bot: Bot) -> None:
                             f"{_html.escape(str(grupo))} en línea",
                             raw=True,
                         ),
+                    monitor="watch_wan_outage",
                     )
 
             # --- nivel 2: múltiples grupos o Guardian offline → verificar WAN ---
@@ -684,6 +794,7 @@ async def watch_wan_outage(bot: Bot) -> None:
                                 accion_automatica="Ninguna — la caída es del proveedor de internet, no de Shomer",
                                 sugerencia="Contactar al ISP del hotel",
                             ),
+                        monitor="watch_wan_outage",
                         )
                     else:
                         await _send_critical(
@@ -694,6 +805,7 @@ async def watch_wan_outage(bot: Bot) -> None:
                                 accion_automatica="Ninguna automática — Guardian seguirá reintentando por equipo",
                                 sugerencia="Revisar switch/cableado del sector afectado",
                             ),
+                        monitor="watch_wan_outage",
                         )
 
             elif total_offline == 0 and _wan_alert_active:
@@ -702,6 +814,7 @@ async def watch_wan_outage(bot: Bot) -> None:
                 _wan_last_repeat = None
                 await _send_critical(
                     bot, _a("✅", "Red recuperada", "todos los equipos en línea"),
+                monitor="watch_wan_outage",
                 )
 
             _tick("watch_wan_outage")
@@ -773,6 +886,7 @@ async def watch_disk(bot: Bot) -> None:
                                 accion_automatica=f"Limpieza automática ejecutada — quedan {free2}GB libres",
                                 sugerencia="Si vuelve a subir pronto, revisar journal/logs grandes manualmente",
                             ),
+                        monitor="watch_disk",
                         )
 
                 elif pct >= 85 and level not in ("warn", "critical"):
@@ -792,6 +906,7 @@ async def watch_disk(bot: Bot) -> None:
                                 f"{tag} {pct}% — limpieza automática, quedan {free2}GB",
                                 raw=True,
                             ),
+                        monitor="watch_disk",
                         )
 
                 elif pct >= 80 and level is None:
@@ -927,7 +1042,7 @@ async def watch_pipeline(bot: Bot) -> None:
                         lines=[
                             _a(
                                 "🟠", "Hunter sin datos recientes",
-                                f"Suricata no recibe tráfico{age_str}. "
+                                f"Suricata sin tráfico en espejo{age_str}. "
                                 f"➡️ Revisar cable espejo — panel Hunter → Pipeline",
                                 raw=True,
                             ),
@@ -1155,6 +1270,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                 await _send(
                     bot,
                     _a("✅", f"{len(verify_ok)} nodos recuperados tras reinicio", txt, raw=True),
+                monitor="watch_guardian_nodes",
                 )
 
             for n in nodes:
@@ -1256,6 +1372,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             ],
                             severity="critical" if status == "offline" else "warn",
                             reply_markup=markup,
+                            allow_ia=(status == "offline"),
                         )
                         _guardian_down_alerted.add(ip)
                         _guardian_down_since[ip] = now_ts
@@ -1344,6 +1461,7 @@ async def preventive_reboot(bot: Bot) -> None:
                                 f"{_html.escape(str(dev['name']))} — {dias} días · {estado}",
                                 raw=True,
                             ),
+                        monitor="preventive_reboot",
                         )
             _tick("preventive_reboot")
         except Exception as e:
@@ -1377,11 +1495,13 @@ async def weekly_backup(bot: Bot) -> None:
                 await _send(
                     bot,
                     _a("💾", "Backup semanal automático", f"{icon} {_html.escape(str(msg))}", raw=True),
+                monitor="weekly_backup",
                 )
                 if not ok:
                     await _send_critical(
                         bot,
                         _a("⚠️", "Backup semanal falló", "revisar configuración o espacio"),
+                    monitor="weekly_backup",
                     )
         except Exception as e:
             _tick("weekly_backup", error=str(e)); log.debug("weekly_backup error: %s", e)
@@ -1431,6 +1551,7 @@ async def watch_protector_retry(bot: Bot) -> None:
                                 f"{_html.escape(str(nombre))} — local OK, B2 falló",
                                 raw=True,
                             ),
+                        monitor="watch_protector_retry",
                         )
                     elif equipo_apagado:
                         await _send(
@@ -1440,6 +1561,7 @@ async def watch_protector_retry(bot: Bot) -> None:
                                 f"{_html.escape(str(nombre))} — equipo apagado o sin red",
                                 raw=True,
                             ),
+                        monitor="watch_protector_retry",
                         )
                     else:
                         await _send(
@@ -1449,6 +1571,7 @@ async def watch_protector_retry(bot: Bot) -> None:
                                 f"{_html.escape(str(nombre))} — revisar credenciales",
                                 raw=True,
                             ),
+                        monitor="watch_protector_retry",
                         )
 
                     if fallos >= 3:
@@ -1459,6 +1582,7 @@ async def watch_protector_retry(bot: Bot) -> None:
                                 f"{_html.escape(str(nombre))} — {fallos} noches seguidas",
                                 raw=True,
                             ),
+                        monitor="watch_protector_retry",
                         )
 
                 elif es_ok and _backup_consecutive_fails.get(nombre, 0) > 0:
@@ -1521,6 +1645,7 @@ async def watch_hunter_verify(bot: Bot) -> None:
                                 f"➡️ Panel Hunter o /desbloquear si es legítimo",
                                 raw=True,
                             ),
+                        monitor="watch_hunter_verify",
                         )
                 except ValueError:
                     pass
@@ -1535,6 +1660,7 @@ async def watch_hunter_verify(bot: Bot) -> None:
                             f"➡️ Revisar /alertas; ataque persistente o falso positivo",
                             raw=True,
                         ),
+                    monitor="watch_hunter_verify",
                     )
 
             _known_blocked = current_blocked
@@ -1556,6 +1682,7 @@ async def watch_hunter_verify(bot: Bot) -> None:
                             f"➡️ Verificar credenciales en panel Hunter → Firewall",
                             raw=True,
                         ),
+                    monitor="watch_hunter_verify",
                     )
             _tick("watch_hunter_verify")
         except Exception as e:
@@ -1597,6 +1724,7 @@ async def watch_docker(bot: Bot) -> None:
             await _send(
                 bot,
                 _a("⚠️", "Agente reiniciado", f"último arranque hace {ago}", raw=True),
+            monitor="watch_docker",
             )
         _tick("watch_docker")
     except Exception as e:
@@ -1655,11 +1783,12 @@ async def watch_connectivity(bot: Bot) -> None:
                                 f"{name} DOWN",
                                 raw=True,
                             )
-                        await _send_critical(bot, msg)
+                        await _send_critical(bot, msg, monitor="watch_connectivity")
                     elif state == "UP" and prev == "DOWN":
                         await _send(
                             bot,
                             _a("✅", "Interfaz recuperada", f"{name} UP", raw=True),
+                        monitor="watch_connectivity",
                         )
 
                 _iface_state_prev[name] = state
@@ -1673,10 +1802,11 @@ async def watch_connectivity(bot: Bot) -> None:
                 await _send_critical(
                     bot,
                     _a("🔴", "Servidor sin internet", "alertas e IA pueden fallar"),
+                monitor="watch_connectivity",
                 )
             elif wan_ok and _server_wan_alert:
                 _server_wan_alert = False
-                await _send(bot, _a("✅", "Internet recuperada", "servidor Shomer online"))
+                await _send(bot, _a("✅", "Internet recuperada", "servidor Shomer online"), monitor="watch_connectivity")
             _tick("watch_connectivity")
         except Exception as e:
             _tick("watch_connectivity", error=str(e)); log.debug("watch_connectivity error: %s", e)
@@ -1739,6 +1869,7 @@ async def watch_groq(bot: Bot) -> None:
                             f"{fail_min} min — chat IA en respaldo",
                             raw=True,
                         ),
+                    monitor="watch_groq",
                     )
             else:
                 # Solo avisar recuperación si la caída fue lo bastante larga como para
@@ -1750,6 +1881,7 @@ async def watch_groq(bot: Bot) -> None:
                     await _send(
                         bot,
                         _a("✅", "Groq recuperado", f"estuvo caído {fail_min} min", raw=True),
+                    monitor="watch_groq",
                     )
                 _groq_ok = True
                 _groq_alerted = False
@@ -1804,6 +1936,7 @@ async def watch_openai(bot: Bot) -> None:
                             f"{fail_min} min — chat usa Groq",
                             raw=True,
                         ),
+                    monitor="watch_openai",
                     )
                     _tick("watch_openai", alerted=True)
             else:
@@ -1812,6 +1945,7 @@ async def watch_openai(bot: Bot) -> None:
                     await _send(
                         bot,
                         _a("✅", "OpenAI recuperado", f"estuvo caído {fail_min} min", raw=True),
+                    monitor="watch_openai",
                     )
                     _tick("watch_openai", alerted=True)
                 else:
@@ -1906,6 +2040,7 @@ async def watch_security(bot: Bot) -> None:
                                 f"{len(_auth_fail_times)} en 10 min — {ips_txt}",
                                 raw=True,
                             ),
+                        monitor="watch_security",
                         )
             except FileNotFoundError:
                 pass
@@ -1935,6 +2070,7 @@ async def watch_security(bot: Bot) -> None:
                                     f"{user} — {now.strftime('%H:%M')}",
                                     raw=True,
                                 ),
+                            monitor="watch_security",
                             )
                 except Exception:
                     pass
@@ -1968,6 +2104,7 @@ async def watch_security(bot: Bot) -> None:
                                         f"patrón {pat}",
                                         raw=True,
                                     ),
+                                monitor="watch_security",
                                 )
                             break
             except Exception:
@@ -1993,6 +2130,7 @@ async def watch_security(bot: Bot) -> None:
                                     _html.escape(str(device)),
                                     raw=True,
                                 ),
+                            monitor="watch_security",
                             )
             except Exception:
                 pass
@@ -2079,7 +2217,7 @@ async def watch_mikrotik_security(bot: Bot) -> None:
                 _conn_alerted = False
 
             for msg in msgs:
-                await _send_critical(bot, msg)
+                await _send_critical(bot, msg, monitor="watch_mikrotik_security")
             _tick("watch_mikrotik_security")
         except Exception as e:
             _tick("watch_mikrotik_security", error=str(e)); log.debug("watch_mikrotik_security error: %s", e)
@@ -2115,6 +2253,7 @@ async def auto_unblock(bot: Bot) -> None:
                                     f"<code>{_html.escape(str(ip))}</code> — {horas:.0f} h",
                                     raw=True,
                                 ),
+                            monitor="auto_unblock",
                             )
                             log.info("Auto-unblock: %s (bloqueada hace %.0fh)", ip, horas)
                 except Exception as e:
@@ -2135,9 +2274,14 @@ _infra_tcp_down: Set[str] = set()
 _infra_loc_alert_ts: Dict[str, float] = {}
 _infra_flap_times: Dict[str, list] = {}
 _infra_flap_alerted: Set[str] = set()
-_infra_offline_streak: Dict[str, int] = {}  # chequeos consecutivos vistos "offline" sin confirmar aun
+_infra_offline_streak: Dict[str, int] = {}
+_infra_last_checked_at: Dict[str, str] = {}
 _infra_snmp_ports_alerted: Dict[str, Set[str]] = {}
 _infra_snmp_ports_up: Dict[str, Set[str]] = {}
+_infra_vpn_ports_up: Dict[str, Set[str]] = {}
+_infra_wave_active_ips: Dict[str, float] = {}
+_infra_snmp_port_down_streak: Dict[tuple, int] = {}
+_infra_pulse_batches_seen: Dict[str, set] = {}
 _infra_seed_done = False
 
 _INFRA_TONER_WARN = int(os.environ.get("INFRA_TONER_WARN_PCT", "15"))
@@ -2150,10 +2294,97 @@ _INFRA_FLAP_MIN = int(os.environ.get("INFRA_FLAP_MIN_CHANGES", "4"))
 # caída real -- evita que un blip de unos segundos (cola de hilos, ping perdido)
 # dispare "Equipo Infra caído" + "recuperado" sin que haya pasado nada real.
 _INFRA_OFFLINE_CONFIRM = int(os.environ.get("INFRA_OFFLINE_CONFIRM_CHECKS", "2"))
+_INFRA_OFFLINE_CONFIRM_PRINTER = int(os.environ.get("INFRA_OFFLINE_CONFIRM_PRINTER", "3"))
+
+
+def _infra_offline_confirm_needed(device_type: str, monitor_profile: Optional[str] = None) -> int:
+    mp = (monitor_profile or "").strip()
+    if device_type in ("printer", "pos") or mp == "printer":
+        return _INFRA_OFFLINE_CONFIRM_PRINTER
+    return _INFRA_OFFLINE_CONFIRM
+
+
 _INFRA_SNMP_TYPES = {"switch", "router", "server", "nas", "controller"}
 _INFRA_SNMP_PORT_ALERTS = os.environ.get("INFRA_SNMP_PORT_ALERTS", "0").strip().lower() in (
     "1", "true", "yes", "on",
 )
+_INFRA_SNMP_PORT_DEBOUNCE = int(os.environ.get("INFRA_SNMP_PORT_DEBOUNCE_POLLS", "2"))
+_INFRA_VPN_ALERT_DISCONNECT = os.environ.get("INFRA_VPN_ALERT_DISCONNECT", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
+
+
+def _is_vpn_iface(port: str) -> bool:
+    """OpenVPN/PPP dinámicos en MikroTik (USB Ingeniería — acceso remoto)."""
+    n = (port or "").lower()
+    return "<ovpn-" in n or "<ppp" in n or "<l2tp-" in n or "<pptp-" in n
+
+
+def _snmp_physical_ports(ports) -> set:
+    return {p for p in (ports or []) if p and not _is_vpn_iface(p)}
+
+
+def _snmp_vpn_ports(ports) -> set:
+    return {p for p in (ports or []) if p and _is_vpn_iface(p)}
+
+
+def _vpn_user_from_iface(port: str) -> str:
+    """<ovpn-sistemas> → sistemas | <ovpn-angy.monroy> → angy.monroy"""
+    n = (port or "").strip().strip("<>").lower()
+    for prefix in ("ovpn-", "ppp-", "l2tp-", "pptp-"):
+        if n.startswith(prefix):
+            return n[len(prefix):] or n
+    return n or "desconocido"
+
+
+_WATCH_INFRA_INTERVAL_SEC = max(30, int(os.environ.get("WATCH_INFRA_INTERVAL_SEC", "60")))
+
+
+async def _process_pulse_ewma_events(bot: Bot, poll_ctx: dict) -> bool:
+    """Telegram Pulse EWMA — degradando/recuperado desde poll_context.pulse_events."""
+    if not poll_ctx.get("pulse_events") and not poll_ctx:
+        return False
+    if not poll_ctx.get("pulse_events"):
+        return False
+    from core import pulse_correlate as _pulse
+    batch_id = str(poll_ctx.get("batch_id") or "")
+    if not batch_id:
+        return False
+    seen = _infra_pulse_batches_seen.setdefault(batch_id, set())
+    alerted = False
+    for ev in poll_ctx.get("pulse_events") or []:
+        ip = ev.get("ip") or ""
+        trans = ev.get("transition") or ""
+        if not ip or not trans:
+            continue
+        eid = f"{ip}:{trans}"
+        if eid in seen:
+            continue
+        seen.add(eid)
+        if trans == "enter_degrading":
+            if not _pulse.ewma_alert_allowed(ip):
+                continue
+            await _send(
+                bot,
+                _pulse.format_ewma_degrading(ev),
+                monitor="watch_infra_pulse",
+            )
+            try:
+                shomer_api.pulse_alert_ack(ip)
+            except Exception as e:
+                log.debug("pulse_alert_ack %s: %s", ip, e)
+            alerted = True
+        elif trans == "exit_degrading":
+            await _send(
+                bot,
+                _pulse.format_ewma_recovered(ev),
+                monitor="watch_infra_pulse",
+            )
+            alerted = True
+    if len(_infra_pulse_batches_seen) > 30:
+        oldest = next(iter(_infra_pulse_batches_seen))
+        _infra_pulse_batches_seen.pop(oldest, None)
+    return alerted
 
 
 def _infra_duration_mins(label: Optional[str]) -> int:
@@ -2176,7 +2407,7 @@ def _infra_duration_mins(label: Optional[str]) -> int:
 
 async def watch_infra(bot: Bot) -> None:
     """
-    Lee /infra/devices cada 2 min:
+    Lee /infra/devices cada WATCH_INFRA_INTERVAL_SEC (default 60s):
     - Caída / recuperación de equipos (Telegram unificado desde el agente)
     - Varios equipos caídos en la misma ubicación (switch/energía)
     - Flapping (muchos cambios de estado en pocas horas)
@@ -2189,28 +2420,40 @@ async def watch_infra(bot: Bot) -> None:
     await asyncio.sleep(100)
 
     while True:
-        eq_alert = pr_alert = svc_alert = snmp_alert = flap_alert = False
+        eq_alert = pr_alert = svc_alert = snmp_alert = flap_alert = pulse_alert = False
         try:
             snap = shomer_api.get_infra_snapshot()
             devices = snap.get("devices") or []
+            from core import pulse_correlate as _pulse
+            poll_ctx = snap.get("poll_context") or {}
+            last_blip = snap.get("last_blip") or {}
+            _cycle_new_offline: List[dict] = []
+            _cycle_recoveries: List[dict] = []
+            _wave_sent_this_cycle = False
+
+            if await _process_pulse_ewma_events(bot, poll_ctx):
+                pulse_alert = True
 
             if not _infra_seed_done:
                 for d in devices:
                     _infra_prev_status[d["ip"]] = d.get("status", "unknown")
                     ip = d["ip"]
-                    _infra_snmp_ports_up[ip] = set(d.get("snmp_up_ports") or [])
+                    all_snmp = set(d.get("snmp_up_ports") or [])
+                    _infra_snmp_ports_up[ip] = _snmp_physical_ports(all_snmp)
+                    _infra_vpn_ports_up[ip] = _snmp_vpn_ports(all_snmp)
+                    if d.get("checked_at"):
+                        _infra_last_checked_at[ip] = d["checked_at"]
                 _infra_seed_done = True
                 log.info("watch_infra: %d equipos cargados (sin alerta inicial)", len(devices))
                 _tick("watch_infra_equipment")
                 _tick("watch_infra_printer")
                 _tick("watch_infra_service")
                 _tick("watch_infra_snmp")
+                _tick("watch_infra_vpn")
                 _tick("watch_infra_flap")
-                await asyncio.sleep(120)
+                await asyncio.sleep(_WATCH_INFRA_INTERVAL_SEC)
                 continue
 
-            # Los APs (device_type='ap') son reflejo de Guardian (_sync_guardian_aps) —
-            # watch_guardian_nodes ya alerta caída/recuperación/degradado por AP.
             offline = [d for d in devices if d.get("status") == "offline" and d.get("device_type") != "ap"]
             now_ts = time.time()
 
@@ -2219,21 +2462,27 @@ async def watch_infra(bot: Bot) -> None:
                 name = d.get("name", ip)
                 status = d.get("status", "unknown")
                 dtype = d.get("device_type", "generic")
+                mprofile = d.get("monitor_profile") or ""
                 icon = d.get("icon", "📡")
                 loc = (d.get("location") or "").strip()
+                checked_at = d.get("checked_at")
 
                 if dtype == "ap":
-                    # Reflejo de Guardian — ya cubierto por watch_guardian_nodes, evita duplicados
                     continue
 
-                confirmed_prev = _infra_prev_status.get(ip)  # último estado CONFIRMADO (alertado)
+                poll_fresh = bool(checked_at) and checked_at != _infra_last_checked_at.get(ip)
+                if poll_fresh:
+                    _infra_last_checked_at[ip] = checked_at
 
-                # ── Transición online ↔ offline, con confirmación anti-blip ────
+                confirmed_prev = _infra_prev_status.get(ip)
+
                 if status == "offline":
+                    if not poll_fresh:
+                        continue
                     streak = _infra_offline_streak.get(ip, 0) + 1
                     _infra_offline_streak[ip] = streak
 
-                    if confirmed_prev != "offline" and streak >= _INFRA_OFFLINE_CONFIRM:
+                    if confirmed_prev != "offline" and streak >= _infra_offline_confirm_needed(dtype, mprofile):
                         # Confirmado tras N chequeos seguidos -- recién aquí es "caída real"
                         flaps = _infra_flap_times.setdefault(ip, [])
                         flaps.append(now_ts)
@@ -2253,6 +2502,7 @@ async def watch_infra(bot: Bot) -> None:
                                     f"{len(_infra_flap_times[ip])} cambios en {window_h} h",
                                     raw=True,
                                 ),
+                            monitor="watch_infra_flap",
                             )
                             _infra_flap_alerted.add(ip)
                             flap_alert = True
@@ -2272,35 +2522,110 @@ async def watch_infra(bot: Bot) -> None:
                                 accion_automatica="Ninguna — Inframonitor solo monitorea, no reinicia equipos de terceros",
                                 sugerencia="Verificar alimentación/cable físicamente",
                             ) + _kn(ip)
-                        await _send(bot, msg)
-                        eq_alert = True
-                        _infra_stale_reminded.discard(ip)
-                        _infra_prev_status[ip] = "offline"
+
+                        if _pulse.blip_recent(poll_ctx, last_blip):
+                            if _pulse.should_inform_blip(now_ts):
+                                await _send(
+                                    bot,
+                                    _pulse.format_blip_message(poll_ctx, last_blip),
+                                    monitor="watch_infra_pulse",
+                                )
+                                eq_alert = True
+                                pulse_alert = True
+                            _infra_prev_status[ip] = "offline"
+                            continue
+
+                        _cycle_new_offline.append({
+                            "ip": ip,
+                            "name": name,
+                            "location": loc,
+                            "device_type": dtype,
+                            "monitor_profile": mprofile,
+                            "msg": msg,
+                        })
+                        continue
                     # streak < umbral y aún no confirmado offline → blip silencioso, no se avisa
 
-                else:  # status == "online"
-                    _infra_offline_streak[ip] = 0
-                    if confirmed_prev == "offline":
-                        # Estaba confirmado caído -- aviso de recuperación inmediato
+                else:
+                    if poll_fresh:
+                        _infra_offline_streak[ip] = 0
+                    if confirmed_prev == "offline" and poll_fresh and status in ("online", "degraded"):
                         dur = d.get("state_duration") or ""
                         detail = msgfmt.host(name, ip)
                         if dur:
                             detail += f" · estuvo caído {_html.escape(dur)}"
                         evt = "Impresora recuperada" if dtype in ("printer", "pos") else "Equipo Infra recuperado"
-                        await _send(
-                            bot, _a("🟢", evt, detail, raw=True),
-                            reply_markup=_save_kb_recovery(ip),
-                        )
-                        eq_alert = True
-                    _infra_prev_status[ip] = "online"
-                    _infra_stale_reminded.discard(ip)
+                        rec = {
+                            "ip": ip,
+                            "name": name,
+                            "detail": detail,
+                            "evt": evt,
+                        }
+                        if ip in _infra_wave_active_ips:
+                            _cycle_recoveries.append(rec)
+                        else:
+                            await _send(
+                                bot, _a("🟢", evt, detail, raw=True),
+                                reply_markup=_save_kb_recovery(ip),
+                                monitor="watch_infra_equipment",
+                            )
+                            eq_alert = True
+                    if poll_fresh and status in ("online", "degraded"):
+                        _infra_prev_status[ip] = status
+                        _infra_wave_active_ips.pop(ip, None)
+                    if poll_fresh:
+                        _infra_stale_reminded.discard(ip)
                     last_flap = max(_infra_flap_times.get(ip) or [0])
                     if ip in _infra_flap_alerted and now_ts - last_flap > _INFRA_FLAP_WINDOW:
                         _infra_flap_alerted.discard(ip)
                         _infra_flap_times.pop(ip, None)
 
+            # ── Pulse Correlate: oleada o caídas individuales ───────────────
+            _wave_thr = _pulse.wave_threshold(poll_ctx)
+            if _cycle_new_offline:
+                if len(_cycle_new_offline) >= _wave_thr:
+                    await _send(
+                        bot,
+                        _pulse.format_wave_message(_cycle_new_offline, poll_ctx),
+                        monitor="watch_infra_pulse",
+                    )
+                    for item in _cycle_new_offline:
+                        _infra_prev_status[item["ip"]] = "offline"
+                        _infra_stale_reminded.discard(item["ip"])
+                        _infra_wave_active_ips[item["ip"]] = now_ts
+                    _wave_sent_this_cycle = True
+                    eq_alert = True
+                    pulse_alert = True
+                else:
+                    for item in _cycle_new_offline:
+                        await _send(bot, item["msg"], monitor="watch_infra_equipment")
+                        _infra_prev_status[item["ip"]] = "offline"
+                        _infra_stale_reminded.discard(item["ip"])
+                        eq_alert = True
+
+            if len(_cycle_recoveries) >= _wave_thr:
+                await _send(
+                    bot,
+                    _pulse.format_wave_recovery(_cycle_recoveries),
+                    monitor="watch_infra_pulse",
+                )
+                for item in _cycle_recoveries:
+                    _infra_wave_active_ips.pop(item["ip"], None)
+                eq_alert = True
+                pulse_alert = True
+            else:
+                for item in _cycle_recoveries:
+                    await _send(
+                        bot,
+                        _a("🟢", item["evt"], item["detail"], raw=True),
+                        reply_markup=_save_kb_recovery(item["ip"]),
+                        monitor="watch_infra_equipment",
+                    )
+                    _infra_wave_active_ips.pop(item["ip"], None)
+                    eq_alert = True
+
             # ── Varios caídos en la misma ubicación ─────────────────────────
-            if len(offline) >= 2:
+            if len(offline) >= 2 and not _wave_sent_this_cycle:
                 by_loc: Dict[str, list] = {}
                 for d in offline:
                     loc = (d.get("location") or "").strip()
@@ -2325,6 +2650,7 @@ async def watch_infra(bot: Bot) -> None:
                             subtitulo,
                             raw=True,
                         ),
+                    monitor="watch_infra_equipment",
                     )
                     _infra_loc_alert_ts[loc_key] = now_ts
                     eq_alert = True
@@ -2345,6 +2671,7 @@ async def watch_infra(bot: Bot) -> None:
                             f"~{mins // 60}h {mins % 60}m sin respuesta",
                             raw=True,
                         ),
+                    monitor="watch_infra_equipment",
                     )
                     _infra_stale_reminded.add(ip)
                     eq_alert = True
@@ -2375,6 +2702,7 @@ async def watch_infra(bot: Bot) -> None:
                                 f"{_html.escape(str(name))} — queda ~{toner}%",
                                 raw=True,
                             ),
+                        monitor="watch_infra_printer",
                         )
                         _infra_toner_level[ip] = toner
                         pr_alert = True
@@ -2383,19 +2711,27 @@ async def watch_infra(bot: Bot) -> None:
 
                 paper_c = pr.get("paper_current")
                 paper_m = pr.get("paper_max")
-                if paper_c is not None and paper_m and paper_m > 0:
-                    if paper_c <= max(10, int(paper_m * 0.08)) and ip not in _infra_paper_alerted:
-                        await _send(
-                            bot,
-                            _a(
-                                "📄", "Papel bajo",
-                                f"{_html.escape(str(name))} — quedan ~{paper_c} hojas",
-                                raw=True,
-                            ),
-                        )
-                        _infra_paper_alerted.add(ip)
-                        pr_alert = True
-                if ip in _infra_paper_alerted and paper_c and paper_m and paper_c > paper_m * 0.2:
+                paper_low = pr.get("paper_low")
+                if paper_low is None and paper_c is not None and paper_m and paper_m > 0:
+                    paper_low = paper_c <= max(10, int(paper_m * 0.08))
+                if paper_low and ip not in _infra_paper_alerted:
+                    trays = pr.get("paper_trays") or []
+                    tray_hint = ""
+                    if len(trays) > 1:
+                        empty_n = sum(1 for t in trays if t.get("state") == "empty")
+                        tray_hint = f" ({empty_n}/{len(trays)} bandejas vacías)"
+                    await _send(
+                        bot,
+                        _a(
+                            "📄", "Papel bajo",
+                            f"{_html.escape(str(name))} — sin papel en bandejas activas{tray_hint}",
+                            raw=True,
+                        ),
+                        monitor="watch_infra_printer",
+                    )
+                    _infra_paper_alerted.add(ip)
+                    pr_alert = True
+                if ip in _infra_paper_alerted and pr.get("paper_ok"):
                     _infra_paper_alerted.discard(ip)
 
             # ── Servicio TCP caído (host responde ping) ───────────────────────
@@ -2417,6 +2753,7 @@ async def watch_infra(bot: Bot) -> None:
                         f"responde ping pero puerto {msgfmt.port_label(port)} no",
                         raw=True,
                     ),
+                monitor="watch_infra_service",
                 )
                 _infra_tcp_down.add(ip)
                 svc_alert = True
@@ -2433,6 +2770,7 @@ async def watch_infra(bot: Bot) -> None:
                             f"puerto {msgfmt.port_label(d.get('tcp_port', '?'))}",
                             raw=True,
                         ),
+                    monitor="watch_infra_service",
                     )
                     svc_alert = True
 
@@ -2444,11 +2782,13 @@ async def watch_infra(bot: Bot) -> None:
                     if d.get("status") != "online" or d.get("snmp_ok") != 1:
                         _infra_snmp_ports_up.pop(ip, None)
                         _infra_snmp_ports_alerted.pop(ip, None)
+                        _infra_vpn_ports_up.pop(ip, None)
                         continue
                     if d.get("device_type") not in _INFRA_SNMP_TYPES:
                         continue
-                    current_up = set(d.get("snmp_up_ports") or [])
-                    prev_up = _infra_snmp_ports_up.get(ip, set())
+                    all_up = set(d.get("snmp_up_ports") or [])
+                    current_up = _snmp_physical_ports(all_up)
+                    prev_up = _snmp_physical_ports(_infra_snmp_ports_up.get(ip, set()))
                     # Poll SNMP incompleto: muchos puertos UP desaparecen de golpe → no alertar
                     if prev_up and len(current_up) < max(1, len(prev_up) // 2):
                         log.debug(
@@ -2457,6 +2797,11 @@ async def watch_infra(bot: Bot) -> None:
                         )
                         continue
                     for port in prev_up - current_up:
+                        key = (ip, port)
+                        streak = _infra_snmp_port_down_streak.get(key, 0) + 1
+                        _infra_snmp_port_down_streak[key] = streak
+                        if streak < _INFRA_SNMP_PORT_DEBOUNCE:
+                            continue
                         await _send(
                             bot,
                             _a(
@@ -2464,10 +2809,12 @@ async def watch_infra(bot: Bot) -> None:
                                 _html.escape(port),
                                 raw=True,
                             ),
+                            monitor="watch_infra_snmp",
                         )
                         snmp_alert = True
                         _infra_snmp_ports_alerted.setdefault(ip, set()).add(port)
                     for port in current_up - prev_up:
+                        _infra_snmp_port_down_streak.pop((ip, port), None)
                         if port in _infra_snmp_ports_alerted.get(ip, set()):
                             await _send(
                                 bot,
@@ -2476,6 +2823,7 @@ async def watch_infra(bot: Bot) -> None:
                                     f"{_html.escape(str(name))} — {_html.escape(port)} UP",
                                     raw=True,
                                 ),
+                            monitor="watch_infra_snmp",
                             )
                             snmp_alert = True
                             _infra_snmp_ports_alerted[ip].discard(port)
@@ -2483,11 +2831,46 @@ async def watch_infra(bot: Bot) -> None:
                     if not _infra_snmp_ports_alerted.get(ip):
                         _infra_snmp_ports_alerted.pop(ip, None)
 
+                    # VPN OpenVPN/PPP — informativo (USB Ingeniería entra/sale del hotel)
+                    current_vpn = _snmp_vpn_ports(all_up)
+                    prev_vpn = _snmp_vpn_ports(_infra_vpn_ports_up.get(ip, set()))
+                    for port in current_vpn - prev_vpn:
+                        user = _vpn_user_from_iface(port)
+                        await _send(
+                            bot,
+                            _a(
+                                "🔐", "Conexión VPN",
+                                f"{_html.escape(str(name))} — usuario "
+                                f"<b>{_html.escape(user)}</b> conectado",
+                                raw=True,
+                            ),
+                            monitor="watch_infra_vpn",
+                        )
+                        snmp_alert = True
+                    for port in prev_vpn - current_vpn:
+                        if not _INFRA_VPN_ALERT_DISCONNECT:
+                            continue
+                        user = _vpn_user_from_iface(port)
+                        await _send(
+                            bot,
+                            _a(
+                                "🔓", "Desconexión VPN",
+                                f"{_html.escape(str(name))} — usuario "
+                                f"<b>{_html.escape(user)}</b> desconectado",
+                                raw=True,
+                            ),
+                            monitor="watch_infra_vpn",
+                        )
+                        snmp_alert = True
+                    _infra_vpn_ports_up[ip] = current_vpn
+
             _tick("watch_infra_equipment", alerted=eq_alert)
             _tick("watch_infra_printer", alerted=pr_alert)
             _tick("watch_infra_service", alerted=svc_alert)
             _tick("watch_infra_snmp", alerted=snmp_alert)
+            _tick("watch_infra_vpn", alerted=snmp_alert)
             _tick("watch_infra_flap", alerted=flap_alert)
+            _tick("watch_infra_pulse", alerted=pulse_alert)
 
         except Exception as e:
             err = str(e)
@@ -2495,9 +2878,11 @@ async def watch_infra(bot: Bot) -> None:
             _tick("watch_infra_printer", error=err)
             _tick("watch_infra_service", error=err)
             _tick("watch_infra_snmp", error=err)
+            _tick("watch_infra_vpn", error=err)
             _tick("watch_infra_flap", error=err)
+            _tick("watch_infra_pulse", error=err)
             log.debug("watch_infra error: %s", e)
-        await asyncio.sleep(120)
+        await asyncio.sleep(_WATCH_INFRA_INTERVAL_SEC)
 
 
 # ── Amenazas activas: sin repetir bloqueos ya conocidos ───────────────────────
@@ -2565,7 +2950,7 @@ async def watch_network_audit(bot: Bot) -> None:
                     f"No hay escaneo registrado. {_HUNTER_RIESGOS_TIPOS} {_HUNTER_RIESGOS_PANEL} "
                     f"También podés pedirme «escanear la red».",
                 )
-                await _send(bot, msg)
+                await _send(bot, msg, monitor="watch_network_audit")
                 _tick("watch_network_audit", alerted=True)
                 await asyncio.sleep(_CHECK_INTERVAL * 4)  # no repetir por 24h
                 continue
@@ -2582,7 +2967,7 @@ async def watch_network_audit(bot: Bot) -> None:
                             f"Hace {days_ago} días sin escanear. {_HUNTER_RIESGOS_TIPOS} "
                             f"{_HUNTER_RIESGOS_PANEL}",
                         )
-                        await _send(bot, msg)
+                        await _send(bot, msg, monitor="watch_network_audit")
                         _audit_stale_scan_alerted = True
                         alerted = True
                 except Exception:
@@ -2608,7 +2993,7 @@ async def watch_network_audit(bot: Bot) -> None:
                         "⚠️", "Riesgos de red pendientes",
                         f"{counts}. {_HUNTER_RIESGOS_TIPOS} {_HUNTER_RIESGOS_PANEL}",
                     )
-                    await _send(bot, msg)
+                    await _send(bot, msg, monitor="watch_network_audit")
                     _audit_last_risk_counts = risk_key
                     alerted = True
 
@@ -2741,7 +3126,7 @@ async def watch_port_errors(bot: Bot) -> None:
                 f"➡️ Empezar por el puerto con más errores nuevos. "
                 f"Cambiar cable físico primero (causa más frecuente)."
             )
-            await _send(bot, msg, target="tecnico")
+            await _send(bot, msg, monitor="watch_port_errors")
             _tick("watch_port_errors", alerted=True)
 
         except Exception as e:

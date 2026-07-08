@@ -43,16 +43,14 @@ def task_result_message(task_id: str, result, mode: str) -> str:
     if tid == "TASK-005":
         files = ctx.get("files") or []
         if files and files[0] != "(ninguno)":
-            body = "\n".join(f"  • {fmt.e(f)}" for f in files[:5])
+            names = ", ".join(fmt.e(f.split("/")[-1]) for f in files[:3])
+            extra = f" (+{len(files) - 3})" if len(files) > 3 else ""
             happened = "Algunos logs del servidor ocupaban demasiado espacio"
-            action = "Redujo el tamaño de los archivos de log"
+            action = "Redujo el tamaño automáticamente (sin borrar historial reciente)"
             ok = True
-            result_line = f"{len(files)} archivo(s) optimizado(s)"
+            result_line = f"{len(files)} archivo(s): {names}{extra}"
         else:
-            happened = "Revisión programada de logs"
-            action = "No encontró logs que requieran limpieza"
-            ok = True
-            result_line = "Todo normal"
+            return ""  # sin Telegram si no hubo nada que truncar
         return fmt.action_result(
             "📄",
             "Mantenimiento — logs",

@@ -70,6 +70,10 @@ def init_db() -> None:
             con.execute("ALTER TABLE patrones_detectados ADD COLUMN ocurrencias INTEGER DEFAULT 0")
         if "evidencia" not in cols:
             con.execute("ALTER TABLE patrones_detectados ADD COLUMN evidencia TEXT DEFAULT ''")
+        try:
+            con.execute("ALTER TABLE patrones_detectados ADD COLUMN tendencia TEXT DEFAULT ''")
+        except Exception:
+            pass  # ya existe
         con.commit()
         con.close()
     except Exception as e:
@@ -85,7 +89,10 @@ def _candidates_from_memoria() -> Dict[str, List[Dict[str, Any]]]:
         con = sqlite3.connect(MEMORIA_DB)
         rows = con.execute(
             "SELECT ts, source, entity_ip, entity_name, event, detail FROM memoria_incidentes "
-            "WHERE ts > datetime('now', ?) ORDER BY ts DESC",
+            "WHERE ts > datetime('now', ?) "
+            "AND source IN ('guardian', 'infra') "
+            "AND event LIKE '%→offline' "
+            "ORDER BY ts DESC",
             (f"-{LOOKBACK_HOURS} hours",),
         ).fetchall()
         con.close()
@@ -95,8 +102,46 @@ def _candidates_from_memoria() -> Dict[str, List[Dict[str, Any]]]:
     groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for ts, source, ip, name, event, detail in rows:
         key = name or ip or source
-        groups[key].append({"ts": ts, "source": source, "event": event, "detail": detail})
+        groups[key].append({"ts": ts, "source": source, "event": event, "detail": detail, "entity_ip": ip})
     return groups
+
+
+def _tendencia_entidad(entity_ip: str, entity_name: str) -> dict:
+    """Compara caídas de esta semana vs la anterior. Detecta degradación."""
+    import sqlite3
+    try:
+        con = sqlite3.connect(MEMORIA_DB)
+        # caídas últimos 7 días
+        c7 = con.execute(
+            "SELECT COUNT(*) FROM memoria_incidentes "
+            "WHERE source IN ('guardian','infra') AND event LIKE '%→offline' "
+            "AND (entity_ip=? OR entity_name=?) "
+            "AND ts > datetime('now','-7 days')",
+            (entity_ip, entity_name),
+        ).fetchone()[0]
+        # caídas semana anterior (día 7 a 14)
+        c14 = con.execute(
+            "SELECT COUNT(*) FROM memoria_incidentes "
+            "WHERE source IN ('guardian','infra') AND event LIKE '%→offline' "
+            "AND (entity_ip=? OR entity_name=?) "
+            "AND ts > datetime('now','-14 days') AND ts <= datetime('now','-7 days')",
+            (entity_ip, entity_name),
+        ).fetchone()[0]
+        con.close()
+    except Exception as e:
+        log.debug("tendencia no disponible: %s", e)
+        return {"semana_actual": 0, "semana_previa": 0, "tendencia": "n/a"}
+    if c14 == 0 and c7 == 0:
+        tend = "estable"
+    elif c14 == 0:
+        tend = "nuevo" if c7 >= 3 else "estable"
+    elif c7 > c14 * 1.5:
+        tend = "degradando"
+    elif c7 < c14 * 0.5:
+        tend = "mejorando"
+    else:
+        tend = "estable"
+    return {"semana_actual": c7, "semana_previa": c14, "tendencia": tend}
 
 
 def run_pattern_detection_sync() -> List[Dict[str, Any]]:
@@ -162,6 +207,11 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
         evidencia = json.dumps([e["ts"] for e in candidatos[entidad][:20]], ensure_ascii=False)
         impacto = (h.get("impacto") or "").strip()
         sugerencia = (h.get("sugerencia_tecnica") or "").strip()
+        ent_ip = ""
+        for ev in candidatos[entidad]:
+            ent_ip = ev.get("entity_ip") or ent_ip
+        _tend = _tendencia_entidad(ent_ip, entidad)
+        tendencia = _tend["tendencia"]
 
         existente = con.execute(
             "SELECT id FROM patrones_detectados WHERE entidad=? AND estado='activo' "
@@ -172,17 +222,17 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
         if existente:
             con.execute(
                 "UPDATE patrones_detectados SET ocurrencias=?, patron_descripcion=?, "
-                "impacto=?, sugerencia_tecnica=?, evidencia=?, fecha_deteccion=datetime('now') "
+                "impacto=?, sugerencia_tecnica=?, evidencia=?, tendencia=?, fecha_deteccion=datetime('now') "
                 "WHERE id=?",
-                (ocurrencias, desc, impacto, sugerencia, evidencia, existente[0]),
+                (ocurrencias, desc, impacto, sugerencia, evidencia, tendencia, existente[0]),
             )
             actualizados += 1
         else:
             con.execute(
                 "INSERT INTO patrones_detectados "
-                "(entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica, evidencia) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (entidad, ocurrencias, desc, impacto, sugerencia, evidencia),
+                "(entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica, evidencia, tendencia) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (entidad, ocurrencias, desc, impacto, sugerencia, evidencia, tendencia),
             )
             guardados.append(h)
     con.commit()
@@ -195,14 +245,61 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
     return guardados
 
 
+def get_pattern_for_entity(entity_ip: str = "", entity_name: str = "") -> dict:
+    """Devuelve patrón activo + tendencia de UNA entidad, para enriquecer alertas en vivo."""
+    if not entity_ip and not entity_name:
+        return {}
+    name = entity_name
+    if entity_ip and not name:
+        try:
+            con = sqlite3.connect(MEMORIA_DB)
+            row = con.execute(
+                "SELECT entity_name FROM memoria_incidentes WHERE entity_ip=? "
+                "AND entity_name != '' ORDER BY ts DESC LIMIT 1",
+                (entity_ip,),
+            ).fetchone()
+            con.close()
+            if row:
+                name = row[0]
+        except Exception:
+            pass
+    try:
+        con = sqlite3.connect(KNOWLEDGE_DB)
+        row = con.execute(
+            "SELECT entidad, ocurrencias, tendencia, sugerencia_tecnica FROM patrones_detectados "
+            "WHERE estado='activo' AND (entidad=? OR entidad=?) "
+            "ORDER BY fecha_deteccion DESC LIMIT 1",
+            (name or entity_ip, entity_ip),
+        ).fetchone()
+        con.close()
+    except Exception:
+        return {}
+    if not row:
+        return {}
+    return {"entidad": row[0], "ocurrencias": row[1], "tendencia": row[2], "sugerencia": row[3]}
+
+
+def alert_suffix(entity_ip: str = "", entity_name: str = "") -> str:
+    """Línea corta para anexar a una alerta de Telegram si la entidad está degradando."""
+    p = get_pattern_for_entity(entity_ip, entity_name)
+    if not p:
+        return ""
+    if p.get("tendencia") == "degradando":
+        return (
+            chr(10)
+            + f"⚠️ Patrón: {p['ocurrencias']} caídas/semana y subiendo. {p.get('sugerencia', '')}"
+        ).rstrip()
+    return ""
+
+
 def get_active_patterns(limit: int = 5) -> str:
     """Bloque de texto para inyectar en el chat de OpenAI (L5)."""
     try:
         con = sqlite3.connect(KNOWLEDGE_DB)
         rows = con.execute(
-            "SELECT entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica "
+            "SELECT entidad, ocurrencias, patron_descripcion, impacto, sugerencia_tecnica, tendencia "
             "FROM patrones_detectados WHERE estado='activo' "
-            "ORDER BY fecha_deteccion DESC LIMIT ?",
+            "ORDER BY CASE WHEN tendencia='degradando' THEN 0 ELSE 1 END, fecha_deteccion DESC LIMIT ?",
             (limit,),
         ).fetchall()
         con.close()
@@ -211,7 +308,8 @@ def get_active_patterns(limit: int = 5) -> str:
     if not rows:
         return ""
     lines = ["Patrones detectados (con evidencia real — usar solo si es relevante a la pregunta):"]
-    for entidad, ocurrencias, desc, impacto, sug in rows:
-        etiqueta = f"{entidad}, {ocurrencias}x" if entidad else "general"
+    for entidad, ocurrencias, desc, impacto, sug, tend in rows:
+        flag = " ⚠️DEGRADANDO" if tend == "degradando" else ""
+        etiqueta = f"{entidad}, {ocurrencias}x{flag}" if entidad else "general"
         lines.append(f"- [{etiqueta}] {desc} | Impacto: {impacto} | Sugerencia: {sug}")
     return "\n".join(lines)

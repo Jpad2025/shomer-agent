@@ -582,6 +582,8 @@ async def _notify_result(
     from core import learning
 
     msg = ui_notify.task_result_message(result.task_id, result, mode)
+    if not msg:
+        return
     fn = send_critical_fn if not result.green_ok else send_fn
     markup = learning.task_feedback_markup(result.task_id) if learning.supervised_enabled() else None
     await fn(bot, msg, markup)

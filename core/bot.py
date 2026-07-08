@@ -76,9 +76,11 @@ MONITOR_LABELS = {
     "watch_infra_printer":     "Infra — tóner y papel",
     "watch_infra_service":     "Infra — servicio TCP desconectado",
     "watch_infra_snmp":        "Infra — puerto perdió enlace (UP→DOWN)",
+    "watch_infra_vpn":         "Infra — conexión VPN MikroTik (USB)",
     "watch_infra_flap":        "Infra — flapping (cable/PoE)",
     "watch_active_threats":    "Hunter — resumen IPs contenidas",
     "watch_port_errors":       "Infra — informe diario errores de puerto (08:00)",
+    "ia_diagnostico":          "IA — diagnóstico automático AP degradando",
 }
 
 MONITOR_GROUPS = [
@@ -91,7 +93,7 @@ MONITOR_GROUPS = [
     ("🛡️ Protector", ["watch_backups", "watch_protector_retry", "watch_protector_sample", "weekly_backup"]),
     ("🏗️ Infra", [
         "watch_infra_equipment", "watch_infra_printer", "watch_infra_service",
-        "watch_infra_snmp", "watch_infra_flap", "watch_port_errors",
+        "watch_infra_snmp", "watch_infra_vpn", "watch_infra_flap", "watch_port_errors",
     ]),
     ("🖥️ Servidor", [
         "watch_services", "watch_disk", "watch_resources", "watch_wan_outage",
@@ -287,6 +289,7 @@ def _ayuda_text() -> str:
         f"<b>📋 Historial y soluciones</b>\n"
         f"/guardar &lt;ip&gt; &lt;descripción&gt; — guardar qué pasó y cómo se resolvió\n"
         f"/historial — últimos cambios del bot (bloqueos, reboots…)\n"
+        f"/bitacora [horas|csv] — fallos guardados en memoria.db (consulta remediación)\n"
         f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo (ver /historial)\n"
         f"<i>Alias:</i> /shomer_historial · /shomer_revertir · /shomer_nueva_consulta\n\n"
 
@@ -1751,6 +1754,17 @@ async def cmd_liberar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def _callback_ip(data: str, action: str) -> str | None:
+    """Extrae IP de callbacks tipo action:IP. Devuelve None si el formato es inválido."""
+    if not data or ":" not in data:
+        return None
+    prefix, ip = data.split(":", 1)
+    if prefix != action:
+        return None
+    ip = ip.strip()
+    return ip or None
+
+
 async def cb_unblock(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1760,7 +1774,13 @@ async def cb_unblock(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Entendido — la IP sigue bloqueada.")
         return
 
-    ip = query.data.split(":", 1)[1]
+    ip = _callback_ip(query.data or "", "unblock_confirm")
+    if not ip:
+        await query.edit_message_text(
+            "⚠️ Botón inválido o mensaje antiguo — usá /liberar <IP>.",
+            parse_mode=PM,
+        )
+        return
     await query.edit_message_text(
         f"⏳ Liberando <code>{fmt.e(ip)}</code>...", parse_mode=PM
     )
@@ -1800,7 +1820,13 @@ async def cb_block(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Entendido — no se bloqueó nada.")
         return
 
-    ip = query.data.split(":", 1)[1]
+    ip = _callback_ip(query.data or "", "block_confirm")
+    if not ip:
+        await query.edit_message_text(
+            "⚠️ Botón inválido o mensaje antiguo — usá /hunter_bloquear <IP>.",
+            parse_mode=PM,
+        )
+        return
     await query.edit_message_text(
         f"⏳ Aplicando bloqueo a <code>{fmt.e(ip)}</code>...", parse_mode=PM
     )
@@ -1828,6 +1854,87 @@ async def cb_block(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"➡️ Verificá que el firewall esté configurado en el panel Hunter.",
             parse_mode=PM,
         )
+
+
+# ── /bitacora — memoria.db (fallos unificados, BD aparte) ─────────────────────
+
+async def cmd_bitacora(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    level = await _guard(update)
+    if not level:
+        return
+    from core import memoria_central
+
+    hours = 48
+    source_filter = None
+    want_csv = False
+    for arg in ctx.args or []:
+        low = arg.lower()
+        if low == "csv":
+            want_csv = True
+        elif low in ("guardian", "infra", "infra_legacy", "auto_task"):
+            source_filter = low
+        elif low.isdigit():
+            hours = max(1, min(int(low), 168))
+
+    if want_csv:
+        csv_text = memoria_central.export_incidents_csv(hours=hours)
+        if not csv_text.strip() or csv_text.count("\n") < 2:
+            await update.message.reply_text(
+                f"📋 Sin incidentes en memoria.db (últimas {hours} h).",
+                parse_mode=PM,
+            )
+            return
+        from io import BytesIO
+        bio = BytesIO(csv_text.encode("utf-8"))
+        bio.name = f"bitacora_{SITE_NAME.replace(' ', '_')}_{hours}h.csv"
+        await update.message.reply_document(
+            document=bio,
+            caption=f"📋 Bitácora memoria.db — {hours} h — {SITE_NAME}",
+        )
+        return
+
+    st = memoria_central.stats(hours=hours)
+    inc = memoria_central.list_incidents(hours=hours, source=source_filter, limit=18)
+    alerts = memoria_central.list_alerts(hours=hours, limit=8)
+
+    lines = [
+        f"Ventana: últimas <b>{hours} h</b>",
+        f"Oleadas (batch_id distintos): <b>{st.get('distinct_batches', 0)}</b>",
+        f"Alertas Telegram registradas: <b>{st.get('telegram_alerts', 0)}</b>",
+    ]
+    by_src = st.get("by_source") or {}
+    if by_src:
+        parts = [f"{k}: {v}" for k, v in sorted(by_src.items())]
+        lines.append("Por módulo: " + ", ".join(parts))
+
+    if inc:
+        lines.append("")
+        lines.append("<b>Últimos incidentes</b>")
+        for row in inc[:15]:
+            ts = (row.get("ts") or "")[5:16]
+            src = fmt.e(row.get("source") or "")
+            name = fmt.e((row.get("entity_name") or row.get("entity_ip") or "")[:28])
+            ev = fmt.e(row.get("event") or "")
+            bid = row.get("batch_id") or ""
+            extra = f" · oleada" if bid else ""
+            lines.append(f"  [{ts}] {src} {name} — {ev}{extra}")
+    else:
+        lines.append("")
+        lines.append("Sin incidentes en este período.")
+
+    if alerts:
+        lines.append("")
+        lines.append("<b>Últimas alertas Telegram</b>")
+        for a in alerts[:6]:
+            ts = (a.get("ts") or "")[5:16]
+            lines.append(f"  [{ts}] {fmt.e(a.get('monitor') or '')}: {fmt.e((a.get('summary') or '')[:60])}")
+
+    lines.append("")
+    lines.append("<i>CSV: /bitacora csv · filtrar: /bitacora guardian 24</i>")
+
+    await update.message.reply_text(
+        fmt.card("📋", f"Bitácora — {SITE_NAME}", lines), parse_mode=PM
+    )
 
 
 # ── /historial ────────────────────────────────────────────────────────────────
@@ -2557,6 +2664,7 @@ def run():
         ("monitores",      cmd_monitores),
         ("resumen",        cmd_resumen),
         ("historial",      cmd_historial),
+        ("bitacora",       cmd_bitacora),
         ("revertir",       cmd_revertir),
         ("nuevo",          cmd_nuevo),
         ("guardar",        cmd_guardar_conocimiento),
@@ -2592,6 +2700,7 @@ def run():
         ("shomer_monitores",       cmd_monitores),
         ("shomer_resumen",         cmd_resumen),
         ("shomer_historial",       cmd_historial),
+        ("shomer_bitacora",        cmd_bitacora),
         ("shomer_revertir",        cmd_revertir),
         ("shomer_nueva_consulta",  cmd_nuevo),
         ("guardian_equipos",       cmd_equipos),
@@ -2620,8 +2729,8 @@ def run():
     app.add_handler(CallbackQueryHandler(cb_instalar,        pattern="^instalar"))
     app.add_handler(CallbackQueryHandler(cb_repair,          pattern="^repair:"))
     app.add_handler(CallbackQueryHandler(cb_dismiss,         pattern="^dismiss:"))
-    app.add_handler(CallbackQueryHandler(cb_block,           pattern="^block_"))
-    app.add_handler(CallbackQueryHandler(cb_unblock,         pattern="^unblock_"))
+    app.add_handler(CallbackQueryHandler(cb_block,           pattern=r"^block_(confirm:.+|cancel)$"))
+    app.add_handler(CallbackQueryHandler(cb_unblock,         pattern=r"^unblock_(confirm:.+|cancel)$"))
     app.add_handler(CallbackQueryHandler(cb_usuario,         pattern="^usuario:"))
     app.add_handler(CallbackQueryHandler(cb_save_knowledge,  pattern="^save_know:"))
     app.add_handler(CallbackQueryHandler(cb_save_task_feedback, pattern="^save_task:"))
@@ -2658,6 +2767,7 @@ def run():
             BotCommand("guardar", "Guardar solución en historial"),
             BotCommand("skills", "Skills aprendidas del sitio"),
             BotCommand("historial", "Cambios recientes del bot"),
+            BotCommand("bitacora", "Bitácora fallos memoria.db"),
             BotCommand("revertir", "Deshacer bloqueo/desbloqueo"),
             BotCommand("instalar", "Guía instalación del sitio"),
             BotCommand("verificar", "Checklist post-instalación"),

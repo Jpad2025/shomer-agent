@@ -714,7 +714,19 @@ def get_infra_snapshot() -> dict:
     return {
         "devices": data.get("devices", []),
         "outages_24h": data.get("outages_24h", 0),
+        "poll_context": data.get("poll_context") or {},
+        "last_blip": data.get("last_blip") or {},
+        "pulse_enabled": data.get("pulse_enabled", False),
     }
+
+
+def pulse_alert_ack(ip: str) -> bool:
+    """Marca cooldown Pulse EWMA en servidor tras Telegram enviado."""
+    ip = (ip or "").strip()
+    if not ip:
+        return False
+    ok, _ = _post(f"/infra/pulse/{ip}/alerted", {})
+    return bool(ok)
 
 
 def get_infra_summary() -> dict:
@@ -835,6 +847,11 @@ def knowledge_hint(ip: str, max_len: int = 55) -> str:
         return ""
 
 
+def get_daily_health() -> dict:
+    """Blips 24h + delta RX dropped NIC gestión."""
+    return _get("/api/host-health/daily") or {}
+
+
 def summary_text() -> str:
     lines = []
     health = get_health()
@@ -888,6 +905,12 @@ def summary_text() -> str:
             lines.append(f"  • …y {extra} más caídos")
         if infra.get("low_toner"):
             lines.append(f"Impresoras con tóner bajo: {len(infra['low_toner'])}")
+    daily = get_daily_health()
+    if daily.get("success"):
+        if daily.get("text_blips"):
+            lines.append(daily["text_blips"])
+        if daily.get("text_nic"):
+            lines.append(daily["text_nic"])
     try:
         from core import llm_router as _llm
         lines.append("IA:")

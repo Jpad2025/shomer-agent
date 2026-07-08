@@ -4,6 +4,7 @@ Prueba en orden: ping → TCP 9100 → SNMP (laser) → ESC/POS (térmica/POS).
 Usa snmpget/snmpwalk CLI (mismo patrón que tplink_eap.py).
 """
 from __future__ import annotations
+import re
 import socket
 import subprocess
 from typing import Optional
@@ -129,8 +130,41 @@ def get_printer_status(ip: str, snmp_community: str = "public") -> dict:
 
         _, paper_raw = _snmpget(ip, snmp_community, _OID_PAPER)
         p = _parse_int(paper_raw)
-        if p is not None:
-            result["paper_ok"] = (p not in (0, -3))
+        ok_walk, cur_lines = _snmpwalk(ip, snmp_community, "1.3.6.1.2.1.43.8.2.1.10")
+        ok_max, max_lines = _snmpwalk(ip, snmp_community, "1.3.6.1.2.1.43.8.2.1.9")
+        if ok_walk and cur_lines:
+            levels, maxs = {}, {}
+            for line in cur_lines:
+                if "=" not in line:
+                    continue
+                m = re.search(r"\.43\.8\.2\.1\.10\.(.+)$", line.split("=", 1)[0].strip())
+                if m:
+                    try:
+                        levels[m.group(1)] = int(line.split(":", 1)[-1].strip())
+                    except ValueError:
+                        pass
+            if ok_max:
+                for line in max_lines:
+                    if "=" not in line:
+                        continue
+                    m = re.search(r"\.43\.8\.2\.1\.9\.(.+)$", line.split("=", 1)[0].strip())
+                    if m:
+                        try:
+                            maxs[m.group(1)] = int(line.split(":", 1)[-1].strip())
+                        except ValueError:
+                            pass
+            has_paper = any(
+                v in (-3, -4) or (v > 0) for v in levels.values()
+            )
+            result["paper_ok"] = has_paper
+            if not has_paper and any(v == 0 for v in levels.values()):
+                result["paper_ok"] = False
+        elif p is not None:
+            result["paper_ok"] = (p not in (0,) and p not in (-3, -4) or p in (-3, -4))
+            if p in (-3, -4):
+                result["paper_ok"] = True
+            elif p == 0:
+                result["paper_ok"] = False
 
         return result
 
