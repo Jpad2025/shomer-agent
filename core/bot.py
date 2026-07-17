@@ -762,10 +762,30 @@ async def _salud_impl(message, ctx, level: str):
     # Servicios
     svc_status = repair.check_services()
     svc_lines  = []
+    down_keys  = []
     for key, state in svc_status.items():
         icon = "✅" if state == "active" else "❌"
         svc_lines.append(f"  {icon} {fmt.e(repair.SERVICES[key]['label'])}")
+        if state != "active":
+            down_keys.append(key)
     parts.append(fmt.section("⚙️", "Servicios", svc_lines))
+
+    # Journal filtrado si hay servicio caído
+    if down_keys:
+        try:
+            from core import journal_context as _jctx
+            j_lines = []
+            for key in down_keys[:2]:
+                hint = _jctx.diagnose_with_journal(
+                    f"Servicio {repair.SERVICES[key]['label']} no activo en /salud",
+                    unit_key=key,
+                )
+                if hint:
+                    j_lines.append(f"  💡 <i>{fmt.e(hint[:300])}</i>")
+            if j_lines:
+                parts.append(fmt.section("📋", "Causa probable (journal)", j_lines))
+        except Exception:
+            pass
 
     # Disco
     disk = shomer_api.get_disk_usage()

@@ -408,6 +408,20 @@ async def watch_hunter(bot: Bot) -> None:
                         accion_automatica=accion,
                         sugerencia=h.get("action", "") + _kn(ip),
                     )
+                    # Contexto IA / fijo: ruido vs amenaza + qué hacer en el hotel
+                    try:
+                        from core import hunter_context as _hctx
+                        hint = _hctx.diagnose_hunter_block(
+                            ip, sig,
+                            severity=int(item.get("severity") or 3),
+                            firewall_blocked=bool(fw_blocked),
+                            block_count=int(block_count or 1),
+                            blocked_by=str(item.get("blocked_by") or "auto"),
+                        )
+                        if hint:
+                            msg_text += f"\n💡 <i>{_html.escape(hint[:320])}</i>"
+                    except Exception as _he:
+                        log.debug("hunter ctx: %s", _he)
                     await _emit(
                         bot,
                         origen="watch_hunter",
@@ -575,9 +589,21 @@ async def watch_resources(bot: Bot) -> None:
                     detalle = " · ".join(motivo)
                     if temp:
                         detalle += f" · {temp:.0f}°C"
+                    jhint = ""
+                    try:
+                        from core import journal_context as _jctx
+                        jhint = _jctx.diagnose_with_journal(
+                            f"Servidor Shomer bajo alta carga: {detalle}",
+                            host_signals=True,
+                        )
+                    except Exception as _je:
+                        log.debug("journal ctx resources: %s", _je)
+                    msg = _a("⚠️", "Servidor bajo alta carga", detalle, raw=True)
+                    if jhint:
+                        msg += f"\n💡 <i>{_html.escape(jhint[:280])}</i>"
                     await _send_critical(
                         bot,
-                        _a("⚠️", "Servidor bajo alta carga", detalle, raw=True),
+                        msg,
                     monitor="watch_resources",
                     )
 
@@ -878,13 +904,25 @@ async def watch_disk(bot: Bot) -> None:
                         repair.run_safe_cleanup()
                         free2 = _free_gb_for(mount, free)
                         warn_rules = [r for r in repair.DISK_CLEANUP_RULES if r["level"] == "warn"]
+                        jhint = ""
+                        try:
+                            from core import journal_context as _jctx
+                            jhint = _jctx.diagnose_with_journal(
+                                f"Disco {tag} al {pct}% (crítico)",
+                                host_signals=True,
+                            )
+                        except Exception as _je:
+                            log.debug("journal ctx disk: %s", _je)
+                        sug = "Si vuelve a subir pronto, revisar journal/logs grandes manualmente"
+                        if jhint:
+                            sug = jhint[:200]
                         await _send_critical(
                             bot,
                             msgfmt.executive_alert(
                                 "crítico", "Servidor Shomer",
                                 impacto=f"Disco {tag} al {pct}% — riesgo de fallas en BD/logs si se llena",
                                 accion_automatica=f"Limpieza automática ejecutada — quedan {free2}GB libres",
-                                sugerencia="Si vuelve a subir pronto, revisar journal/logs grandes manualmente",
+                                sugerencia=sug,
                             ),
                         monitor="watch_disk",
                         )
@@ -899,13 +937,23 @@ async def watch_disk(bot: Bot) -> None:
                     if not ran:
                         repair.run_safe_cleanup()
                         free2 = _free_gb_for(mount, free)
+                        jhint = ""
+                        try:
+                            from core import journal_context as _jctx
+                            jhint = _jctx.diagnose_with_journal(
+                                f"Disco {tag} al {pct}%",
+                                host_signals=True,
+                            )
+                        except Exception as _je:
+                            log.debug("journal ctx disk85: %s", _je)
+                        extra = f"\n💡 <i>{_html.escape(jhint[:280])}</i>" if jhint else ""
                         await _send_critical(
                             bot,
                             _a(
                                 "⚠️", "Disco alto",
                                 f"{tag} {pct}% — limpieza automática, quedan {free2}GB",
                                 raw=True,
-                            ),
+                            ) + extra,
                         monitor="watch_disk",
                         )
 
@@ -1082,6 +1130,16 @@ async def watch_services(bot: Bot) -> None:
 
                 if state != "active" and not _service_alerted.get(key):
                     _service_alerted[key] = True
+                    # Journal filtrado → causa probable (no inventario del hotel)
+                    jhint = ""
+                    try:
+                        from core import journal_context as _jctx
+                        jhint = _jctx.diagnose_with_journal(
+                            f"El servicio {label} está caído o no responde",
+                            unit_key=key,
+                        )
+                    except Exception as _je:
+                        log.debug("journal ctx services: %s", _je)
                     ran = False
                     if task_id:
                         ran = await auto_tasks.maybe_run(
@@ -1093,18 +1151,21 @@ async def watch_services(bot: Bot) -> None:
                     if not ran:
                         ok, detail = repair.restart_service(key)
                         if ok:
+                            lines_down = [
+                                _a(
+                                    "⚠️", f"{label} se detuvo",
+                                    "reinicio automático en curso",
+                                    raw=True,
+                                ),
+                            ]
+                            if jhint:
+                                lines_down.append(f"💡 <i>{_html.escape(jhint[:280])}</i>")
                             await _emit(
                                 bot,
                                 origen="watch_services",
                                 entidad=f"services:{key}",
                                 metrica="restart",
-                                lines=[
-                                    _a(
-                                        "⚠️", f"{label} se detuvo",
-                                        "reinicio automático en curso",
-                                        raw=True,
-                                    ),
-                                ],
+                                lines=lines_down,
                                 severity="warn",
                                 bypass_buffer=True,
                                 critical=True,
@@ -1128,18 +1189,21 @@ async def watch_services(bot: Bot) -> None:
                                 )
                                 _service_alerted[key] = False
                             else:
+                                lines_fail = [
+                                    _a(
+                                        "🔴", f"{label} no respondió",
+                                        "reinicio automático falló — usar /salud",
+                                        raw=True,
+                                    ),
+                                ]
+                                if jhint:
+                                    lines_fail.append(f"💡 <i>{_html.escape(jhint[:280])}</i>")
                                 await _emit(
                                     bot,
                                     origen="watch_services",
                                     entidad=f"services:{key}",
                                     metrica="restart_failed",
-                                    lines=[
-                                        _a(
-                                            "🔴", f"{label} no respondió",
-                                            "reinicio automático falló — usar /salud",
-                                            raw=True,
-                                        ),
-                                    ],
+                                    lines=lines_fail,
                                     severity="critical",
                                     bypass_buffer=True,
                                     critical=True,
@@ -1152,18 +1216,21 @@ async def watch_services(bot: Bot) -> None:
                                     {"port": port, "service_key": key},
                                     _send, _send_critical,
                                 )
+                            lines_down2 = [
+                                _a(
+                                    "🔴", f"{label} caído",
+                                    _html.escape(str(detail[:120])),
+                                    raw=True,
+                                ),
+                            ]
+                            if jhint:
+                                lines_down2.append(f"💡 <i>{_html.escape(jhint[:280])}</i>")
                             await _emit(
                                 bot,
                                 origen="watch_services",
                                 entidad=f"services:{key}",
                                 metrica="down",
-                                lines=[
-                                    _a(
-                                        "🔴", f"{label} caído",
-                                        _html.escape(str(detail[:120])),
-                                        raw=True,
-                                    ),
-                                ],
+                                lines=lines_down2,
                                 severity="critical",
                                 bypass_buffer=True,
                                 critical=True,

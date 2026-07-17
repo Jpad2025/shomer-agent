@@ -90,6 +90,28 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "explain_hunter_alert",
+            "description": (
+                "Explica un bloqueo Hunter (Suricata/Wazuh) en español: si es ruido de internet "
+                "o amenaza real, y si el técnico del hotel debe hacer algo. "
+                "Usar cuando preguntan por una IP bloqueada o qué significa una alerta."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ip": {"type": "string", "description": "IP bloqueada"},
+                    "signature": {
+                        "type": "string",
+                        "description": "Firma Suricata/ET si se conoce (opcional)",
+                    },
+                },
+                "required": ["ip"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_disk_usage",
             "description": (
                 "Uso de disco del servidor Shomer por partición: porcentaje usado, GB libres. "
@@ -129,6 +151,39 @@ TOOLS = [
                 "Estado de los servicios systemd clave del servidor Shomer: "
                 "shomer-guardian, shomer-tools, nginx, suricata, wazuh-manager, redis. "
                 "Usar cuando preguntan si algún servicio está caído o con problemas."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_service_journal",
+            "description": (
+                "Lee un recorte FILTRADO del journal systemd de un servicio Shomer "
+                "(errores recientes, no el log completo). "
+                "Servicios: guardian, poller, tools, suricata, redis, nginx, docker. "
+                "Usar cuando preguntan por qué falló un servicio, reinicios, OOM o errores del servidor."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {
+                        "type": "string",
+                        "description": "Clave: guardian|poller|tools|suricata|redis|nginx|docker",
+                    }
+                },
+                "required": ["service"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_host_journal_signals",
+            "description": (
+                "Recorte filtrado del journal del host: disco lleno, OOM, reinicios, errores. "
+                "Usar cuando preguntan por qué el servidor Shomer falló, se reinició o se quedó sin disco/RAM."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -494,6 +549,45 @@ def execute(name: str, args: dict) -> Any:
             blocked = shomer_api.get_blocked_ips() or []
             return {"blocked": blocked[:20], "total": len(blocked)}
 
+        elif name == "explain_hunter_alert":
+            from core import hunter_context as _hctx
+            from core import shomer_api
+            ip = str(args.get("ip") or "").strip()
+            sig = str(args.get("signature") or "").strip()
+            sev = 3
+            fw = True
+            count = 1
+            by = "auto"
+            if not sig:
+                for b in (shomer_api.get_blocked_ips() or []):
+                    if b.get("ip") == ip:
+                        sig = b.get("alert_signature") or ""
+                        sev = int(b.get("severity") or 3)
+                        fw = bool(b.get("firewall_blocked", True))
+                        count = int(b.get("block_count") or 1)
+                        by = str(b.get("blocked_by") or "auto")
+                        break
+            hint = _hctx.diagnose_hunter_block(
+                ip, sig,
+                severity=sev,
+                firewall_blocked=fw,
+                block_count=count,
+                blocked_by=by,
+                force_ai=True,
+            )
+            snippet = _hctx.build_alert_snippet(
+                ip, sig, severity=sev, firewall_blocked=fw,
+                block_count=count, blocked_by=by,
+            )
+            return {
+                "ip": ip,
+                "title": snippet.get("title"),
+                "scope": snippet.get("scope"),
+                "risk": snippet.get("risk"),
+                "explanation": hint,
+                "firewall_blocked": fw,
+            }
+
         elif name == "get_disk_usage":
             from core import shomer_api
             return shomer_api.get_disk_usage()
@@ -527,6 +621,37 @@ def execute(name: str, args: dict) -> Any:
                 "redis": health.get("redis", "?"),
                 "uptime": data.get("uptime", {}).get("label"),
                 "temp_c": (data.get("temperature") or {}).get("celsius"),
+            }
+
+        elif name == "get_service_journal":
+            from core import journal_context as _jctx
+            key = str(args.get("service") or "").strip().lower()
+            # alias comunes
+            aliases = {
+                "shomer-guardian": "guardian",
+                "inframonitor": "poller",
+                "shomer-tools": "tools",
+                "redis-server": "redis",
+            }
+            key = aliases.get(key, key)
+            payload = _jctx.get_unit_journal(key)
+            return {
+                "service": key,
+                "ok": payload.get("ok"),
+                "label": payload.get("label"),
+                "journal": payload.get("text") or "",
+                "error": payload.get("error"),
+                "hint": "Solo errores/reciente filtrado — no es el journal completo",
+            }
+
+        elif name == "get_host_journal_signals":
+            from core import journal_context as _jctx
+            payload = _jctx.get_host_journal_signals()
+            return {
+                "ok": payload.get("ok"),
+                "journal": payload.get("text") or "",
+                "error": payload.get("error"),
+                "hint": "Señales disco/OOM/reinicio/errores — no inventario de red",
             }
 
         elif name == "get_backup_status":
