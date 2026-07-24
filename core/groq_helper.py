@@ -379,10 +379,23 @@ def _check_budget_before_call() -> str | None:
     return None
 
 
-def _call_groq(messages: list[dict], max_tokens: int) -> str:
-    budget_msg = _check_budget_before_call()
-    if budget_msg:
-        return budget_msg
+def _call_groq(messages: list[dict], max_tokens: int, background: bool = False) -> str:
+    # background=True -> llamada de fondo (monitores, patrones). NO pausa el bot
+    # entero ni escupe mensajes de error como texto: si Groq no puede, se salta
+    # esta llamada y el monitor sigue. La pausa/mensaje global queda solo para el
+    # chat interactivo, donde sí tiene sentido avisar al usuario.
+    if background:
+        try:
+            from core.memory import check_token_budget
+            if check_token_budget() == "exceeded":
+                log.info("Groq fondo: presupuesto diario excedido — se salta la llamada (sin pausar el bot)")
+                return ""
+        except Exception:
+            pass
+    else:
+        budget_msg = _check_budget_before_call()
+        if budget_msg:
+            return budget_msg
     try:
         resp = _get_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -403,14 +416,19 @@ def _call_groq(messages: list[dict], max_tokens: int) -> str:
                 max_tokens=max_tokens,
                 temperature=0.1,
             )
+            _register_usage(resp, endpoint="explain")
             return (resp.choices[0].message.content or "").strip()
         except RateLimitError:
-            from core import maintenance as _mnt
-
-            _mnt.pause()
+            # Antes: maintenance.pause() apagaba el bot ENTERO ~90s aunque solo
+            # fallara una llamada de FONDO (un monitor), dejando el chat mudo sin
+            # que nadie lo usara. El plan free de Groq se recupera solo al minuto
+            # siguiente, así que ya NO pausamos por un 429 aislado.
+            log.warning("Groq rate-limit (2º intento) — se omite esta llamada, sin pausar el bot")
+            if background:
+                return ""
             return (
-                "⏳ Cuota Groq agotada — el asistente entrará en pausa breve (~90s). "
-                "Usa comandos directos: /salud · /alertas"
+                "⏳ El asistente IA está tocando el límite del plan free de Groq. "
+                "Reintenta en un momento o usa comandos directos: /salud · /alertas"
             )
 
     except APIConnectionError:
@@ -459,6 +477,7 @@ def explain(
     context: str = "",
     include_doc: bool = False,
     level: str = "tecnico",
+    background: bool = True,
 ) -> str:
     effective_dev = (
         level == "developer"
@@ -486,7 +505,7 @@ def explain(
 
     messages.append({"role": "user", "content": prompt})
 
-    out = _call_groq(messages, max_tokens)
+    out = _call_groq(messages, max_tokens, background=background)
     if not out:
         return (
             "No pude generar texto. Usa `/salud` o `/salud` para datos verificados del servidor."

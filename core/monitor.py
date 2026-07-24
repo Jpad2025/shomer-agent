@@ -1607,39 +1607,55 @@ async def watch_protector_retry(bot: Bot) -> None:
                     _backup_consecutive_fails[nombre] = _backup_consecutive_fails.get(nombre, 0) + 1
                     fallos = _backup_consecutive_fails[nombre]
 
-                    b2_fallo = "b2" in status.lower() or "cloud" in status.lower()
-                    equipo_apagado = "connect" in status.lower() or "timeout" in status.lower()
+                    st_l = status.lower()
+                    b2_fallo = "b2" in st_l or "cloud" in st_l
+                    equipo_apagado = (
+                        "connect" in st_l or "timeout" in st_l
+                        or "unreachable" in st_l or "no route" in st_l
+                    )
+                    permiso_repo = (
+                        "permission" in st_l or "permiso" in st_l
+                        or "open /srv" in st_l or "load(<index" in st_l
+                        or "restic" in st_l and "index" in st_l
+                    )
+                    credencial = (
+                        "logon" in st_l or "access denied" in st_l
+                        or "nt_status" in st_l or "auth" in st_l
+                        or "mount.cifs" in st_l or "permission denied" in st_l
+                    )
 
                     if b2_fallo:
-                        await _send(
-                            bot,
-                            _a(
-                                "☁️", "Backup sin subir a nube",
-                                f"{_html.escape(str(nombre))} — local OK, B2 falló",
-                                raw=True,
-                            ),
-                        monitor="watch_protector_retry",
-                        )
+                        detalle = f"{_html.escape(str(nombre))} — local OK, B2 falló"
+                        titulo = "Backup sin subir a nube"
+                        icono = "☁️"
                     elif equipo_apagado:
-                        await _send(
-                            bot,
-                            _a(
-                                "⚠️", "Backup falló",
-                                f"{_html.escape(str(nombre))} — equipo apagado o sin red",
-                                raw=True,
-                            ),
-                        monitor="watch_protector_retry",
+                        detalle = f"{_html.escape(str(nombre))} — equipo apagado o sin red"
+                        titulo = "Backup falló"
+                        icono = "⚠️"
+                    elif permiso_repo:
+                        detalle = (
+                            f"{_html.escape(str(nombre))} — repo local /srv "
+                            "(permisos o índice Restic); no es credencial Windows"
                         )
+                        titulo = "Backup falló"
+                        icono = "⚠️"
+                    elif credencial:
+                        detalle = f"{_html.escape(str(nombre))} — revisar credenciales"
+                        titulo = "Backup falló"
+                        icono = "⚠️"
                     else:
-                        await _send(
-                            bot,
-                            _a(
-                                "⚠️", "Backup falló",
-                                f"{_html.escape(str(nombre))} — revisar credenciales",
-                                raw=True,
-                            ),
-                        monitor="watch_protector_retry",
+                        detalle = (
+                            f"{_html.escape(str(nombre))} — revisar Protector "
+                            f"({_html.escape(status[:120])})"
                         )
+                        titulo = "Backup falló"
+                        icono = "⚠️"
+
+                    await _send(
+                        bot,
+                        _a(icono, titulo, detalle, raw=True),
+                        monitor="watch_protector_retry",
+                    )
 
                     if fallos >= 3:
                         await _send_critical(
@@ -1885,13 +1901,14 @@ async def watch_connectivity(bot: Bot) -> None:
 _groq_ok = True
 _groq_fail_since: Optional[float] = None
 _groq_alerted = False
+_groq_alert_day = ""   # YYYY-MM-DD del último aviso — tope 1 alerta/día (plan free)
 
 async def watch_groq(bot: Bot) -> None:
     """
     Cada 5 min verifica conectividad con Groq.
     Si falla >10 min: alerta developer (el bot responderá sin IA).
     """
-    global _groq_ok, _groq_fail_since, _groq_alerted
+    global _groq_ok, _groq_fail_since, _groq_alerted, _groq_alert_day
     import socket
     await asyncio.sleep(150)
 
@@ -1905,18 +1922,31 @@ async def watch_groq(bot: Bot) -> None:
             tcp_ok = False
 
         ok = False
+        # Motivo del fallo para redactar la alerta con la causa REAL:
+        #   - sin_conexion : ni siquiera abre el socket TCP (internet/DNS del server)
+        #   - limite       : Groq responde pero rechaza por cuota / rate-limit (429) — lo más común en el plan free
+        #   - sobrecargado : Groq 503/529 (saturado del lado de ellos)
+        #   - error        : otro error de la API
+        fail_reason = "sin_conexion"
         if tcp_ok:
             try:
                 from groq import Groq as _Groq
                 import os as _os
                 _test_client = _Groq(api_key=_os.environ["GROQ_API_KEY"], timeout=10.0)
-                _test_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": "ping"}],
-                    max_tokens=1,
-                )
+                # Antes esto mandaba un chat real cada 5 min (288 llamadas/día) que
+                # GASTABAN cuota del plan free y competían con los monitores. models.list()
+                # verifica API + credencial SIN consumir tokens (no toca el límite TPM).
+                _test_client.models.list()
                 ok = True
-            except Exception:
+            except Exception as _ge:
+                # Hay conexión (TCP abrió); el fallo es de la API, casi siempre cuota/límite.
+                _emsg = f"{type(_ge).__name__} {_ge}".lower()
+                if "429" in _emsg or "rate" in _emsg or "quota" in _emsg or "limit" in _emsg:
+                    fail_reason = "limite"
+                elif "503" in _emsg or "529" in _emsg or "overload" in _emsg:
+                    fail_reason = "sobrecargado"
+                else:
+                    fail_reason = "error"
                 ok = False
 
 
@@ -1927,15 +1957,26 @@ async def watch_groq(bot: Bot) -> None:
                     _groq_fail_since = now_ts
                 _groq_ok = False
                 fail_min = int((now_ts - (_groq_fail_since or now_ts)) / 60)
-                if fail_min >= 10 and not _groq_alerted:
+                _today_str = _time_module.strftime("%Y-%m-%d")
+                # Tope 1 alerta/día: en plan free Groq toca su límite varias veces al
+                # día; sin este tope llegaban "Groq caído" repetidos. Es informativo.
+                if fail_min >= 10 and not _groq_alerted and _groq_alert_day != _today_str:
                     _groq_alerted = True
+                    _groq_alert_day = _today_str
+                    # Título y detalle según la causa real (no siempre es "sin conexión").
+                    _titulo, _detalle = {
+                        "limite":       ("Groq — límite de uso (plan free)",
+                                         f"{fail_min} min sin responder por cuota/rate-limit — el chat IA usa respaldo. No es caída del hotel."),
+                        "sobrecargado": ("Groq — servicio saturado",
+                                         f"{fail_min} min con Groq sobrecargado (503/529) — reintenta solo. No es caída del hotel."),
+                        "sin_conexion": ("Groq sin conexión",
+                                         f"{fail_min} min sin salida a api.groq.com — revisar internet/DNS del servidor."),
+                    }.get(fail_reason,
+                          ("Groq no responde",
+                           f"{fail_min} min con error de la API de Groq — el chat IA usa respaldo."))
                     await _send(
                         bot,
-                        _a(
-                            "⚠️", "Groq sin conexión",
-                            f"{fail_min} min — chat IA en respaldo",
-                            raw=True,
-                        ),
+                        _a("⚠️", _titulo, _detalle, raw=True),
                     monitor="watch_groq",
                     )
             else:
@@ -1947,7 +1988,7 @@ async def watch_groq(bot: Bot) -> None:
                     fail_min = int((now_ts - (_groq_fail_since or now_ts)) / 60)
                     await _send(
                         bot,
-                        _a("✅", "Groq recuperado", f"estuvo caído {fail_min} min", raw=True),
+                        _a("✅", "Groq restablecido", f"IA sin servicio {fail_min} min — ya responde", raw=True),
                     monitor="watch_groq",
                     )
                 _groq_ok = True
@@ -2356,6 +2397,37 @@ _INFRA_TONER_CRIT = int(os.environ.get("INFRA_TONER_CRIT_PCT", "5"))
 _INFRA_STALE_MINS = int(os.environ.get("INFRA_STALE_REMINDER_MINS", "120"))
 _INFRA_GROUP_COOLDOWN = int(os.environ.get("INFRA_GROUP_COOLDOWN_SEC", "1800"))
 _INFRA_FLAP_WINDOW = int(os.environ.get("INFRA_FLAP_WINDOW_SEC", "21600"))  # 6 h
+
+# Ubicaciones placeholder del inventario — NO son un sitio físico real.
+# Agrupar por ellas genera spam falso ("2 equipos sin respuesta — Por confirmar…").
+_INFRA_LOC_PLACEHOLDERS = {
+    "",
+    "por confirmar",
+    "por confirmar ubicacion",
+    "por confirmar ubicación",
+    "sin ubicacion",
+    "sin ubicación",
+    "n/a",
+    "na",
+    "unknown",
+    "desconocida",
+}
+
+
+def _infra_location_key(raw: Optional[str]) -> str:
+    """Normaliza ubicación; placeholders → '' (no agrupar como sitio común)."""
+    loc = (raw or "").strip()
+    if not loc:
+        return ""
+    norm = (
+        loc.lower()
+        .replace("á", "a").replace("é", "e").replace("í", "i")
+        .replace("ó", "o").replace("ú", "u")
+    )
+    if norm in _INFRA_LOC_PLACEHOLDERS or norm.startswith("por confirmar"):
+        return ""
+    return loc
+
 _INFRA_FLAP_MIN = int(os.environ.get("INFRA_FLAP_MIN_CHANGES", "4"))
 # Chequeos consecutivos "offline" (~120s c/u, ciclo de este watcher) antes de avisar
 # caída real -- evita que un blip de unos segundos (cola de hilos, ping perdido)
@@ -2692,11 +2764,15 @@ async def watch_infra(bot: Bot) -> None:
                     eq_alert = True
 
             # ── Varios caídos en la misma ubicación ─────────────────────────
+            # Solo ubicaciones reales (switch/piso). Placeholders tipo
+            # "Por confirmar ubicación" no agrupan: no implica mismo rack.
             if len(offline) >= 2 and not _wave_sent_this_cycle:
                 by_loc: Dict[str, list] = {}
                 for d in offline:
-                    loc = (d.get("location") or "").strip()
-                    by_loc.setdefault(loc or "_sin_loc", []).append(d)
+                    loc = _infra_location_key(d.get("location"))
+                    if not loc:
+                        continue
+                    by_loc.setdefault(loc, []).append(d)
                 for loc_key, devs in by_loc.items():
                     if len(devs) < 2:
                         continue
@@ -2706,10 +2782,7 @@ async def watch_infra(bot: Bot) -> None:
                         _html.escape(str(x.get("name", x["ip"]))) for x in devs[:5]
                     )
                     extra = f" (+{len(devs) - 5})" if len(devs) > 5 else ""
-                    if loc_key == "_sin_loc":
-                        subtitulo = names + extra
-                    else:
-                        subtitulo = f"{_html.escape(loc_key)}: {names}{extra}"
+                    subtitulo = f"{_html.escape(loc_key)}: {names}{extra}"
                     await _send(
                         bot,
                         _a(

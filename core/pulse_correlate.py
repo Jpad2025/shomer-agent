@@ -80,7 +80,12 @@ def format_wave_message(devices: List[dict], poll_context: Optional[dict] = None
     extra = f" (+{n - 6})" if n > 6 else ""
     batch = (poll_context or {}).get("batch_id") or ""
     batch_line = f"\nRef: <code>{_html.escape(str(batch))}</code>" if batch else ""
-    locs = sorted({(d.get("location") or "").strip() for d in devices if (d.get("location") or "").strip()})
+    locs = sorted({
+        (d.get("location") or "").strip()
+        for d in devices
+        if (d.get("location") or "").strip()
+        and not (d.get("location") or "").strip().lower().startswith("por confirmar")
+    })
     loc_hint = ""
     if len(locs) == 1:
         loc_hint = f"\nUbicación común: <b>{_html.escape(locs[0])}</b>"

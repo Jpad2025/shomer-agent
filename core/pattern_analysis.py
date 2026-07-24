@@ -162,7 +162,9 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
 
     prompt = _PROMPT_TEMPLATE.format(
         hours=LOOKBACK_HOURS,
-        candidatos=json.dumps(candidatos_payload, ensure_ascii=False)[:6000],
+        # 6000 -> 2500: un solo payload grande + 1200 tokens de salida excedía el
+        # tope tokens/min del plan free (429). Con 2500/600 entra sin chocar.
+        candidatos=json.dumps(candidatos_payload, ensure_ascii=False)[:2500],
     )
     # _call_groq directo, NO explain() -- explain() está pensado para alertas cortas
     # (tope fijo de 600 tokens para nivel developer) e inyecta system prompt + reglas
@@ -181,7 +183,14 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
         },
         {"role": "user", "content": prompt},
     ]
-    out = groq_helper._call_groq(messages, max_tokens=1200)
+    out = groq_helper._call_groq(messages, max_tokens=600, background=True)
+
+    # background=True: si Groq no pudo (límite del plan free), _call_groq devuelve
+    # "" o un mensaje con ⏳/❌/⚠️. Eso NO es JSON: antes se registraba como
+    # "respuesta no es JSON válido" (ruido). Ahora se trata como "sin hallazgos".
+    if not out or out.lstrip()[:1] in ("⏳", "❌", "⚠️"):
+        log.info("pattern_analysis: Groq sin respuesta útil (límite/plan free) — se omite este ciclo")
+        return []
 
     try:
         cleaned = out.strip()
