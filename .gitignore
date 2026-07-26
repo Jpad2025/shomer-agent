@@ -1,9 +1,24 @@
+# Secretos y datos locales — NUNCA hacer push de esto
 .env
 .env.*
 !.env.example
 data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Runtime / build
 __pycache__/
 *.pyc
 *.pyo
 *.log
+logs/
+venv/
+.venv/
+.pytest_cache/
+
+# Editor / local
 .cursor*
+*.bak
+*.bak.*

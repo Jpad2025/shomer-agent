@@ -474,6 +474,27 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_memoria",
+            "description": (
+                "Memoria operativa del técnico (/guardar y botones): soluciones previas, "
+                "consejo (físico vs reboot, falso positivo Hunter) y tags. "
+                "Usar SIEMPRE al diagnosticar un equipo o IP concreta antes de sugerir reboot o bloqueo."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ip": {
+                        "type": "string",
+                        "description": "IP del equipo o de la IP bloqueada",
+                    },
+                },
+                "required": ["ip"],
+            },
+        },
+    },
 ]
 
 
@@ -972,8 +993,9 @@ def execute(name: str, args: dict) -> Any:
                 return {"estado": "error", "mensaje": err}
 
         elif name == "get_incident_history":
+            # Alias legado → misma lógica que consultar_memoria (sin consejo estructurado)
             from core import shomer_api
-            ip      = args.get("ip", "").strip() or None
+            ip = args.get("ip", "").strip() or None
             records = shomer_api.get_knowledge(ip=ip, limit=8)
             if not records:
                 msg = f"No hay incidentes registrados para {ip}." if ip else "No hay incidentes registrados aún."
@@ -991,6 +1013,42 @@ def execute(name: str, args: dict) -> Any:
                 "incidentes": items,
                 "total":      len(items),
                 "mensaje":    f"Se encontraron {len(items)} incidente(s) previo(s)." + (f" Filtrado por IP {ip}." if ip else ""),
+            }
+
+        elif name == "consultar_memoria":
+            import ipaddress
+            from core import shomer_api
+            ip = (args.get("ip") or "").strip()
+            if not ip:
+                return {"error": "IP requerida"}
+            try:
+                ipaddress.ip_address(ip)
+            except ValueError:
+                return {"error": "IP inválida"}
+            dec = shomer_api.knowledge_decision(ip)
+            records = shomer_api.get_knowledge(ip=ip, limit=6)
+            items = []
+            for r in records:
+                items.append({
+                    "equipo": r.get("device_name") or r.get("device_ip", ""),
+                    "problema": r.get("problem", ""),
+                    "solucion": r.get("action", ""),
+                    "fecha": (r.get("created_at") or "")[:16],
+                })
+            return {
+                "ip": ip,
+                "consejo": dec.get("advice") or None,
+                "ultima_solucion": dec.get("hint") or None,
+                "tags": dec.get("tags") or [],
+                "prefer_physical_check": bool(dec.get("prefer_physical")),
+                "likely_false_positive": bool(dec.get("likely_false_positive")),
+                "reboot_resolved_count": int(dec.get("reboot_resolved_count") or 0),
+                "incidentes": items,
+                "total": len(items),
+                "mensaje": (
+                    dec.get("advice")
+                    or (f"{len(items)} antecedente(s) en memoria." if items else "Sin memoria previa para esta IP.")
+                ),
             }
 
         elif name == "get_agente_skills":

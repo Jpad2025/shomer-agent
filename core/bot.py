@@ -161,20 +161,19 @@ def _resolve_device_name(ip: str) -> str:
 
 
 def _save_knowledge_markup(ip: str, *, reboot_quick: bool = True) -> InlineKeyboardMarkup:
-    """Botones post-acción — callback corto (límite 64 B de Telegram)."""
+    """Botones post-acción con tags limpios (límite 64 B callback Telegram)."""
+    rows = []
     if reboot_quick:
-        row = [
+        rows.append([
             InlineKeyboardButton("💾 Reinicio resolvió", callback_data=f"save_know:r:{ip}"),
-            InlineKeyboardButton("📝 Otra causa", callback_data=f"save_know:o:{ip}"),
-        ]
-    else:
-        row = [
-            InlineKeyboardButton("💾 Guardar solución", callback_data=f"save_know:o:{ip}"),
-        ]
-    return InlineKeyboardMarkup([
-        row,
-        [InlineKeyboardButton("No guardar", callback_data="save_know:x:0")],
+            InlineKeyboardButton("🔌 Cable/PoE", callback_data=f"save_know:p:{ip}"),
+        ])
+    rows.append([
+        InlineKeyboardButton("🚫 Falso positivo", callback_data=f"save_know:u:{ip}"),
+        InlineKeyboardButton("📝 Otra causa", callback_data=f"save_know:o:{ip}"),
     ])
+    rows.append([InlineKeyboardButton("No guardar", callback_data="save_know:x:0")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _is_greeting(text: str) -> bool:
@@ -1330,6 +1329,19 @@ async def cb_save_knowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(
             _save_reply_text(meta["kid"], nombre, meta),
+            parse_mode=PM,
+        )
+    elif tipo == "p":
+        meta = shomer_api.save_knowledge(
+            ip, nombre,
+            problem="Falla física / enlace (cable, PoE o alimentación)",
+            action="Revisión en sitio — cable, PoE o alimentación; no insistir solo con reboot",
+            saved_by=uid,
+        )
+        await query.edit_message_text(
+            f"💾 Causa física guardada (#{meta['kid']}) para <b>{fmt.e(nombre)}</b>"
+            f"{_learning.feedback_suffix(meta)}\n"
+            f"<i>La IA priorizará revisión en sitio en próximas alertas.</i>",
             parse_mode=PM,
         )
     elif tipo == "u":

@@ -64,21 +64,31 @@ def _kn(ip: str) -> str:
 
 
 def _save_kb_after_reboot(ip: str) -> InlineKeyboardMarkup:
-    """Post-reboot — correlación monitor ↔ acción (callbacks cortos)."""
+    """Post-reboot — tags limpios para memoria / IA."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💾 Reinicio resolvió", callback_data=f"save_know:r:{ip}"),
-            InlineKeyboardButton("📝 Otra causa", callback_data=f"save_know:o:{ip}"),
+            InlineKeyboardButton("🔌 Cable/PoE", callback_data=f"save_know:p:{ip}"),
         ],
-        [InlineKeyboardButton("No guardar", callback_data="save_know:x:0")],
+        [
+            InlineKeyboardButton("📝 Otra causa", callback_data=f"save_know:o:{ip}"),
+            InlineKeyboardButton("No guardar", callback_data="save_know:x:0"),
+        ],
     ])
 
 
 def _save_kb_recovery(ip: str) -> InlineKeyboardMarkup:
-    """Recuperación espontánea — invita a documentar qué pasó."""
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("💾 Guardar qué pasó", callback_data=f"save_know:o:{ip}"),
-    ]])
+    """Recuperación espontánea — invita a documentar con tag."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💾 Reinicio / volvió solo", callback_data=f"save_know:r:{ip}"),
+            InlineKeyboardButton("🔌 Cable/PoE", callback_data=f"save_know:p:{ip}"),
+        ],
+        [
+            InlineKeyboardButton("📝 Describir", callback_data=f"save_know:o:{ip}"),
+            InlineKeyboardButton("No guardar", callback_data="save_know:x:0"),
+        ],
+    ])
 
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 _DEV_CHAT_ID = os.environ.get("AGENT_DEVELOPER_CHAT_ID", "").strip()
