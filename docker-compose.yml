@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     network_mode: host          # acceso directo a la LAN del cliente
     env_file: .env
+    environment:
+      - TZ=America/Bogota
     volumes:
       - ./core:/app/core        # código Python — cambios en disco sin rebuild
       - ./data:/app/data        # devices.json persiste aquí

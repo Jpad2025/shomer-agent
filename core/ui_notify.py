@@ -41,23 +41,17 @@ def task_result_message(task_id: str, result, mode: str) -> str:
         )
 
     if tid == "TASK-005":
-        files = ctx.get("files") or []
-        if files and files[0] != "(ninguno)":
-            names = ", ".join(fmt.e(f.split("/")[-1]) for f in files[:3])
-            extra = f" (+{len(files) - 3})" if len(files) > 3 else ""
-            happened = "Algunos logs del servidor ocupaban demasiado espacio"
-            action = "Redujo el tamaño automáticamente (sin borrar historial reciente)"
-            ok = True
-            result_line = f"{len(files)} archivo(s): {names}{extra}"
-        else:
-            return ""  # sin Telegram si no hubo nada que truncar
+        # Mantenimiento nocturno: silencio si OK; solo avisar si falló.
+        if result.green_ok:
+            return ""
         return fmt.action_result(
             "📄",
-            "Mantenimiento — logs",
-            happened=happened,
-            action=action,
-            ok=ok,
-            result_line=result_line,
+            "Mantenimiento — logs falló",
+            happened="Algunos logs del servidor ocupaban demasiado espacio",
+            action="Intentó reducir el tamaño automáticamente",
+            ok=False,
+            result_line=result.green_detail or "Revisar /var/log/shomer",
+            next_step="Usá /salud — si persiste, revisar espacio en disco",
         )
 
     if tid == "TASK-006":

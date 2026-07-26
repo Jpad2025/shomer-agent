@@ -759,7 +759,7 @@ def execute(name: str, args: dict) -> Any:
             if not dev:
                 return {"error": "Equipo no encontrado en Infra", "ip": ip}
             pr = dev.get("printer") or {}
-            hint = shomer_api.knowledge_hint(ip)
+            dec = shomer_api.knowledge_decision(ip)
             out = {
                 "ip": dev.get("ip"),
                 "name": dev.get("name"),
@@ -772,7 +772,11 @@ def execute(name: str, args: dict) -> Any:
                 "snmp_ok": dev.get("snmp_ok"),
                 "snmp_down_ports": dev.get("snmp_down_ports") or [],
                 "state_duration": dev.get("state_duration"),
-                "prior_solution": hint or None,
+                "prior_solution": dec.get("hint") or None,
+                "memory_advice": dec.get("advice") or None,
+                "memory_tags": dec.get("tags") or [],
+                "prefer_physical_check": bool(dec.get("prefer_physical")),
+                "likely_false_positive": bool(dec.get("likely_false_positive")),
             }
             if pr:
                 out["printer"] = pr

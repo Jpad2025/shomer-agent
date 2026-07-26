@@ -42,11 +42,25 @@ def _a(icon: str, event: str, detail: str = "", *, raw: bool = False) -> str:
 
 
 def _kn(ip: str) -> str:
-    """Sufijo HTML opcional — antecedente en knowledge.db."""
-    hint = shomer_api.knowledge_hint(ip)
-    if not hint:
+    """Sufijo HTML — antecedente + consejo de memoria (knowledge.db)."""
+    try:
+        dec = shomer_api.knowledge_decision(ip)
+    except Exception:
         return ""
-    return f" · 📋 {_html.escape(hint)}"
+    parts: list[str] = []
+    hint = (dec.get("hint") or "").strip()
+    if hint:
+        if len(hint) > 55:
+            hint = hint[:54] + "…"
+        parts.append(f"📋 {_html.escape(hint)}")
+    advice = (dec.get("advice") or "").strip()
+    if advice:
+        if len(advice) > 120:
+            advice = advice[:119] + "…"
+        parts.append(f"💡 {_html.escape(advice)}")
+    if not parts:
+        return ""
+    return " · " + " · ".join(parts)
 
 
 def _save_kb_after_reboot(ip: str) -> InlineKeyboardMarkup:
@@ -491,14 +505,14 @@ async def watch_devices(bot: Bot) -> None:
 # ── 4. Resumen diario 07:00 ──────────────────────────────────────────────────
 
 async def daily_summary(bot: Bot) -> None:
-    """Envía resumen cada mañana a las 07:00."""
+    """Envía resumen cada mañana a las 08:00 (America/Bogota — ver TZ del contenedor)."""
     global _last_summary_day
     await asyncio.sleep(20)
 
     while True:
         try:
             now = datetime.now()
-            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.day:
+            if now.hour == 8 and now.minute < 2 and _last_summary_day != now.day:
                 _last_summary_day = now.day
                 shomer_ctx = shomer_api.summary_text()
                 daily_health = shomer_api.get_daily_health()
@@ -691,7 +705,9 @@ async def watch_backups(bot: Bot) -> None:
                         metrica="backup_stale",
                         lines=[
                             _a(
-                                "⚠️", "Backup atrasado",
+                                "⚠️",
+                                "Backup falló" if "error" in (status or "").lower()
+                                else "Backup no corrido",
                                 f"{_html.escape(str(nombre))} — {_html.escape(str(problema))}",
                                 raw=True,
                             ),
@@ -990,7 +1006,7 @@ _last_log_truncate_day: Optional[int] = None
 
 
 async def watch_log_truncate(bot: Bot) -> None:
-    """Diario 03:00 — trunca /var/log/shomer/*.log >50 MB si TASK-005 habilitado."""
+    """Diario 03:00 Bogotá — trunca logs >50 MB. Sin Telegram si OK (ver ui_notify TASK-005)."""
     global _last_log_truncate_day
     await asyncio.sleep(110)
 
@@ -1018,7 +1034,7 @@ _last_protector_sample_week: Optional[int] = None
 
 
 async def watch_protector_sample(bot: Bot) -> None:
-    """Domingo ~06:00 — audita 3 equipos Protector al azar (solo lectura)."""
+    """Domingo ~08:00 Bogotá — audita 3 equipos Protector al azar (solo lectura)."""
     global _last_protector_sample_week
     await asyncio.sleep(100)
 
@@ -1027,7 +1043,7 @@ async def watch_protector_sample(bot: Bot) -> None:
             now = datetime.now()
             if (
                 now.weekday() == 6
-                and now.hour == 6
+                and now.hour == 8
                 and now.minute < 5
                 and _last_protector_sample_week != now.isocalendar()[1]
                 and auto_tasks.get_task_mode("TASK-006") != "off"
@@ -1383,12 +1399,18 @@ async def watch_guardian_nodes(bot: Bot) -> None:
 
                     # Patrón recurrente: 3+ reboots en 24h
                     if len(hoy_reboots) >= 3:
+                        dec = shomer_api.knowledge_decision(ip)
+                        extra = ""
+                        if dec.get("prefer_physical") or dec.get("reboot_resolved_count", 0) >= 2:
+                            extra = " — historial sugiere revisión física, no otro reboot"
+                        elif dec.get("advice"):
+                            extra = f" — {_html.escape(dec['advice'][:90])}"
                         await _emit_guardian(
                             bot, ip,
                             [
                                 _a(
                                     "🔁", "Reinicios repetidos",
-                                    f"{_html.escape(str(nombre))} — {len(hoy_reboots)} veces en 24 h",
+                                    f"{_html.escape(str(nombre))} — {len(hoy_reboots)} veces en 24 h{extra}",
                                     raw=True,
                                 ),
                             ],
@@ -1442,7 +1464,6 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             allow_ia=(status == "offline"),
                         )
                         _guardian_down_alerted.add(ip)
-                        _guardian_down_since[ip] = now_ts
 
                 elif status == "degraded" and prev not in ("degraded",) and not _is_suppressed(ip):
                     _guardian_down_streak[ip] = 0
@@ -1490,8 +1511,8 @@ async def watch_guardian_nodes(bot: Bot) -> None:
 
 async def preventive_reboot(bot: Bot) -> None:
     """
-    Cada día a las 04:00 revisa APs con uptime > 30 días.
-    Si encuentra alguno, lo reinicia y notifica.
+    Cada día a las 03:00 (Bogotá) revisa APs con uptime > 30 días.
+    Reinicia en silencio si OK; solo Telegram si el reinicio falla.
     Aplica solo a equipos sin 'no_reboot: true'.
     """
     await asyncio.sleep(60)
@@ -1500,7 +1521,7 @@ async def preventive_reboot(bot: Bot) -> None:
     while True:
         try:
             now = datetime.now()
-            if now.hour == 4 and now.minute < 2 and _last_day != now.day:
+            if now.hour == 3 and now.minute < 2 and _last_day != now.day:
                 _last_day = now.day
                 devices = dm.list_devices()
                 for dev in devices:
@@ -1519,12 +1540,18 @@ async def preventive_reboot(bot: Bot) -> None:
                             pass
                     if dias >= 30:
                         result = dm.reboot_device(dev["ip"])
-                        ok_r   = result.get("ok")
-                        estado = "OK" if ok_r else f"falló: {result.get('message', '')}"
+                        ok_r = result.get("ok")
+                        if ok_r:
+                            log.info(
+                                "Reinicio preventivo OK: %s (%s d) — sin Telegram",
+                                dev.get("name"), dias,
+                            )
+                            continue
+                        estado = f"falló: {result.get('message', '')}"
                         await _send_critical(
                             bot,
                             _a(
-                                "🔄", "Reinicio preventivo nocturno",
+                                "🔄", "Reinicio preventivo falló",
                                 f"{_html.escape(str(dev['name']))} — {dias} días · {estado}",
                                 raw=True,
                             ),
@@ -1543,8 +1570,8 @@ _last_weekly_backup_week: Optional[int] = None
 
 async def weekly_backup(bot: Bot) -> None:
     """
-    Cada domingo a las 02:00 crea un backup completo del sistema.
-    Notifica al developer con resultado y tamaño.
+    Cada domingo a las 02:00 Bogotá crea backup del sistema.
+    Silencio si OK; Telegram solo si falla.
     """
     global _last_weekly_backup_week
     from core import backup_manager
@@ -1558,16 +1585,16 @@ async def weekly_backup(bot: Bot) -> None:
                     and _last_weekly_backup_week != now.isocalendar()[1]):
                 _last_weekly_backup_week = now.isocalendar()[1]
                 ok, msg, size_mb = backup_manager.create_backup()
-                icon = "✅" if ok else "❌"
-                await _send(
-                    bot,
-                    _a("💾", "Backup semanal automático", f"{icon} {_html.escape(str(msg))}", raw=True),
-                monitor="weekly_backup",
-                )
-                if not ok:
+                if ok:
+                    log.info("Backup semanal OK: %s — sin Telegram", msg)
+                else:
                     await _send_critical(
                         bot,
-                        _a("⚠️", "Backup semanal falló", "revisar configuración o espacio"),
+                        _a(
+                            "⚠️", "Backup semanal falló",
+                            _html.escape(str(msg) or "revisar configuración o espacio"),
+                            raw=True,
+                        ),
                     monitor="weekly_backup",
                     )
         except Exception as e:
@@ -1732,6 +1759,20 @@ async def watch_hunter_verify(bot: Bot) -> None:
                         )
                 except ValueError:
                     pass
+
+                # Memoria: si el técnico guardó "falso positivo", orientar decisión
+                dec = shomer_api.knowledge_decision(ip)
+                if dec.get("likely_false_positive"):
+                    await _send_critical(
+                        bot,
+                        _a(
+                            "⚠️", "Bloqueo con antecedente de falso positivo",
+                            f"<code>{_html.escape(str(ip))}</code> — en memoria figura como falso positivo. "
+                            f"➡️ Revisar /desbloquear si aplica · {_html.escape((dec.get('hint') or '')[:80])}",
+                            raw=True,
+                        ),
+                    monitor="watch_hunter_verify",
+                    )
 
                 # Patrón recurrente: misma IP bloqueada 3+ veces
                 if _block_count.get(ip, 0) >= 3:

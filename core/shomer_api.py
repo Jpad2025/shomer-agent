@@ -831,20 +831,99 @@ def get_switch_port_errors() -> list:
 
 def knowledge_hint(ip: str, max_len: int = 55) -> str:
     """Texto corto de la última solución guardada para esa IP (alertas / IA)."""
+    dec = knowledge_decision(ip)
+    hint = (dec.get("hint") or "").strip()
+    if not hint:
+        return ""
+    if len(hint) > max_len:
+        return hint[: max_len - 1] + "…"
+    return hint
+
+
+def knowledge_decision(ip: str, limit: int = 8) -> dict:
+    """
+    Memoria operativa para alertas e IA (no piloto automático).
+
+    Usa lo que el técnico guardó con /guardar o botones post-acción.
+    Devuelve consejo accionable; NUNCA ejecuta reboot/bloqueo por sí sola.
+    """
+    empty = {
+        "hint": "",
+        "advice": "",
+        "tags": [],
+        "prefer_physical": False,
+        "likely_false_positive": False,
+        "reboot_resolved_count": 0,
+        "entries": 0,
+    }
     if not ip:
-        return ""
+        return empty
     try:
-        hist = get_knowledge(ip=ip, limit=1)
-        if not hist:
-            return ""
-        act = (hist[0].get("action") or "").strip()
-        if not act:
-            return ""
-        if len(act) > max_len:
-            act = act[: max_len - 1] + "…"
-        return act
+        hist = get_knowledge(ip=ip, limit=limit)
     except Exception:
-        return ""
+        return empty
+    if not hist:
+        return empty
+
+    tags: list[str] = []
+    reboot_n = 0
+    physical = False
+    false_pos = False
+    texts: list[str] = []
+
+    for row in hist:
+        blob = f"{row.get('problem') or ''} {row.get('action') or ''}".lower()
+        texts.append((row.get("action") or row.get("problem") or "").strip())
+        if any(k in blob for k in (
+            "falso positivo", "false positive", "no bloquear", "whitelist", "excepción",
+        )):
+            false_pos = True
+            if "falso_positivo" not in tags:
+                tags.append("falso_positivo")
+        if any(k in blob for k in (
+            "reinicio resolvió", "reboot resolvió", "reinicio ok", "se reinició",
+            "reinicio automatico", "reinicio automático",
+        )):
+            reboot_n += 1
+        if any(k in blob for k in (
+            "cable", "alimentación", "alimentacion", "poe", "físico", "fisico",
+            "sobrecalentamiento", "switch", "puerto",
+        )):
+            physical = True
+            if "fisico" not in tags:
+                tags.append("fisico")
+
+    if reboot_n >= 2 and "reboot_recurrente" not in tags:
+        tags.append("reboot_recurrente")
+
+    advice_parts: list[str] = []
+    if false_pos:
+        advice_parts.append(
+            "Historial: posible falso positivo — revisar antes de volver a bloquear esa IP/firma."
+        )
+    if physical:
+        advice_parts.append(
+            "Historial: causas físicas previas (cable/PoE/alimentación) — priorizar revisión en sitio."
+        )
+    if reboot_n >= 2:
+        advice_parts.append(
+            f"Historial: reinicio resolvió {reboot_n} veces — no insistir en otro reboot; revisar causa raíz."
+        )
+    elif reboot_n == 1:
+        advice_parts.append(
+            "Historial: un reinicio resolvió antes — probar reboot solo si sigue caído tras verificación."
+        )
+
+    hint = texts[0] if texts else ""
+    return {
+        "hint": hint,
+        "advice": " ".join(advice_parts),
+        "tags": tags,
+        "prefer_physical": physical,
+        "likely_false_positive": false_pos,
+        "reboot_resolved_count": reboot_n,
+        "entries": len(hist),
+    }
 
 
 def get_daily_health() -> dict:

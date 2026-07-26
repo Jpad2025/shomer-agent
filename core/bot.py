@@ -58,7 +58,7 @@ MONITOR_LABELS = {
     "watch_pipeline":          "Hunter — detección Suricata (pipeline)",
     "watch_services":          "Servicios Guardian / Tools / Nginx",
     "watch_guardian_nodes":    "Estado de APs y nodos",
-    "preventive_reboot":       "Reinicio preventivo nocturno (4:00 AM)",
+    "preventive_reboot":       "Reinicio preventivo nocturno (03:00 Bogotá, solo si falla)",
     "weekly_backup":           "Backup semanal del sistema (Dom 2:00)",
     "watch_protector_retry":   "Reintentos de backup fallido",
     "watch_hunter_verify":     "Hunter — verificación de bloqueos",
