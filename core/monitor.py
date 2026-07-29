@@ -194,11 +194,31 @@ async def _send(
         except Exception:
             pass
 
+    def _noc_mirror() -> None:
+        """Mismos avisos que Telegram → ticker NOC (sin mensaje extra)."""
+        try:
+            import re as _re
+            from core.shomer_api import log_ia_action
+            plain = _re.sub(r"<[^>]+>", " ", msg or "")
+            plain = _re.sub(r"\s+", " ", plain).strip()
+            eng = "Groq" if (mon or "").startswith("watch_") else (mon or "Agente")
+            # etiquetas cortas legibles en TV
+            if "hunter" in (mon or "").lower() or "bloque" in plain.lower():
+                eng = "Hunter"
+            elif "infra" in (mon or "").lower() or "watch_infra" in (mon or ""):
+                eng = "Infra"
+            elif "guardian" in (mon or "").lower() or "watch_node" in (mon or ""):
+                eng = "Guardian"
+            log_ia_action(eng, plain[:140], "telegram")
+        except Exception:
+            pass
+
     try:
         await bot.send_message(
             chat_id=CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
         )
         _memoria_log(True)
+        _noc_mirror()
     except TelegramError as e:
         log.warning("Telegram send error: %s", e)
         if _DEV_CHAT_ID and _DEV_CHAT_ID != CHAT_ID:
@@ -207,6 +227,7 @@ async def _send(
                     chat_id=_DEV_CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
                 )
                 _memoria_log(True)
+                _noc_mirror()
             except TelegramError as e2:
                 log.warning("Telegram send error (fallback developer): %s", e2)
                 _memoria_log(False)

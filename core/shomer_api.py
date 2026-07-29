@@ -384,21 +384,26 @@ def set_maintenance(on: bool) -> bool:
     return True
 
 def log_ia_action(engine: str, msg: str, action_type: str = "auto") -> None:
-    """Registra acción IA en Redis noc:ia_log para display NOC (máx 20 entradas)."""
+    """Registra acción IA / espejo Telegram en Redis noc:ia_log para display NOC (máx 25)."""
     from datetime import datetime
     import json as _json
     r = _redis()
     if not r:
         return
     try:
+        try:
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("America/Bogota"))
+        except Exception:
+            now = datetime.utcnow()
         entry = _json.dumps({
-            "at": datetime.utcnow().strftime("%H:%M:%S"),
+            "at": now.strftime("%H:%M:%S"),
             "engine": engine,
-            "msg": str(msg).strip()[:110],
+            "msg": str(msg).strip()[:140],
             "type": action_type,
         }, ensure_ascii=False)
         r.lpush("noc:ia_log", entry)
-        r.ltrim("noc:ia_log", 0, 19)
+        r.ltrim("noc:ia_log", 0, 24)
     except Exception:
         pass
 
