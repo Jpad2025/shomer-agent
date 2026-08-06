@@ -194,11 +194,31 @@ async def _send(
         except Exception:
             pass
 
+    def _noc_mirror() -> None:
+        """Mismos avisos que Telegram → ticker NOC (sin mensaje extra)."""
+        try:
+            import re as _re
+            from core.shomer_api import log_ia_action
+            plain = _re.sub(r"<[^>]+>", " ", msg or "")
+            plain = _re.sub(r"\s+", " ", plain).strip()
+            eng = "Groq" if (mon or "").startswith("watch_") else (mon or "Agente")
+            # etiquetas cortas legibles en TV
+            if "hunter" in (mon or "").lower() or "bloque" in plain.lower():
+                eng = "Hunter"
+            elif "infra" in (mon or "").lower() or "watch_infra" in (mon or ""):
+                eng = "Infra"
+            elif "guardian" in (mon or "").lower() or "watch_node" in (mon or ""):
+                eng = "Guardian"
+            log_ia_action(eng, plain[:140], "telegram")
+        except Exception:
+            pass
+
     try:
         await bot.send_message(
             chat_id=CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
         )
         _memoria_log(True)
+        _noc_mirror()
     except TelegramError as e:
         log.warning("Telegram send error: %s", e)
         if _DEV_CHAT_ID and _DEV_CHAT_ID != CHAT_ID:
@@ -207,6 +227,7 @@ async def _send(
                     chat_id=_DEV_CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
                 )
                 _memoria_log(True)
+                _noc_mirror()
             except TelegramError as e2:
                 log.warning("Telegram send error (fallback developer): %s", e2)
                 _memoria_log(False)
@@ -1292,6 +1313,10 @@ _guardian_down_streak: Dict[str, int] = {}  # ip -> polls consecutivos offline/n
 _guardian_down_alerted: Set[str] = set()    # IPs con alerta caída ya enviada (incidente actual)
 _GUARDIAN_ALERT_CYCLES = max(1, int(os.environ.get("BOT_GUARDIAN_ALERT_CYCLES", "2")))
 _GUARDIAN_REBOOT_VERIFY_MAX_AGE = max(60, int(os.environ.get("BOT_GUARDIAN_REBOOT_VERIFY_MAX_AGE", "600")))
+# Sesión 69 — a partir de N caídas activas en patrones_detectados, la alerta de caída
+# pasa a formato compacto (ver watch_guardian_nodes). No suprime avisos, solo acorta
+# el texto para equipos ya identificados como flapping crónico.
+_CHRONIC_ALERT_MIN_OCURRENCIAS = max(2, int(os.environ.get("BOT_CHRONIC_ALERT_MIN_OCURRENCIAS", "5")))
 _AUTO_UNBLOCK_HOURS = int(os.environ.get("BOT_AUTO_UNBLOCK_HOURS", "0"))
 
 
@@ -1459,16 +1484,45 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             if status == "offline"
                             else "Guardian seguirá monitoreando — sin reboot (solo degrada WAN, no LAN)"
                         )
-                        await _emit_guardian(
-                            bot, ip,
-                            [
+
+                        # Sesión 69 — equipo "flapper" crónico ya identificado por
+                        # pattern_analysis (patrones_detectados): en vez de repetir el
+                        # bloque completo (impacto/acción/sugerencia) en cada caída nueva
+                        # -- ej. AP REST SCALA tuvo 29 alertas críticas completas en 40
+                        # días -- se manda un aviso corto que sigue notificando cada
+                        # caída (no se suprime nada) pero sin inflar el chat con texto
+                        # repetido de un problema físico ya conocido/reportado a campo.
+                        _pat = {}
+                        try:
+                            from core import pattern_analysis as _pa
+                            _pat = _pa.get_pattern_for_entity(entity_ip=ip, entity_name=nombre) or {}
+                        except Exception:
+                            pass
+                        _chronic = _pat.get("ocurrencias", 0) >= _CHRONIC_ALERT_MIN_OCURRENCIAS
+
+                        if _chronic:
+                            lines = [
+                                _a(
+                                    icon, f"{nombre} {motivo}",
+                                    f"caída #{_pat['ocurrencias']} de un patrón ya conocido "
+                                    f"({_pat.get('tendencia', 'estable')}) — sin novedad, "
+                                    "ver /consultar_memoria para histórico",
+                                    raw=True,
+                                ),
+                            ]
+                        else:
+                            lines = [
                                 msgfmt.executive_alert(
                                     "crítico" if status == "offline" else "alto", "Guardian",
                                     impacto=f"{nombre} {motivo} — usuarios sin servicio en ese equipo",
                                     accion_automatica=accion_g,
                                     sugerencia="Revisar cableado/alimentación física",
                                 ) + _kn(ip),
-                            ],
+                            ]
+
+                        await _emit_guardian(
+                            bot, ip,
+                            lines,
                             severity="critical" if status == "offline" else "warn",
                             reply_markup=markup,
                             allow_ia=(status == "offline"),
@@ -2441,6 +2495,12 @@ _infra_vpn_ports_up: Dict[str, Set[str]] = {}
 _infra_wave_active_ips: Dict[str, float] = {}
 _infra_snmp_port_down_streak: Dict[tuple, int] = {}
 _infra_pulse_batches_seen: Dict[str, set] = {}
+
+# VPN — digest agrupado en vez de un mensaje por conexión/desconexión (Sesión 69).
+# Antes: 267 mensajes en 40 días (17% del total de alertas), uno por evento individual.
+# Ahora: se acumulan y se envían agrupados cada _VPN_DIGEST_INTERVAL_SEC.
+_vpn_digest_events: list = []  # [(nombre, usuario, "conectado"|"desconectado")]
+_vpn_digest_last_flush: float = 0.0
 _infra_seed_done = False
 
 _INFRA_TONER_WARN = int(os.environ.get("INFRA_TONER_WARN_PCT", "15"))
@@ -2502,6 +2562,8 @@ _INFRA_SNMP_PORT_DEBOUNCE = int(os.environ.get("INFRA_SNMP_PORT_DEBOUNCE_POLLS",
 _INFRA_VPN_ALERT_DISCONNECT = os.environ.get("INFRA_VPN_ALERT_DISCONNECT", "0").strip().lower() in (
     "1", "true", "yes", "on",
 )
+# Ventana de agrupación del digest VPN (Sesión 69) — default 30 min.
+_VPN_DIGEST_INTERVAL_SEC = max(60, int(os.environ.get("VPN_DIGEST_INTERVAL_SEC", "1800")))
 
 
 def _is_vpn_iface(port: str) -> bool:
@@ -2525,6 +2587,48 @@ def _vpn_user_from_iface(port: str) -> str:
         if n.startswith(prefix):
             return n[len(prefix):] or n
     return n or "desconocido"
+
+
+async def _flush_vpn_digest(bot: Bot) -> bool:
+    """Envía un único mensaje agrupando las conexiones/desconexiones VPN
+    acumuladas desde el último flush (ventana _VPN_DIGEST_INTERVAL_SEC).
+
+    Sesión 69 — antes cada conexión VPN generaba un mensaje Telegram individual
+    (267 mensajes en 40 días, 17% del total de alertas del sitio, para un evento
+    puramente informativo). Ahora se agrupa: no se pierde información (todo queda
+    igual en memoria_alertas vía el mensaje agrupado), solo baja la frecuencia de
+    interrupciones en Telegram.
+    """
+    global _vpn_digest_last_flush
+    now = _time_module.time()
+    if not _vpn_digest_events:
+        if _vpn_digest_last_flush == 0.0:
+            _vpn_digest_last_flush = now
+        return False
+    if now - _vpn_digest_last_flush < _VPN_DIGEST_INTERVAL_SEC:
+        return False
+
+    events = list(_vpn_digest_events)
+    _vpn_digest_events.clear()
+    _vpn_digest_last_flush = now
+
+    counts: Dict[tuple, int] = {}
+    for _name, user, accion in events:
+        counts[(user, accion)] = counts.get((user, accion), 0) + 1
+
+    partes = []
+    for (user, accion), n in sorted(counts.items(), key=lambda kv: -kv[1]):
+        icon = "🔐" if accion == "conectado" else "🔓"
+        suf = f" x{n}" if n > 1 else ""
+        partes.append(f"{icon} <b>{_html.escape(user)}</b> {accion}{suf}")
+
+    mins = _VPN_DIGEST_INTERVAL_SEC // 60
+    await _send(
+        bot,
+        _a("🔐", f"VPN — últimos {mins} min", " · ".join(partes), raw=True),
+        monitor="watch_infra_vpn",
+    )
+    return True
 
 
 _WATCH_INFRA_INTERVAL_SEC = max(30, int(os.environ.get("WATCH_INFRA_INTERVAL_SEC", "60")))
@@ -2697,7 +2801,28 @@ async def watch_infra(bot: Bot) -> None:
                             _infra_flap_alerted.add(ip)
                             flap_alert = True
 
-                        if dtype in ("printer", "pos"):
+                        # Sesión 69 — mismo criterio que Guardian: equipo ya identificado
+                        # como flapper crónico en patrones_detectados (ej. Bixolon .60 y
+                        # .243, 94 alertas completas c/u en 40 días) -> aviso compacto,
+                        # sin repetir el bloque completo cada caída ya conocida.
+                        _pat = {}
+                        try:
+                            from core import pattern_analysis as _pa
+                            _pat = _pa.get_pattern_for_entity(entity_ip=ip, entity_name=name) or {}
+                        except Exception:
+                            pass
+                        _chronic = _pat.get("ocurrencias", 0) >= _CHRONIC_ALERT_MIN_OCURRENCIAS
+
+                        if _chronic:
+                            etiqueta = "Impresora" if dtype in ("printer", "pos") else "Equipo"
+                            msg = _a(
+                                "🔴", f"{etiqueta} {name} no responde",
+                                f"caída #{_pat['ocurrencias']} de un patrón ya conocido "
+                                f"({_pat.get('tendencia', 'estable')}) — sin novedad, "
+                                "ver /consultar_memoria para histórico",
+                                raw=True,
+                            )
+                        elif dtype in ("printer", "pos"):
                             msg = msgfmt.executive_alert(
                                 "alto", "Inframonitor",
                                 impacto=f"Impresora {name} no responde — sin imprimir",
@@ -3022,38 +3147,23 @@ async def watch_infra(bot: Bot) -> None:
                     if not _infra_snmp_ports_alerted.get(ip):
                         _infra_snmp_ports_alerted.pop(ip, None)
 
-                    # VPN OpenVPN/PPP — informativo (USB Ingeniería entra/sale del hotel)
+                    # VPN OpenVPN/PPP — informativo (USB Ingeniería entra/sale del hotel).
+                    # Sesión 69: se agrupa en digest (_vpn_digest_events) en vez de un
+                    # mensaje Telegram por conexión — ver flush más abajo.
                     current_vpn = _snmp_vpn_ports(all_up)
                     prev_vpn = _snmp_vpn_ports(_infra_vpn_ports_up.get(ip, set()))
                     for port in current_vpn - prev_vpn:
                         user = _vpn_user_from_iface(port)
-                        await _send(
-                            bot,
-                            _a(
-                                "🔐", "Conexión VPN",
-                                f"{_html.escape(str(name))} — usuario "
-                                f"<b>{_html.escape(user)}</b> conectado",
-                                raw=True,
-                            ),
-                            monitor="watch_infra_vpn",
-                        )
-                        snmp_alert = True
+                        _vpn_digest_events.append((str(name), user, "conectado"))
                     for port in prev_vpn - current_vpn:
                         if not _INFRA_VPN_ALERT_DISCONNECT:
                             continue
                         user = _vpn_user_from_iface(port)
-                        await _send(
-                            bot,
-                            _a(
-                                "🔓", "Desconexión VPN",
-                                f"{_html.escape(str(name))} — usuario "
-                                f"<b>{_html.escape(user)}</b> desconectado",
-                                raw=True,
-                            ),
-                            monitor="watch_infra_vpn",
-                        )
-                        snmp_alert = True
+                        _vpn_digest_events.append((str(name), user, "desconectado"))
                     _infra_vpn_ports_up[ip] = current_vpn
+
+            if await _flush_vpn_digest(bot):
+                snmp_alert = True
 
             _tick("watch_infra_equipment", alerted=eq_alert)
             _tick("watch_infra_printer", alerted=pr_alert)
