@@ -353,6 +353,18 @@ async def cmd_consultas(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(_consultas_text(), parse_mode=PM)
 
 
+async def cmd_version(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _guard(update):
+        return
+    from core import version as _v
+    from core import identity as _id
+    await update.message.reply_text(
+        f"🏷️ <b>{fmt.e(_id.SITE_NAME)}</b>\n"
+        f"Shomer Agent <b>v{fmt.e(_v.VERSION)}</b> — {fmt.e(_v.RELEASED)}",
+        parse_mode=PM,
+    )
+
+
 # ── /equipos — impl compartida ────────────────────────────────────────────────
 
 async def _equipos_impl(message, ctx, level: str):
@@ -2824,6 +2836,7 @@ def run():
         ("bloquear",       cmd_bloquear),
         ("desbloquear",    cmd_desbloquear),
         ("silenciar",      cmd_silenciar),
+        ("version",        cmd_version),
         # Instalación
         ("instalar",       cmd_instalar),
         ("usuario",        cmd_usuario),

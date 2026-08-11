@@ -1,0 +1,9 @@
+# Servidores Shomer — un alias SSH por línea (deben existir en ~/.ssh/config
+# del maestro, hoy Ópera). Líneas vacías y las que empiezan con # se ignoran.
+#
+# Para agregar un hotel nuevo en Bogotá: agregar su alias SSH acá, no hay
+# que tocar tools/fleet_sync.sh.
+
+shomer205
+shomer245
+shomer243
