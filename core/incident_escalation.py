@@ -50,11 +50,11 @@ def _agg_window_sec() -> float:
 
 
 def _ack_timeout_sec() -> float:
-    return max(60.0, float(os.environ.get("ESCALATION_ACK_TIMEOUT_SEC", "1800")))
+    return max(60.0, float(os.environ.get("ESCALATION_ACK_TIMEOUT_SEC", "43200")))
 
 
 def _reminder_timeout_sec() -> float:
-    return max(60.0, float(os.environ.get("ESCALATION_REMINDER_TIMEOUT_SEC", "1800")))
+    return max(60.0, float(os.environ.get("ESCALATION_REMINDER_TIMEOUT_SEC", "43200")))
 
 
 def _grace_hours() -> float:
