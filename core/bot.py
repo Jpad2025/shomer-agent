@@ -2435,6 +2435,108 @@ async def cb_dismiss(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         pass
 
 
+def _fmt_duracion(horas: float) -> str:
+    horas = max(1, round(horas))
+    if horas < 48:
+        return f"{horas}h"
+    dias = round(horas / 24)
+    return f"{dias} día{'s' if dias != 1 else ''}"
+
+
+async def cb_ack_incident(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Botones 'Lo resuelvo ahora' / 'Próxima visita' — silencia el incidente."""
+    query = update.callback_query
+    level = await _guard(update)
+    if not level:
+        await query.answer()
+        return
+    _, kind, ip = query.data.split(":", 2)
+    tecnico = update.effective_user.first_name if update.effective_user else ""
+
+    import time as _time
+    from core import incident_escalation
+    info = incident_escalation.acknowledge(ip, tecnico, kind=kind)
+    if info:
+        dur = _fmt_duracion((info["grace_until_at"] - _time.time()) / 3600)
+        await query.answer("✅ Anotado")
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        motivo = "atenderlo remoto" if kind == "remote" else "la próxima visita"
+        try:
+            await query.message.reply_text(
+                f"{'🔧' if kind == 'remote' else '📅'} Anotado — no te vuelvo a avisar de "
+                f"{info['name']} por {dur} ({motivo}), salvo que siga fallando después de ese tiempo."
+            )
+        except Exception:
+            pass
+        try:
+            shomer_api.log_technician_action(
+                update.effective_user.id if update.effective_user else "?",
+                f"ack_incident:{kind}", ip, info["name"],
+            )
+        except Exception:
+            pass
+    else:
+        await query.answer("Ese incidente ya no está activo")
+
+
+async def cmd_silenciar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """/silenciar <ip> <duración> — ej. /silenciar 192.168.0.140 2d"""
+    level = await _guard(update)
+    if not level:
+        return
+    if len(ctx.args or []) < 2:
+        await update.message.reply_text(
+            "📅 <b>Silenciar incidente</b> — duración personalizada.\n\n"
+            "<code>/silenciar 192.168.0.140 2d</code> (días)\n"
+            "<code>/silenciar 192.168.0.140 6h</code> (horas)\n"
+            "<code>/silenciar 192.168.0.140 90m</code> (minutos)\n\n"
+            "Solo funciona si hay un incidente activo para esa IP (llegó el mensaje resumen).",
+            parse_mode=PM,
+        )
+        return
+    ip, dur_raw = ctx.args[0], ctx.args[1].strip().lower()
+    try:
+        if dur_raw.endswith("d"):
+            horas = float(dur_raw[:-1]) * 24
+        elif dur_raw.endswith("h"):
+            horas = float(dur_raw[:-1])
+        elif dur_raw.endswith("m"):
+            horas = float(dur_raw[:-1]) / 60
+        else:
+            horas = float(dur_raw)
+    except ValueError:
+        await update.message.reply_text(
+            "⚠️ Duración no entendida. Usá algo como <code>2d</code>, <code>6h</code> o <code>90m</code>.",
+            parse_mode=PM,
+        )
+        return
+
+    tecnico = update.effective_user.first_name if update.effective_user else ""
+    from core import incident_escalation
+    info = incident_escalation.acknowledge(ip, tecnico, custom_hours=horas)
+    if info:
+        dur_txt = _fmt_duracion(horas)
+        await update.message.reply_text(
+            f"📅 Anotado — no te vuelvo a avisar de {fmt.e(info['name'])} por {dur_txt}, "
+            "salvo que siga fallando después de ese tiempo."
+        )
+        try:
+            shomer_api.log_technician_action(
+                update.effective_user.id if update.effective_user else "?",
+                "ack_incident:custom", ip, info["name"],
+            )
+        except Exception:
+            pass
+    else:
+        await update.message.reply_text(
+            f"No hay un incidente activo con resumen enviado para <code>{fmt.e(ip)}</code>.",
+            parse_mode=PM,
+        )
+
+
 async def cb_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -2721,6 +2823,7 @@ def run():
         ("liberar",        cmd_liberar),
         ("bloquear",       cmd_bloquear),
         ("desbloquear",    cmd_desbloquear),
+        ("silenciar",      cmd_silenciar),
         # Instalación
         ("instalar",       cmd_instalar),
         ("usuario",        cmd_usuario),
@@ -2761,6 +2864,7 @@ def run():
     app.add_handler(CallbackQueryHandler(cb_instalar,        pattern="^instalar"))
     app.add_handler(CallbackQueryHandler(cb_repair,          pattern="^repair:"))
     app.add_handler(CallbackQueryHandler(cb_dismiss,         pattern="^dismiss:"))
+    app.add_handler(CallbackQueryHandler(cb_ack_incident,    pattern="^ack_incident:"))
     app.add_handler(CallbackQueryHandler(cb_block,           pattern=r"^block_(confirm:.+|cancel)$"))
     app.add_handler(CallbackQueryHandler(cb_unblock,         pattern=r"^unblock_(confirm:.+|cancel)$"))
     app.add_handler(CallbackQueryHandler(cb_usuario,         pattern="^usuario:"))

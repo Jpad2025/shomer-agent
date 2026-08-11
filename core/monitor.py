@@ -571,10 +571,35 @@ async def daily_summary(bot: Bot) -> None:
                     ),
                 )
                 ia_lines = _llm.status_lines()
+
+                # Servidor (CPU/RAM/disco/servicios) — mismo dato que antes daban
+                # los checks sueltos de madrugada/mediodía/tarde; ahora va en el
+                # único mensaje de la mañana, no interrumpe si está todo bien.
+                server_line = ""
+                try:
+                    from core import repair as _repair
+                    metrics = shomer_api.get_server_metrics()
+                    disk = shomer_api.get_disk_usage()
+                    svc = _repair.check_services()
+                    parts = []
+                    if metrics and metrics.get("success"):
+                        m = metrics.get("now", {})
+                        parts.append(f"CPU {m.get('cpu', 0):.0f}% · RAM {m.get('ram', 0):.0f}%")
+                    if disk.get("ok") and disk.get("partitions"):
+                        peor = max(disk["partitions"], key=lambda p: p.get("pct", 0))
+                        parts.append(f"Disco {peor.get('mount', '?')} {peor.get('pct', 0):.0f}%")
+                    if svc:
+                        caidos = [_repair.SERVICES[k]["label"] for k, s in svc.items() if s != "active"]
+                        parts.append("Servicios ✅" if not caidos else f"⚠️ caídos: {', '.join(caidos)}")
+                    if parts:
+                        server_line = "\n🖥️ " + " · ".join(parts)
+                except Exception as e:
+                    log.debug("daily_summary server block error: %s", e)
+
                 _tick("daily_summary", alerted=True)
                 await _send(
                     bot,
-                    f"☀️ <b>Resumen diario</b>\n\n{resumen}{visibility_block}\n\n"
+                    f"☀️ <b>Resumen diario</b>\n\n{resumen}{visibility_block}{server_line}\n\n"
                     + "\n".join(ia_lines),
                 monitor="daily_summary",
                 )
@@ -1520,27 +1545,44 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                                 ) + _kn(ip),
                             ]
 
-                        await _emit_guardian(
-                            bot, ip,
-                            lines,
-                            severity="critical" if status == "offline" else "warn",
-                            reply_markup=markup,
-                            allow_ia=(status == "offline"),
+                        _sev = "critical" if status == "offline" else "warn"
+
+                        async def _send_first(
+                            _bot=bot, _ip=ip, _lines=lines, _sev=_sev,
+                            _markup=markup, _allow_ia=(status == "offline"),
+                        ):
+                            await _emit_guardian(
+                                _bot, _ip, _lines,
+                                severity=_sev, reply_markup=_markup, allow_ia=_allow_ia,
+                            )
+
+                        from core import incident_escalation as _esc
+                        await _esc.handle_event(
+                            bot, ip, nombre, "offline",
+                            send_first_fn=_send_first, severity=_sev,
                         )
                         _guardian_down_alerted.add(ip)
 
                 elif status == "degraded" and prev not in ("degraded",) and not _is_suppressed(ip):
                     _guardian_down_streak[ip] = 0
-                    await _emit_guardian(
-                        bot, ip,
-                        [
-                            _a(
-                                "🟡", f"{nombre} con señal débil",
-                                "interferencia, cable o muchos clientes",
-                                raw=True,
-                            ),
-                        ],
-                        severity="warn",
+
+                    async def _send_first_degraded(_bot=bot, _ip=ip, _nombre=nombre):
+                        await _emit_guardian(
+                            _bot, _ip,
+                            [
+                                _a(
+                                    "🟡", f"{_nombre} con señal débil",
+                                    "interferencia, cable o muchos clientes",
+                                    raw=True,
+                                ),
+                            ],
+                            severity="warn",
+                        )
+
+                    from core import incident_escalation as _esc
+                    await _esc.handle_event(
+                        bot, ip, nombre, "degraded",
+                        send_first_fn=_send_first_degraded, severity="warn",
                     )
 
                 elif status == "online":
@@ -3487,7 +3529,10 @@ async def watch_memoria_sync(bot: Bot) -> None:
 
 def start_all(bot: Bot) -> None:
     triage.init(bot, _send)
+    from core import incident_escalation
+    incident_escalation.init(bot, _send)
     loop = asyncio.get_event_loop()
+    loop.create_task(incident_escalation.watch_cleanup(bot))
     loop.create_task(watch_hunter(bot))
     loop.create_task(watch_devices(bot))
     loop.create_task(daily_summary(bot))
@@ -3519,7 +3564,8 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_port_errors(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (28 tasks) — triage=%s auto_tasks=%s",
+        "Monitores iniciados (29 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
+        incident_escalation.is_enabled(),
     )
