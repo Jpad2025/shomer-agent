@@ -4,6 +4,17 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.1 — 2026-08-13
+
+- **Fix: "Nodo recuperado" repetido en equipos flapeando** (`core/monitor.py`
+  `watch_guardian_nodes` + `core/incident_escalation.py`): el aviso de
+  recuperación se mandaba en cada blip, sin pasar por la ventana de
+  agregación que ya protege el lado de las caídas — un solo AP flapeando
+  (OFC-COCINA `.113`) generó 44 de 54 mensajes Telegram en 24h. Nueva
+  `incident_escalation.is_flapping(ip)` (true si el incidente ya acumuló
+  2+ eventos en la ventana activa); `watch_guardian_nodes` la usa para
+  suprimir recuperaciones repetidas — la primera se sigue avisando normal.
+
 ## 1.1.0 — 2026-08-10
 
 - **Escalamiento de incidentes recurrentes** (`core/incident_escalation.py`):

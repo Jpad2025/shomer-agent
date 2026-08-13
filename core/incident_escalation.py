@@ -439,6 +439,17 @@ async def handle_event(
     return False
 
 
+def is_flapping(ip: str) -> bool:
+    """True si el incidente Guardian de esta IP ya acumuló más de una falla
+    dentro de la ventana de agregación actual (evento 2+, contado en silencio
+    por `handle_event`). watch_guardian_nodes lo usa para no repetir 'Nodo
+    recuperado' en cada blip de un equipo que está flapeando — la primera
+    recuperación de un incidente sí se avisa normal, igual que la primera
+    falla (ver docstring del módulo)."""
+    row = _get_row(f"guardian:{ip}")
+    return bool(row and row["state"] != "closed" and (row["event_count"] or 0) > 1)
+
+
 def acknowledge(
     ip: str, technician: str = "", *, kind: str = "remote", custom_hours: Optional[float] = None,
 ) -> Optional[dict]:

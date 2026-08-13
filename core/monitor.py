@@ -1591,7 +1591,9 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         and ip in _guardian_down_alerted
                         and not _is_suppressed(ip)
                     ):
-                        recoveries.append((ip, nombre))
+                        from core import incident_escalation as _esc
+                        if not _esc.is_flapping(ip):
+                            recoveries.append((ip, nombre))
                     _guardian_down_streak[ip] = 0
                     _guardian_down_alerted.discard(ip)
 
