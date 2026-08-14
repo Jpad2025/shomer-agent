@@ -4,6 +4,18 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.3 — 2026-08-13
+
+- **`watch_infra` ahora usa escalamiento crónico (paso 5 del mapa)** — hasta
+  ahora esta protección solo la tenía Guardian (wifi); switches, impresoras,
+  cámaras y datáfonos mandaban un mensaje completo por cada caída de un
+  mismo equipo flapeando, sin agrupar (el mismo problema que tuvo OFC-COCINA
+  en Guardian, Sesión 71, pero nunca arreglado del lado de Inframonitor).
+  `core/monitor.py::watch_infra`: la caída individual (no-oleada) ahora pasa
+  por `incident_escalation.handle_event()`; las dos rutas de recuperación
+  individual ahora chequean `is_flapping()` antes de avisar "recuperado".
+  No toca la detección de oleada (Pulse Correlate) — eso ya agrupaba bien.
+
 ## 1.1.2 — 2026-08-13
 
 - **Solo comentarios, sin cambio de comportamiento.** Se agregaron marcas

@@ -2932,12 +2932,18 @@ async def watch_infra(bot: Bot) -> None:
                         if ip in _infra_wave_active_ips:
                             _cycle_recoveries.append(rec)
                         else:
-                            await _send(
-                                bot, _a("🟢", evt, detail, raw=True),
-                                reply_markup=_save_kb_recovery(ip),
-                                monitor="watch_infra_equipment",
-                            )
-                            eq_alert = True
+                            # Mapa de decisión de alertas (CLAUDE.md), paso 6 —
+                            # recuperación repetida (mismo criterio que Sesión 71
+                            # en Guardian): si el equipo ya está flapeando, no
+                            # repetir "recuperado" en cada blip.
+                            from core import incident_escalation as _esc
+                            if not _esc.is_flapping(ip):
+                                await _send(
+                                    bot, _a("🟢", evt, detail, raw=True),
+                                    reply_markup=_save_kb_recovery(ip),
+                                    monitor="watch_infra_equipment",
+                                )
+                                eq_alert = True
                     if poll_fresh and status in ("online", "degraded"):
                         _infra_prev_status[ip] = status
                         _infra_wave_active_ips.pop(ip, None)
@@ -2965,8 +2971,20 @@ async def watch_infra(bot: Bot) -> None:
                     eq_alert = True
                     pulse_alert = True
                 else:
+                    # Mapa de decisión de alertas (CLAUDE.md), paso 5 —
+                    # escalamiento crónico. Antes watch_infra no pasaba por
+                    # acá (a diferencia de Guardian) -- un switch/impresora
+                    # flapeando mandaba un mensaje completo por cada caída,
+                    # igual que le pasaba a OFC-COCINA en Guardian (Sesión 71).
                     for item in _cycle_new_offline:
-                        await _send(bot, item["msg"], monitor="watch_infra_equipment")
+                        async def _send_first(_bot=bot, _item=item):
+                            await _send(_bot, _item["msg"], monitor="watch_infra_equipment")
+
+                        from core import incident_escalation as _esc
+                        await _esc.handle_event(
+                            bot, item["ip"], item["name"], "offline",
+                            send_first_fn=_send_first, severity="warn",
+                        )
                         _infra_prev_status[item["ip"]] = "offline"
                         _infra_stale_reminded.discard(item["ip"])
                         eq_alert = True
@@ -2982,15 +3000,18 @@ async def watch_infra(bot: Bot) -> None:
                 eq_alert = True
                 pulse_alert = True
             else:
+                from core import incident_escalation as _esc
                 for item in _cycle_recoveries:
-                    await _send(
-                        bot,
-                        _a("🟢", item["evt"], item["detail"], raw=True),
-                        reply_markup=_save_kb_recovery(item["ip"]),
-                        monitor="watch_infra_equipment",
-                    )
+                    # Mapa de decisión de alertas (CLAUDE.md), paso 6 (igual que arriba).
+                    if not _esc.is_flapping(item["ip"]):
+                        await _send(
+                            bot,
+                            _a("🟢", item["evt"], item["detail"], raw=True),
+                            reply_markup=_save_kb_recovery(item["ip"]),
+                            monitor="watch_infra_equipment",
+                        )
+                        eq_alert = True
                     _infra_wave_active_ips.pop(item["ip"], None)
-                    eq_alert = True
 
             # ── Varios caídos en la misma ubicación ─────────────────────────
             # Solo ubicaciones reales (switch/piso). Placeholders tipo
