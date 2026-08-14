@@ -4,6 +4,16 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.2 — 2026-08-13
+
+- **Solo comentarios, sin cambio de comportamiento.** Se agregaron marcas
+  "Mapa de decisión de alertas (CLAUDE.md), paso N" en `core/monitor.py`
+  (chequeo de patrón crónico paso 7, `incident_escalation`/`is_flapping`
+  pasos 5-6) y en el docstring de `core/incident_escalation.py` — para que
+  el código mismo indique en qué parte del mapa está cada pieza, en vez de
+  tener que reconstruir el orden leyendo 3 archivos cada vez. Pedido
+  explícito de Juan Pablo tras revisar 2 meses de ajustes de sensibilidad.
+
 ## 1.1.1 — 2026-08-13
 
 - **Fix: "Nodo recuperado" repetido en equipos flapeando** (`core/monitor.py`

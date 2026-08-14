@@ -3,6 +3,13 @@ Escalamiento de incidentes recurrentes — evita mandar un mensaje Telegram por
 cada caída de un equipo que ya está flapping (ej. AP HAB 104: 81 mensajes en
 un día, mismo problema físico sin resolver).
 
+Este módulo es el paso 5 (y `is_flapping` el paso 6) del Mapa de decisión de
+alertas (CLAUDE.md, Sesión 72) -- pasos 1-4 (ping, blip gateway, blip masivo,
+umbral por nodo) ya corrieron antes, en el poller de network_monitor, y ya
+decidieron que esto SÍ es un evento real que vale la pena avisar.
+Nota: hoy solo lo usa Guardian (watch_guardian_nodes) -- watch_infra
+(switches/impresoras/cámaras/datáfonos) no pasa por acá todavía.
+
 Ciclo de vida por entidad (ip):
   1. Primera falla -> se manda el aviso normal (sin cambios de formato).
   2. Fallas siguientes dentro de la ventana de agregación (ESCALATION_AGG_WINDOW_SEC)

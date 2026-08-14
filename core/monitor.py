@@ -1510,13 +1510,14 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             else "Guardian seguirá monitoreando — sin reboot (solo degrada WAN, no LAN)"
                         )
 
-                        # Sesión 69 — equipo "flapper" crónico ya identificado por
-                        # pattern_analysis (patrones_detectados): en vez de repetir el
-                        # bloque completo (impacto/acción/sugerencia) en cada caída nueva
-                        # -- ej. AP REST SCALA tuvo 29 alertas críticas completas en 40
-                        # días -- se manda un aviso corto que sigue notificando cada
-                        # caída (no se suprime nada) pero sin inflar el chat con texto
-                        # repetido de un problema físico ya conocido/reportado a campo.
+                        # Mapa de decisión de alertas (CLAUDE.md), paso 7 — patrón
+                        # crónico. Sesión 69 — equipo "flapper" crónico ya identificado
+                        # por pattern_analysis (patrones_detectados): en vez de repetir
+                        # el bloque completo (impacto/acción/sugerencia) en cada caída
+                        # nueva -- ej. AP REST SCALA tuvo 29 alertas críticas completas
+                        # en 40 días -- se manda un aviso corto que sigue notificando
+                        # cada caída (no se suprime nada) pero sin inflar el chat con
+                        # texto repetido de un problema físico ya conocido/reportado.
                         _pat = {}
                         try:
                             from core import pattern_analysis as _pa
@@ -1556,6 +1557,9 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                                 severity=_sev, reply_markup=_markup, allow_ia=_allow_ia,
                             )
 
+                        # Mapa de decisión de alertas (CLAUDE.md), paso 5 —
+                        # escalamiento crónico: agrupa repetidas del MISMO
+                        # equipo en la ventana de agregación, no avisa una x una.
                         from core import incident_escalation as _esc
                         await _esc.handle_event(
                             bot, ip, nombre, "offline",
@@ -1579,6 +1583,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                             severity="warn",
                         )
 
+                    # Mapa de decisión de alertas (CLAUDE.md), paso 5 (igual que arriba).
                     from core import incident_escalation as _esc
                     await _esc.handle_event(
                         bot, ip, nombre, "degraded",
@@ -1591,6 +1596,9 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         and ip in _guardian_down_alerted
                         and not _is_suppressed(ip)
                     ):
+                        # Mapa de decisión de alertas (CLAUDE.md), paso 6 —
+                        # recuperación repetida (Sesión 71): si el equipo ya
+                        # está flapeando, no repetir "recuperado" en cada blip.
                         from core import incident_escalation as _esc
                         if not _esc.is_flapping(ip):
                             recoveries.append((ip, nombre))
@@ -2845,10 +2853,11 @@ async def watch_infra(bot: Bot) -> None:
                             _infra_flap_alerted.add(ip)
                             flap_alert = True
 
-                        # Sesión 69 — mismo criterio que Guardian: equipo ya identificado
-                        # como flapper crónico en patrones_detectados (ej. Bixolon .60 y
-                        # .243, 94 alertas completas c/u en 40 días) -> aviso compacto,
-                        # sin repetir el bloque completo cada caída ya conocida.
+                        # Mapa de decisión de alertas (CLAUDE.md), paso 7 — patrón
+                        # crónico. Sesión 69 — mismo criterio que Guardian: equipo ya
+                        # identificado como flapper crónico en patrones_detectados
+                        # (ej. Bixolon .60 y .243, 94 alertas completas c/u en 40 días)
+                        # -> aviso compacto, sin repetir el bloque completo cada caída.
                         _pat = {}
                         try:
                             from core import pattern_analysis as _pa
