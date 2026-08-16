@@ -133,6 +133,18 @@ def _init_db() -> None:
             escalated_count      INTEGER DEFAULT 0,
             updated_at           TEXT DEFAULT (datetime('now'))
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS eventos_filtrados (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts           TEXT NOT NULL DEFAULT (datetime('now')),
+            ip           TEXT NOT NULL,
+            entity_name  TEXT,
+            fuente       TEXT NOT NULL,
+            motivo       TEXT NOT NULL,
+            event_count  INTEGER
+        )""")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_eventos_filtrados_ts ON eventos_filtrados (ts)"
+        )
 
 
 def _get_row(entity_key: str) -> Optional[dict]:
@@ -456,6 +468,23 @@ def is_flapping(ip: str) -> bool:
     falla (ver docstring del módulo)."""
     row = _get_row(f"guardian:{ip}")
     return bool(row and row["state"] != "closed" and (row["event_count"] or 0) > 1)
+
+
+def record_filtered_event(ip: str, name: str, fuente: str, motivo: str = "recuperacion_repetida") -> None:
+    """Tarea pendiente 2 (14 ago): registra un 'recuperado' suprimido por
+    is_flapping -- separa "qué pasó" de "si se avisó" sin tocar esa decisión
+    (llamar justo donde ya se decidió no mandar el mensaje)."""
+    try:
+        row = _get_row(f"guardian:{ip}")
+        event_count = (row or {}).get("event_count")
+        with _sq.connect(_KNOWLEDGE_DB) as conn:
+            conn.execute(
+                "INSERT INTO eventos_filtrados (ip, entity_name, fuente, motivo, event_count) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (ip, name, fuente, motivo, event_count),
+            )
+    except Exception as e:
+        log.debug("record_filtered_event: %s", e)
 
 
 def acknowledge(

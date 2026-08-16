@@ -1602,6 +1602,8 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         from core import incident_escalation as _esc
                         if not _esc.is_flapping(ip):
                             recoveries.append((ip, nombre))
+                        else:
+                            _esc.record_filtered_event(ip, nombre, "watch_guardian_nodes")
                     _guardian_down_streak[ip] = 0
                     _guardian_down_alerted.discard(ip)
 
@@ -2944,6 +2946,8 @@ async def watch_infra(bot: Bot) -> None:
                                     monitor="watch_infra_equipment",
                                 )
                                 eq_alert = True
+                            else:
+                                _esc.record_filtered_event(ip, name, "watch_infra")
                     if poll_fresh and status in ("online", "degraded"):
                         _infra_prev_status[ip] = status
                         _infra_wave_active_ips.pop(ip, None)
@@ -3011,6 +3015,8 @@ async def watch_infra(bot: Bot) -> None:
                             monitor="watch_infra_equipment",
                         )
                         eq_alert = True
+                    else:
+                        _esc.record_filtered_event(item["ip"], item["name"], "watch_infra")
                     _infra_wave_active_ips.pop(item["ip"], None)
 
             # ── Varios caídos en la misma ubicación ─────────────────────────

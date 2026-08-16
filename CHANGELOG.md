@@ -4,6 +4,17 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.4 — 2026-08-16
+
+- **Tarea pendiente 2 (parte 1):** nueva tabla `eventos_filtrados` en
+  `knowledge.db` + `incident_escalation.record_filtered_event()` — registra
+  cada "recuperado" que se suprime por `is_flapping` (3 puntos en
+  `monitor.py`: Guardian y las 2 rutas de recuperación de Inframonitor), sin
+  tocar la decisión de avisar (diff solo agrega líneas). Objetivo: separar
+  "qué pasó" de "si se avisó" para auditar después sin reconstruir logs a
+  mano. Ver `PENDIENTES_LAB.md` § Tarea pendiente 2. Complementa el registro
+  del lado de network_monitor (blip gateway/masivo) hecho el mismo día.
+
 ## 1.1.3 — 2026-08-13
 
 - **`watch_infra` ahora usa escalamiento crónico (paso 5 del mapa)** — hasta
