@@ -362,6 +362,11 @@ async def _notify_coordinator(ip: str, name: str, row: dict) -> None:
                 "Sin respuesta del técnico tras dos avisos."
             )
             await _bot.send_message(chat_id=chat_id, text=texto, parse_mode="HTML")
+            try:
+                from core.monitor import _registrar_envio_real
+                _registrar_envio_real("coordinador", texto)
+            except Exception:
+                pass
         except Exception as e:
             log.warning("escalation: no se pudo notificar al coordinador por Telegram: %s", e)
     else:

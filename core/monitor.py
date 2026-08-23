@@ -27,6 +27,36 @@ from core import fmt as msgfmt
 
 log = logging.getLogger("shomer-monitor")
 
+_TELEGRAM_ENVIADOS_DB = "/app/data/telegram_enviados.db"
+
+
+def _registrar_envio_real(origen: str, resumen: str) -> None:
+    """Contador de verdad -- registra CADA mensaje que de verdad salió a
+    Telegram desde este proceso. Mismo archivo que usa Guardian (canal
+    directo, network_monitor) para el mismo fin -- /app/data acá adentro es
+    /storage/shomer-agent/data afuera, compartido y escribible por los dos
+    lados (a diferencia de /storage/db, solo-lectura para el bot). Ver
+    Sesión 23 ago: reconstruir el conteo solo desde memoria_alertas tenía
+    un hueco real (el canal directo de Guardian nunca quedaba ahí)."""
+    try:
+        import sqlite3
+        conn = sqlite3.connect(_TELEGRAM_ENVIADOS_DB, timeout=5)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS enviados ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "ts TEXT DEFAULT (datetime('now')), "
+            "origen TEXT, resumen TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO enviados (origen, resumen) VALUES (?, ?)",
+            (origen, (resumen or "")[:80]),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
 _monitor_ctx: ContextVar[Optional[str]] = ContextVar("shomer_monitor", default=None)
 
 
@@ -218,6 +248,7 @@ async def _send(
             chat_id=CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
         )
         _memoria_log(True)
+        _registrar_envio_real("bot", msg)
         _noc_mirror()
     except TelegramError as e:
         log.warning("Telegram send error: %s", e)
@@ -227,6 +258,7 @@ async def _send(
                     chat_id=_DEV_CHAT_ID, text=msg, parse_mode="HTML", reply_markup=reply_markup,
                 )
                 _memoria_log(True)
+                _registrar_envio_real("bot_dev_fallback", msg)
                 _noc_mirror()
             except TelegramError as e2:
                 log.warning("Telegram send error (fallback developer): %s", e2)
