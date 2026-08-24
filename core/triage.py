@@ -49,7 +49,10 @@ class TriageManager:
     async def emit(self, event: ShomerEvent) -> None:
         if not is_enabled():
             text = "\n".join(event.lines) if event.lines else f"{event.metrica}: {event.valor}"
-            await self._send(self._bot, text, reply_markup=event.reply_markup)
+            await self._send(
+                self._bot, text, reply_markup=event.reply_markup,
+                monitor=event.origen, severity=event.severity,
+            )
             return
 
         key = event.entity_key()
@@ -79,13 +82,17 @@ class TriageManager:
         if not events:
             return
 
-        text, markup = self._merge(key, events)
+        text, markup, origen, severity = self._merge(key, events)
         try:
-            await self._send(self._bot, text, reply_markup=markup)
+            await self._send(
+                self._bot, text, reply_markup=markup, monitor=origen, severity=severity,
+            )
         except Exception as e:
             log.warning("triage flush send error: %s", e)
 
-    def _merge(self, entity_key: str, events: List[ShomerEvent]) -> tuple[str, Optional[object]]:
+    def _merge(
+        self, entity_key: str, events: List[ShomerEvent],
+    ) -> tuple[str, Optional[object], str, str]:
         events = sorted(events, key=lambda e: _SEV_ORDER.get(e.severity, 0))
         lines: List[str] = []
         seen: set[str] = set()
@@ -119,6 +126,7 @@ class TriageManager:
                 log.debug("triage groq merge skip: %s", e)
 
         severity = events[-1].severity if events else "info"
+        origen = events[-1].origen if events else "bot"
         from core import fmt
 
         raw = fmt.triage_digest(entity_key, raw, severity)
@@ -134,7 +142,7 @@ class TriageManager:
 
             markup = kb([btn("✅ Entendido", "dismiss:ok")])
 
-        return raw, markup
+        return raw, markup, origen, severity
 
 
 _manager: Optional[TriageManager] = None
