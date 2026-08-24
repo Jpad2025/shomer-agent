@@ -2329,6 +2329,8 @@ async def watch_openai(bot: Bot) -> None:
                     monitor="watch_openai",
                     )
                     _tick("watch_openai", alerted=True)
+                else:
+                    _tick("watch_openai")
             else:
                 if not _openai_ok and _openai_alerted:
                     fail_min = int((now_ts - (_openai_fail_since or now_ts)) / 60)
