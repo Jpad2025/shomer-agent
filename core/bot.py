@@ -66,7 +66,6 @@ MONITOR_LABELS = {
     "watch_connectivity":      "Conectividad del servidor",
     "watch_groq":              "Conexión Groq (monitores y resúmenes)",
     "watch_openai":            "Conexión OpenAI (chat interactivo)",
-    "watch_security":          "Firewall Linux / OpenWrt",
     "watch_mikrotik_security": "Firewall MikroTik",
     "auto_unblock":            "Desbloqueo automático de IPs",
     "watch_network_audit":     "Riesgos de red pendientes",
@@ -92,7 +91,7 @@ MONITOR_GROUPS = [
     ("👁️ Guardian", ["watch_guardian_nodes", "watch_devices", "preventive_reboot"]),
     ("🎯 Hunter", [
         "watch_hunter", "watch_pipeline", "watch_hunter_verify",
-        "watch_security", "watch_mikrotik_security", "auto_unblock",
+        "watch_mikrotik_security", "auto_unblock",
         "watch_network_audit", "watch_active_threats",
     ]),
     ("🛡️ Protector", ["watch_backups", "watch_protector_retry", "watch_protector_sample", "weekly_backup"]),

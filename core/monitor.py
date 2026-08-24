@@ -918,7 +918,7 @@ async def watch_wan_outage(bot: Bot) -> None:
     2. Multi-grupo offline → verificar WAN desde el firewall
     3. WAN confirmada caída → alerta ISP
     """
-    global _wan_alert_active, _group_alerts
+    global _wan_alert_active, _group_alerts, _wan_outage_start, _wan_last_repeat
     await asyncio.sleep(40)
 
     # Leer firewall desde devices.json (el que tenga is_wan_probe=true)
@@ -2349,188 +2349,6 @@ async def watch_openai(bot: Bot) -> None:
         await asyncio.sleep(300)
 
 
-# ── Seguridad: detección de intentos de copia/daño (Capa 1) ──────────────────
-
-async def watch_security(bot: Bot) -> None:
-    """
-    Capa 1 — solo detección y notificación. Sin bloqueos.
-
-    Detecta en /var/log/auth.log:
-    - Logins SSH en horario inusual (00:00 - 06:00)
-    - Fallos de autenticación masivos (>5 en 10 min)
-
-    Detecta en /var/log/syslog o journalctl:
-    - scp/rsync/tar sobre /opt/network_monitor → posible exfiltración
-    - Acceso a /etc/shomer/, *.env, *.db en paths sensibles
-
-    Detecta en /proc/mounts y journalctl:
-    - Nuevos dispositivos USB montados
-
-    Acción: wall a sesiones SSH activas + alerta developer.
-    """
-    import subprocess, re
-    await asyncio.sleep(180)
-
-    _auth_fail_times: list = []
-    _scp_warned: Set[str] = set()
-    _usb_warned: Set[str] = set()
-    _ssh_unusual_warned: Set[str] = set()
-
-    AUTH_LOG = "/var/log/auth.log"
-
-    def _wall(msg: str) -> None:
-        try:
-            subprocess.run(["wall", msg], timeout=5, capture_output=True)
-        except Exception:
-            pass
-
-    while True:
-        try:
-            now_ts = _time_module.time()
-            now = datetime.now()
-
-            # ── 1. Fallos SSH ──────────────────────────────────────────────────
-            try:
-                with open(AUTH_LOG, "r", errors="ignore") as f:
-                    lines = f.readlines()[-500:]
-
-                recent_fails = []
-                for line in lines:
-                    if "Failed password" in line or "Invalid user" in line:
-                        recent_fails.append(line)
-
-                # Contar fallos en los últimos 10 min
-                cutoff = now_ts - 600
-                _auth_fail_times = [t for t in _auth_fail_times if t > cutoff]
-
-                nuevos_fallos = len(recent_fails) - len(_auth_fail_times)
-                if nuevos_fallos > 0:
-                    for _ in range(min(nuevos_fallos, 10)):
-                        _auth_fail_times.append(now_ts)
-
-                if len(_auth_fail_times) >= 5:
-                    # Extraer IPs únicas
-                    ips = set()
-                    for line in recent_fails[-20:]:
-                        m = re.search(r'from (\d+\.\d+\.\d+\.\d+)', line)
-                        if m:
-                            ips.add(m.group(1))
-                    key = f"brute_{int(now_ts/600)}"
-                    if key not in _scp_warned:
-                        _scp_warned.add(key)
-                        _wall(
-                            "AVISO DE SEGURIDAD: Se detectaron múltiples intentos de acceso "
-                            "fallidos al servidor. Este sistema está siendo monitoreado."
-                        )
-                        ips_txt = ", ".join(list(ips)[:5]) or "desconocidas"
-                        await _send(
-                            bot,
-                            _a(
-                                "🔐", "Intentos SSH fallidos",
-                                f"{len(_auth_fail_times)} en 10 min — {ips_txt}",
-                                raw=True,
-                            ),
-                        monitor="watch_security",
-                        )
-            except FileNotFoundError:
-                pass
-
-            # ── 2. Login SSH en horario inusual (00:00 - 06:00) ───────────────
-            if 0 <= now.hour < 6:
-                try:
-                    r = subprocess.run(
-                        ["who"], capture_output=True, text=True, timeout=5
-                    )
-                    for line in r.stdout.splitlines():
-                        parts = line.split()
-                        if not parts:
-                            continue
-                        user = parts[0]
-                        key = f"ssh_{user}_{now.date()}"
-                        if key not in _ssh_unusual_warned and "pts" in line:
-                            _ssh_unusual_warned.add(key)
-                            _wall(
-                                f"AVISO: Acceso SSH detectado en horario inusual ({now.strftime('%H:%M')}). "
-                                f"Este acceso ha sido registrado."
-                            )
-                            await _send(
-                                bot,
-                                _a(
-                                    "🔐", "Acceso SSH inusual",
-                                    f"{user} — {now.strftime('%H:%M')}",
-                                    raw=True,
-                                ),
-                            monitor="watch_security",
-                            )
-                except Exception:
-                    pass
-
-            # ── 3. Comandos de copia sobre archivos sensibles ──────────────────
-            try:
-                r = subprocess.run(
-                    ["journalctl", "-u", "ssh", "--since", "5 minutes ago",
-                     "--no-pager", "-q"],
-                    capture_output=True, text=True, timeout=8
-                )
-                sensible_patterns = [
-                    "scp", "rsync", "sftp", "/opt/network_monitor",
-                    "/etc/shomer", "network_monitor.db", "shomer-runtime.env"
-                ]
-                for line in r.stdout.splitlines():
-                    for pat in sensible_patterns:
-                        if pat in line:
-                            key = f"copy_{hash(line)}"
-                            if key not in _scp_warned:
-                                _scp_warned.add(key)
-                                _wall(
-                                    "AVISO DE SEGURIDAD: Se detectó una operación de "
-                                    "transferencia de archivos del sistema. "
-                                    "Este acceso ha sido registrado y reportado."
-                                )
-                                await _send(
-                                    bot,
-                                    _a(
-                                        "🔐", "Posible copia de archivos",
-                                        f"patrón {pat}",
-                                        raw=True,
-                                    ),
-                                monitor="watch_security",
-                                )
-                            break
-            except Exception:
-                pass
-
-            # ── 4. USB montado ─────────────────────────────────────────────────
-            try:
-                with open("/proc/mounts", "r") as f:
-                    mounts = f.read()
-                for line in mounts.splitlines():
-                    if "/media/" in line or "/mnt/" in line:
-                        device = line.split()[0]
-                        if device not in _usb_warned and not device.startswith("//"):
-                            _usb_warned.add(device)
-                            _wall(
-                                "AVISO: Se detectó un dispositivo externo conectado al servidor. "
-                                "Este evento ha sido registrado."
-                            )
-                            await _send(
-                                bot,
-                                _a(
-                                    "🔐", "USB conectado al servidor",
-                                    _html.escape(str(device)),
-                                    raw=True,
-                                ),
-                            monitor="watch_security",
-                            )
-            except Exception:
-                pass
-
-            _tick("watch_security")
-        except Exception as e:
-            _tick("watch_security", error=str(e)); log.debug("watch_security error: %s", e)
-        await asyncio.sleep(120)
-
-
 async def watch_mikrotik_security(bot: Bot) -> None:
     """
     Monitor de seguridad perimetral — lee logs del firewall Hunter (OpenWrt/Linux) vía SSH.
@@ -3755,7 +3573,6 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_connectivity(bot))
     loop.create_task(watch_groq(bot))
     loop.create_task(watch_openai(bot))
-    loop.create_task(watch_security(bot))
     loop.create_task(watch_mikrotik_security(bot))
     loop.create_task(watch_network_audit(bot))
     loop.create_task(watch_protector_sample(bot))
@@ -3768,7 +3585,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_pending_guardian(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (29 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (28 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),
