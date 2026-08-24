@@ -9,7 +9,7 @@ import os
 import re
 import time
 from contextvars import ContextVar
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 from typing import Any, Dict, Optional, Set
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
@@ -1838,6 +1838,7 @@ async def weekly_backup(bot: Bot) -> None:
                         ),
                     monitor="weekly_backup",
                     )
+            _tick("weekly_backup")
         except Exception as e:
             _tick("weekly_backup", error=str(e)); log.debug("weekly_backup error: %s", e)
         await asyncio.sleep(60)
@@ -1939,6 +1940,7 @@ async def watch_protector_retry(bot: Bot) -> None:
                 elif es_ok and _backup_consecutive_fails.get(nombre, 0) > 0:
                     _backup_consecutive_fails[nombre] = 0
 
+            _tick("watch_protector_retry")
         except Exception as e:
             _tick("watch_protector_retry", error=str(e)); log.debug("watch_protector_retry error: %s", e)
         await asyncio.sleep(3600)
@@ -3553,7 +3555,7 @@ async def watch_port_errors(bot: Bot) -> None:
             # Calcular segundos hasta las 06:58 (2 min antes del reporte 07:00)
             target = now.replace(hour=6, minute=58, second=0, microsecond=0)
             if now >= target:
-                target = target.replace(day=target.day + 1)
+                target = target + timedelta(days=1)
             wait_sec = (target - now).total_seconds()
             await asyncio.sleep(wait_sec)
         except Exception:
@@ -3693,31 +3695,33 @@ async def watch_pending_guardian(bot: Bot) -> None:
         try:
             import sqlite3
             conn = sqlite3.connect(_TELEGRAM_ENVIADOS_DB, timeout=5)
-            conn.row_factory = sqlite3.Row
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS notificaciones_pendientes ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "ts TEXT DEFAULT (datetime('now')), "
-                "mensaje TEXT NOT NULL, "
-                "estado TEXT DEFAULT 'pendiente', "
-                "procesado_at TEXT)"
-            )
-            rows = conn.execute(
-                "SELECT id, mensaje FROM notificaciones_pendientes WHERE estado='pendiente'"
-            ).fetchall()
-            for row in rows:
-                # Marcar DESPUÉS de enviar -- si el envío se cae a mitad de
-                # camino, la fila se queda "pendiente" y el respaldo de
-                # Guardian (60s) la agarra igual. Marcar antes arriesgaría
-                # perderla en silencio si _send() falla puertas adentro.
-                await _send(bot, row["mensaje"], monitor="equipos_red", severity="warn")
+            try:
+                conn.row_factory = sqlite3.Row
                 conn.execute(
-                    "UPDATE notificaciones_pendientes SET estado='relevado_bot', "
-                    "procesado_at=datetime('now') WHERE id=?",
-                    (row["id"],),
+                    "CREATE TABLE IF NOT EXISTS notificaciones_pendientes ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "ts TEXT DEFAULT (datetime('now')), "
+                    "mensaje TEXT NOT NULL, "
+                    "estado TEXT DEFAULT 'pendiente', "
+                    "procesado_at TEXT)"
                 )
-                conn.commit()
-            conn.close()
+                rows = conn.execute(
+                    "SELECT id, mensaje FROM notificaciones_pendientes WHERE estado='pendiente'"
+                ).fetchall()
+                for row in rows:
+                    # Marcar DESPUÉS de enviar -- si el envío se cae a mitad de
+                    # camino, la fila se queda "pendiente" y el respaldo de
+                    # Guardian (60s) la agarra igual. Marcar antes arriesgaría
+                    # perderla en silencio si _send() falla puertas adentro.
+                    await _send(bot, row["mensaje"], monitor="equipos_red", severity="warn")
+                    conn.execute(
+                        "UPDATE notificaciones_pendientes SET estado='relevado_bot', "
+                        "procesado_at=datetime('now') WHERE id=?",
+                        (row["id"],),
+                    )
+                    conn.commit()
+            finally:
+                conn.close()
             _tick("watch_pending_guardian")
         except Exception as e:
             _tick("watch_pending_guardian", error=str(e))

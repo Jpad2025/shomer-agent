@@ -78,9 +78,14 @@ MONITOR_LABELS = {
     "watch_infra_snmp":        "Infra — puerto perdió enlace (UP→DOWN)",
     "watch_infra_vpn":         "Infra — conexión VPN MikroTik (USB)",
     "watch_infra_flap":        "Infra — flapping (cable/PoE)",
+    "watch_infra_pulse":       "Infra — detección temprana (pulso EWMA)",
     "watch_active_threats":    "Hunter — resumen IPs contenidas",
-    "watch_port_errors":       "Infra — informe diario errores de puerto (08:00)",
+    "watch_port_errors":       "Infra — errores de puerto (nota para resumen 7 AM)",
     "ia_diagnostico":          "IA — diagnóstico automático AP degradando",
+    "evening_summary":         "Resumen de la noche (10:00 PM)",
+    "watch_pending_guardian":  "Relevo de alertas de Guardian al bot",
+    "watch_memoria_sync":      "Sync memoria unificada (solo lectura)",
+    "watch_pattern_analysis":  "Análisis de patrones (sin Telegram propio)",
 }
 
 MONITOR_GROUPS = [
@@ -93,13 +98,17 @@ MONITOR_GROUPS = [
     ("🛡️ Protector", ["watch_backups", "watch_protector_retry", "watch_protector_sample", "weekly_backup"]),
     ("🏗️ Infra", [
         "watch_infra_equipment", "watch_infra_printer", "watch_infra_service",
-        "watch_infra_snmp", "watch_infra_vpn", "watch_infra_flap", "watch_port_errors",
+        "watch_infra_snmp", "watch_infra_vpn", "watch_infra_flap", "watch_infra_pulse",
+        "watch_port_errors",
     ]),
     ("🖥️ Servidor", [
         "watch_services", "watch_disk", "watch_resources", "watch_wan_outage",
         "watch_connectivity", "watch_log_truncate",
     ]),
-    ("🤖 Bot / IA", ["watch_docker", "watch_openai", "watch_groq", "daily_summary"]),
+    ("🤖 Bot / IA", [
+        "watch_docker", "watch_openai", "watch_groq", "daily_summary", "evening_summary",
+        "watch_pending_guardian", "watch_memoria_sync", "watch_pattern_analysis",
+    ]),
 ]
 
 _GREETINGS = {
