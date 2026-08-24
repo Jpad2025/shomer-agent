@@ -57,6 +57,54 @@ def _registrar_envio_real(origen: str, resumen: str) -> None:
         pass
 
 
+_NOTAS_REPORTE_DB = "/app/data/knowledge.db"
+
+
+def _agregar_nota_reporte(fuente: str, texto: str) -> None:
+    """Libreta compartida para el grupo 'salud del propio Shomer' (24 ago):
+    en vez de que watch_docker / watch_network_audit / watch_port_errors
+    manden su propio mensaje suelto, anotan acá -- los dos reportes
+    programados (07:00 y 22:00) la leen y la vacían. Persistida (no en
+    memoria) para no perder una nota si el bot se reinicia entre reportes."""
+    try:
+        import sqlite3
+        conn = sqlite3.connect(_NOTAS_REPORTE_DB, timeout=5)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS notas_reporte ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "ts TEXT DEFAULT (datetime('now')), "
+            "fuente TEXT, texto TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO notas_reporte (fuente, texto) VALUES (?, ?)", (fuente, texto),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.debug("_agregar_nota_reporte: %s", e)
+
+
+def _leer_y_vaciar_notas_reporte() -> list[str]:
+    """Lee todas las notas acumuladas desde el último reporte y las borra."""
+    try:
+        import sqlite3
+        conn = sqlite3.connect(_NOTAS_REPORTE_DB, timeout=5)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS notas_reporte ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "ts TEXT DEFAULT (datetime('now')), "
+            "fuente TEXT, texto TEXT)"
+        )
+        rows = conn.execute("SELECT texto FROM notas_reporte ORDER BY id").fetchall()
+        conn.execute("DELETE FROM notas_reporte")
+        conn.commit()
+        conn.close()
+        return [r[0] for r in rows]
+    except Exception as e:
+        log.debug("_leer_y_vaciar_notas_reporte: %s", e)
+        return []
+
+
 _monitor_ctx: ContextVar[Optional[str]] = ContextVar("shomer_monitor", default=None)
 
 
@@ -567,15 +615,43 @@ async def watch_devices(bot: Bot) -> None:
 
 # ── 4. Resumen diario 07:00 ──────────────────────────────────────────────────
 
+def _build_server_line() -> str:
+    """CPU/RAM/disco/servicios -- compartido entre el reporte de la mañana
+    y el de la noche (24 ago), para no repetir la misma lógica dos veces."""
+    try:
+        from core import repair as _repair
+        metrics = shomer_api.get_server_metrics()
+        disk = shomer_api.get_disk_usage()
+        svc = _repair.check_services()
+        parts = []
+        if metrics and metrics.get("success"):
+            m = metrics.get("now", {})
+            parts.append(f"CPU {m.get('cpu', 0):.0f}% · RAM {m.get('ram', 0):.0f}%")
+        if disk.get("ok") and disk.get("partitions"):
+            peor = max(disk["partitions"], key=lambda p: p.get("pct", 0))
+            parts.append(f"Disco {peor.get('mount', '?')} {peor.get('pct', 0):.0f}%")
+        if svc:
+            caidos = [_repair.SERVICES[k]["label"] for k, s in svc.items() if s != "active"]
+            parts.append("Servicios ✅" if not caidos else f"⚠️ caídos: {', '.join(caidos)}")
+        return "\n🖥️ " + " · ".join(parts) if parts else ""
+    except Exception as e:
+        log.debug("_build_server_line error: %s", e)
+        return ""
+
+
 async def daily_summary(bot: Bot) -> None:
-    """Envía resumen cada mañana a las 08:00 (America/Bogota — ver TZ del contenedor)."""
+    """Envía resumen cada mañana a las 07:00 (America/Bogota — ver TZ del
+    contenedor). 24 ago: incluye también las notas acumuladas de
+    watch_docker/watch_network_audit/watch_port_errors -- un solo mensaje
+    de la mañana en vez de varios sueltos (ver Sesión 74, grupo "salud del
+    propio Shomer")."""
     global _last_summary_day
     await asyncio.sleep(20)
 
     while True:
         try:
             now = datetime.now()
-            if now.hour == 8 and now.minute < 2 and _last_summary_day != now.day:
+            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.day:
                 _last_summary_day = now.day
                 shomer_ctx = shomer_api.summary_text()
                 daily_health = shomer_api.get_daily_health()
@@ -603,40 +679,55 @@ async def daily_summary(bot: Bot) -> None:
                     ),
                 )
                 ia_lines = _llm.status_lines()
+                server_line = _build_server_line()
 
-                # Servidor (CPU/RAM/disco/servicios) — mismo dato que antes daban
-                # los checks sueltos de madrugada/mediodía/tarde; ahora va en el
-                # único mensaje de la mañana, no interrumpe si está todo bien.
-                server_line = ""
-                try:
-                    from core import repair as _repair
-                    metrics = shomer_api.get_server_metrics()
-                    disk = shomer_api.get_disk_usage()
-                    svc = _repair.check_services()
-                    parts = []
-                    if metrics and metrics.get("success"):
-                        m = metrics.get("now", {})
-                        parts.append(f"CPU {m.get('cpu', 0):.0f}% · RAM {m.get('ram', 0):.0f}%")
-                    if disk.get("ok") and disk.get("partitions"):
-                        peor = max(disk["partitions"], key=lambda p: p.get("pct", 0))
-                        parts.append(f"Disco {peor.get('mount', '?')} {peor.get('pct', 0):.0f}%")
-                    if svc:
-                        caidos = [_repair.SERVICES[k]["label"] for k, s in svc.items() if s != "active"]
-                        parts.append("Servicios ✅" if not caidos else f"⚠️ caídos: {', '.join(caidos)}")
-                    if parts:
-                        server_line = "\n🖥️ " + " · ".join(parts)
-                except Exception as e:
-                    log.debug("daily_summary server block error: %s", e)
+                # 24 ago: notas acumuladas de watch_docker/watch_network_audit/
+                # watch_port_errors desde el reporte anterior -- un solo mensaje.
+                notas = _leer_y_vaciar_notas_reporte()
+                notas_block = "\n\n" + "\n\n".join(notas) if notas else ""
 
                 _tick("daily_summary", alerted=True)
                 await _send(
                     bot,
-                    f"☀️ <b>Resumen diario</b>\n\n{resumen}{visibility_block}{server_line}\n\n"
-                    + "\n".join(ia_lines),
+                    f"☀️ <b>Resumen de la mañana</b>\n\n{resumen}{visibility_block}{server_line}"
+                    f"{notas_block}\n\n" + "\n".join(ia_lines),
                 monitor="daily_summary",
                 )
         except Exception as e:
             _tick("daily_summary", error=str(e)); log.debug("daily_summary error: %s", e)
+        await asyncio.sleep(60)
+
+
+_last_evening_day: Optional[int] = None
+
+
+async def evening_summary(bot: Bot) -> None:
+    """Reporte de cierre a las 22:00 (24 ago, Sesión 74) -- más liviano que
+    el de la mañana: salud del servidor + lo que se acumuló en la libreta
+    desde el reporte de las 07:00 (watch_docker/watch_network_audit/
+    watch_port_errors). Si no hay nada nuevo, avisa "sin novedades" en vez
+    de quedarse callado -- así el técnico sabe que el sistema sigue vivo y
+    de verdad no pasó nada, no que se le olvidó revisar."""
+    global _last_evening_day
+    await asyncio.sleep(30)
+
+    while True:
+        try:
+            now = datetime.now()
+            if now.hour == 22 and now.minute < 2 and _last_evening_day != now.day:
+                _last_evening_day = now.day
+                server_line = _build_server_line()
+                notas = _leer_y_vaciar_notas_reporte()
+                notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
+
+                _tick("evening_summary", alerted=True)
+                await _send(
+                    bot,
+                    f"🌙 <b>Cierre del día</b>{server_line}{notas_block}",
+                    monitor="evening_summary",
+                )
+        except Exception as e:
+            _tick("evening_summary", error=str(e)); log.debug("evening_summary error: %s", e)
         await asyncio.sleep(60)
 
 
@@ -1995,11 +2086,9 @@ async def watch_docker(bot: Bot) -> None:
         if prev_ts:
             mins = int((now_ts - prev_ts) / 60)
             ago = f"{mins} min" if mins < 60 else f"{mins // 60} h"
-            await _send(
-                bot,
-                _a("⚠️", "Agente reiniciado", f"último arranque hace {ago}", raw=True),
-            monitor="watch_docker",
-            )
+            # 24 ago: ya no manda mensaje suelto -- queda anotado para el
+            # próximo reporte (07:00 o 22:00, el que venga primero).
+            _agregar_nota_reporte("watch_docker", f"⚠️ Agente reiniciado — último arranque hace {ago}")
         _tick("watch_docker")
     except Exception as e:
         _tick("watch_docker", error=str(e)); log.debug("watch_docker error: %s", e)
@@ -3356,14 +3445,13 @@ async def watch_network_audit(bot: Bot) -> None:
             last_scan = summary.get("last_scan")
             alerted = False
 
-            # 1. Sin escaneo en 30 días
+            # 1. Sin escaneo en 30 días -- 24 ago: anotado, no mensaje suelto
             if not last_scan:
-                msg = _a(
-                    "🔍", "Auditoría de red pendiente",
-                    f"No hay escaneo registrado. {_HUNTER_RIESGOS_TIPOS} {_HUNTER_RIESGOS_PANEL} "
-                    f"También podés pedirme «escanear la red».",
+                _agregar_nota_reporte(
+                    "watch_network_audit",
+                    f"🔍 Auditoría de red pendiente — no hay escaneo registrado. "
+                    f"{_HUNTER_RIESGOS_TIPOS}",
                 )
-                await _send(bot, msg, monitor="watch_network_audit")
                 _tick("watch_network_audit", alerted=True)
                 await asyncio.sleep(_CHECK_INTERVAL * 4)  # no repetir por 24h
                 continue
@@ -3375,12 +3463,11 @@ async def watch_network_audit(bot: Bot) -> None:
                     dt = datetime.fromisoformat(scan_ts.replace("Z","") + "+00:00")
                     days_ago = (datetime.now(timezone.utc) - dt).days
                     if days_ago >= _NO_AUDIT_DAYS and not _audit_stale_scan_alerted:
-                        msg = _a(
-                            "🔍", "Auditoría de red atrasada",
-                            f"Hace {days_ago} días sin escanear. {_HUNTER_RIESGOS_TIPOS} "
-                            f"{_HUNTER_RIESGOS_PANEL}",
+                        _agregar_nota_reporte(
+                            "watch_network_audit",
+                            f"🔍 Auditoría de red atrasada — hace {days_ago} días sin escanear. "
+                            f"{_HUNTER_RIESGOS_TIPOS}",
                         )
-                        await _send(bot, msg, monitor="watch_network_audit")
                         _audit_stale_scan_alerted = True
                         alerted = True
                 except Exception:
@@ -3402,11 +3489,10 @@ async def watch_network_audit(bot: Bot) -> None:
                     if altos > 0:
                         partes.append(f"{altos} alto{'s' if altos > 1 else ''}")
                     counts = ", ".join(partes)
-                    msg = _a(
-                        "⚠️", "Riesgos de red pendientes",
-                        f"{counts}. {_HUNTER_RIESGOS_TIPOS} {_HUNTER_RIESGOS_PANEL}",
+                    _agregar_nota_reporte(
+                        "watch_network_audit",
+                        f"⚠️ Riesgos de red pendientes — {counts}. {_HUNTER_RIESGOS_TIPOS}",
                     )
-                    await _send(bot, msg, monitor="watch_network_audit")
                     _audit_last_risk_counts = risk_key
                     alerted = True
 
@@ -3453,19 +3539,19 @@ def _save_port_baseline(data: Dict[str, Dict[str, int]]) -> None:
 async def watch_port_errors(bot: Bot) -> None:
     """
     Informe diario de errores de puerto en switches/routers con SNMP.
-    Corre a las 08:00 hora local. Compara contadores actuales contra el
-    baseline del día anterior — reporta solo los incrementos nuevos.
-    Causas y recomendación generadas por IA (Groq).
-    Solo al técnico.
+    24 ago: ya no manda su propio mensaje -- calcula a las 06:58 (2 min
+    antes del reporte de la mañana) y anota, para que daily_summary (07:00)
+    lo encuentre listo. Compara contadores actuales contra el baseline del
+    día anterior — reporta solo los incrementos nuevos. Causas y
+    recomendación generadas por IA (Groq).
     """
     _load_port_baseline()
-    # Esperar hasta las 08:00 del día siguiente para el primer ciclo
     await asyncio.sleep(120)
     while True:
         try:
             now = datetime.now()
-            # Calcular segundos hasta las 08:00
-            target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            # Calcular segundos hasta las 06:58 (2 min antes del reporte 07:00)
+            target = now.replace(hour=6, minute=58, second=0, microsecond=0)
             if now >= target:
                 target = target.replace(day=target.day + 1)
             wait_sec = (target - now).total_seconds()
@@ -3527,19 +3613,15 @@ async def watch_port_errors(bot: Bot) -> None:
             except Exception:
                 diagnosis = "Revisar cables físicos en los puertos con errores, comenzando por el de mayor incremento."
 
-            # Armar mensaje
-            site = os.environ.get("SITE_NAME", "")
-            header = f"📊 <b>INFORME PUERTOS{' — ' + site if site else ''}</b>"
+            # Armar nota para el reporte de la mañana (24 ago: ya no manda solo)
             body = "\n".join(report_lines)
-            msg = (
-                f"{header}\n"
-                f"<code>{datetime.now().strftime('%d/%m/%Y')}</code>\n\n"
-                f"{body}\n\n"
-                f"💡 <i>{diagnosis}</i>\n\n"
-                f"➡️ Empezar por el puerto con más errores nuevos. "
-                f"Cambiar cable físico primero (causa más frecuente)."
+            nota = (
+                f"📊 <b>Errores de puerto</b>\n"
+                f"{body}\n"
+                f"💡 <i>{diagnosis}</i> "
+                f"Empezar por el puerto con más errores nuevos, cable físico primero."
             )
-            await _send(bot, msg, monitor="watch_port_errors")
+            _agregar_nota_reporte("watch_port_errors", nota)
             _tick("watch_port_errors", alerted=True)
 
         except Exception as e:
@@ -3652,6 +3734,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_hunter(bot))
     loop.create_task(watch_devices(bot))
     loop.create_task(daily_summary(bot))
+    loop.create_task(evening_summary(bot))
     loop.create_task(watch_resources(bot))
     loop.create_task(watch_backups(bot))
     loop.create_task(watch_wan_outage(bot))
