@@ -436,7 +436,7 @@ async def _emit_guardian(
         pass
     await _emit(
         bot,
-        origen="watch_guardian_nodes",
+        origen="equipos_red",
         entidad=f"guardian:{ip}",
         metrica="node_status",
         lines=lines,
@@ -1536,7 +1536,7 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                 await _send(
                     bot,
                     _a("✅", f"{len(verify_ok)} nodos recuperados tras reinicio", txt, raw=True),
-                monitor="watch_guardian_nodes",
+                monitor="equipos_red",
                 )
 
             for n in nodes:
@@ -2836,7 +2836,7 @@ async def _process_pulse_ewma_events(bot: Bot, poll_ctx: dict) -> bool:
             await _send(
                 bot,
                 _pulse.format_ewma_degrading(ev),
-                monitor="watch_infra_pulse",
+                monitor="equipos_red",
             )
             try:
                 shomer_api.pulse_alert_ack(ip)
@@ -2847,7 +2847,7 @@ async def _process_pulse_ewma_events(bot: Bot, poll_ctx: dict) -> bool:
             await _send(
                 bot,
                 _pulse.format_ewma_recovered(ev),
-                monitor="watch_infra_pulse",
+                monitor="equipos_red",
             )
             alerted = True
     if len(_infra_pulse_batches_seen) > 30:
@@ -2971,7 +2971,7 @@ async def watch_infra(bot: Bot) -> None:
                                     f"{len(_infra_flap_times[ip])} cambios en {window_h} h",
                                     raw=True,
                                 ),
-                            monitor="watch_infra_flap",
+                            monitor="equipos_red",
                             )
                             _infra_flap_alerted.add(ip)
                             flap_alert = True
@@ -3019,7 +3019,7 @@ async def watch_infra(bot: Bot) -> None:
                                 await _send(
                                     bot,
                                     _pulse.format_blip_message(poll_ctx, last_blip),
-                                    monitor="watch_infra_pulse",
+                                    monitor="equipos_red",
                                 )
                                 eq_alert = True
                                 pulse_alert = True
@@ -3064,7 +3064,7 @@ async def watch_infra(bot: Bot) -> None:
                                 await _send(
                                     bot, _a("🟢", evt, detail, raw=True),
                                     reply_markup=_save_kb_recovery(ip),
-                                    monitor="watch_infra_equipment",
+                                    monitor="equipos_red",
                                 )
                                 eq_alert = True
                             else:
@@ -3086,7 +3086,7 @@ async def watch_infra(bot: Bot) -> None:
                     await _send(
                         bot,
                         _pulse.format_wave_message(_cycle_new_offline, poll_ctx),
-                        monitor="watch_infra_pulse",
+                        monitor="equipos_red",
                     )
                     for item in _cycle_new_offline:
                         _infra_prev_status[item["ip"]] = "offline"
@@ -3103,7 +3103,7 @@ async def watch_infra(bot: Bot) -> None:
                     # igual que le pasaba a OFC-COCINA en Guardian (Sesión 71).
                     for item in _cycle_new_offline:
                         async def _send_first(_bot=bot, _item=item):
-                            await _send(_bot, _item["msg"], monitor="watch_infra_equipment")
+                            await _send(_bot, _item["msg"], monitor="equipos_red")
 
                         from core import incident_escalation as _esc
                         await _esc.handle_event(
@@ -3118,7 +3118,7 @@ async def watch_infra(bot: Bot) -> None:
                 await _send(
                     bot,
                     _pulse.format_wave_recovery(_cycle_recoveries),
-                    monitor="watch_infra_pulse",
+                    monitor="equipos_red",
                 )
                 for item in _cycle_recoveries:
                     _infra_wave_active_ips.pop(item["ip"], None)
@@ -3133,7 +3133,7 @@ async def watch_infra(bot: Bot) -> None:
                             bot,
                             _a("🟢", item["evt"], item["detail"], raw=True),
                             reply_markup=_save_kb_recovery(item["ip"]),
-                            monitor="watch_infra_equipment",
+                            monitor="equipos_red",
                         )
                         eq_alert = True
                     else:
@@ -3167,7 +3167,7 @@ async def watch_infra(bot: Bot) -> None:
                             subtitulo,
                             raw=True,
                         ),
-                    monitor="watch_infra_equipment",
+                    monitor="equipos_red",
                     )
                     _infra_loc_alert_ts[loc_key] = now_ts
                     eq_alert = True
@@ -3188,7 +3188,7 @@ async def watch_infra(bot: Bot) -> None:
                             f"~{mins // 60}h {mins % 60}m sin respuesta",
                             raw=True,
                         ),
-                    monitor="watch_infra_equipment",
+                    monitor="equipos_red",
                     )
                     _infra_stale_reminded.add(ip)
                     eq_alert = True
@@ -3219,7 +3219,7 @@ async def watch_infra(bot: Bot) -> None:
                                 f"{_html.escape(str(name))} — queda ~{toner}%",
                                 raw=True,
                             ),
-                        monitor="watch_infra_printer",
+                        monitor="equipos_red",
                         )
                         _infra_toner_level[ip] = toner
                         pr_alert = True
@@ -3244,7 +3244,7 @@ async def watch_infra(bot: Bot) -> None:
                             f"{_html.escape(str(name))} — sin papel en bandejas activas{tray_hint}",
                             raw=True,
                         ),
-                        monitor="watch_infra_printer",
+                        monitor="equipos_red",
                     )
                     _infra_paper_alerted.add(ip)
                     pr_alert = True
@@ -3270,7 +3270,7 @@ async def watch_infra(bot: Bot) -> None:
                         f"responde ping pero puerto {msgfmt.port_label(port)} no",
                         raw=True,
                     ),
-                monitor="watch_infra_service",
+                monitor="equipos_red",
                 )
                 _infra_tcp_down.add(ip)
                 svc_alert = True
@@ -3287,7 +3287,7 @@ async def watch_infra(bot: Bot) -> None:
                             f"puerto {msgfmt.port_label(d.get('tcp_port', '?'))}",
                             raw=True,
                         ),
-                    monitor="watch_infra_service",
+                    monitor="equipos_red",
                     )
                     svc_alert = True
 
@@ -3326,7 +3326,7 @@ async def watch_infra(bot: Bot) -> None:
                                 _html.escape(port),
                                 raw=True,
                             ),
-                            monitor="watch_infra_snmp",
+                            monitor="equipos_red",
                         )
                         snmp_alert = True
                         _infra_snmp_ports_alerted.setdefault(ip, set()).add(port)
@@ -3340,7 +3340,7 @@ async def watch_infra(bot: Bot) -> None:
                                     f"{_html.escape(str(name))} — {_html.escape(port)} UP",
                                     raw=True,
                                 ),
-                            monitor="watch_infra_snmp",
+                            monitor="equipos_red",
                             )
                             snmp_alert = True
                             _infra_snmp_ports_alerted[ip].discard(port)
@@ -3710,7 +3710,7 @@ async def watch_pending_guardian(bot: Bot) -> None:
                 # camino, la fila se queda "pendiente" y el respaldo de
                 # Guardian (60s) la agarra igual. Marcar antes arriesgaría
                 # perderla en silencio si _send() falla puertas adentro.
-                await _send(bot, row["mensaje"], monitor="guardian_relay", severity="warn")
+                await _send(bot, row["mensaje"], monitor="equipos_red", severity="warn")
                 conn.execute(
                     "UPDATE notificaciones_pendientes SET estado='relevado_bot', "
                     "procesado_at=datetime('now') WHERE id=?",

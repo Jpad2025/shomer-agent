@@ -310,7 +310,7 @@ async def _flush_digest(entity_key: str, row: dict) -> None:
     ]
     await _send_fn(
         _bot, "\n".join(lines), reply_markup=_ack_buttons(ip),
-        monitor="watch_guardian_nodes", severity=row.get("severity") or "warn",
+        monitor="equipos_red", severity=row.get("severity") or "warn",
     )
     _mark_digest_sent(entity_key, now)
     _schedule(entity_key, "ack_timeout", _ack_timeout_sec())
@@ -328,7 +328,7 @@ async def _send_reminder(entity_key: str, row: dict) -> None:
     ]
     await _send_fn(
         _bot, "\n".join(lines), reply_markup=_ack_buttons(ip),
-        monitor="watch_guardian_nodes", severity=row.get("severity") or "warn",
+        monitor="equipos_red", severity=row.get("severity") or "warn",
     )
     _mark_reminder_sent(entity_key, time.time())
     _schedule(entity_key, "reminder_timeout", _reminder_timeout_sec())
@@ -344,7 +344,7 @@ async def _escalate(entity_key: str, row: dict) -> None:
             raw=True,
         ),
     ]
-    await _send_fn(_bot, "\n".join(lines), monitor="watch_guardian_nodes", severity="critical")
+    await _send_fn(_bot, "\n".join(lines), monitor="equipos_red", severity="critical")
     await _notify_coordinator(ip, name, row)
     _set_state(entity_key, "escalated")
     _bump_escalated(entity_key)
@@ -455,7 +455,7 @@ async def handle_event(
                 raw=True,
             ),
         ]
-        await _send_fn(bot, "\n".join(lines), monitor="watch_guardian_nodes", severity=severity)
+        await _send_fn(bot, "\n".join(lines), monitor="equipos_red", severity=severity)
         _schedule(entity_key, "window", _agg_window_sec())
         return True
 
@@ -567,7 +567,7 @@ async def watch_cleanup(bot: Bot) -> None:
                                 raw=True,
                             ),
                         ]
-                        await _send_fn(bot, "\n".join(lines), monitor="watch_guardian_nodes", severity="info")
+                        await _send_fn(bot, "\n".join(lines), monitor="equipos_red", severity="info")
         except Exception as e:
             log.debug("incident_escalation watch_cleanup error: %s", e)
         await asyncio.sleep(600)
