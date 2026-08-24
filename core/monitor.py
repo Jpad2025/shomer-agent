@@ -3597,6 +3597,52 @@ async def watch_memoria_sync(bot: Bot) -> None:
         await asyncio.sleep(MEMORIA_SYNC_INTERVAL)
 
 
+# ── Opción 2 (24 ago) — releva lo que Guardian encola en vez de mandar
+# directo. Formato consistente (mismo _send que todo lo demás, mismo
+# prefijo de sitio, misma auditoría en memoria_alertas + telegram_enviados).
+# Si esto no releva en 60s, shomer_telegram_relay.py (lado network_monitor)
+# lo manda directo como respaldo -- ver ese módulo para el porqué.
+PENDING_GUARDIAN_POLL_SEC = int(os.environ.get("PENDING_GUARDIAN_POLL_SEC", "10"))
+
+
+async def watch_pending_guardian(bot: Bot) -> None:
+    await asyncio.sleep(20)
+    while True:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(_TELEGRAM_ENVIADOS_DB, timeout=5)
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS notificaciones_pendientes ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "ts TEXT DEFAULT (datetime('now')), "
+                "mensaje TEXT NOT NULL, "
+                "estado TEXT DEFAULT 'pendiente', "
+                "procesado_at TEXT)"
+            )
+            rows = conn.execute(
+                "SELECT id, mensaje FROM notificaciones_pendientes WHERE estado='pendiente'"
+            ).fetchall()
+            for row in rows:
+                # Marcar DESPUÉS de enviar -- si el envío se cae a mitad de
+                # camino, la fila se queda "pendiente" y el respaldo de
+                # Guardian (60s) la agarra igual. Marcar antes arriesgaría
+                # perderla en silencio si _send() falla puertas adentro.
+                await _send(bot, row["mensaje"], monitor="guardian_relay", severity="warn")
+                conn.execute(
+                    "UPDATE notificaciones_pendientes SET estado='relevado_bot', "
+                    "procesado_at=datetime('now') WHERE id=?",
+                    (row["id"],),
+                )
+                conn.commit()
+            conn.close()
+            _tick("watch_pending_guardian")
+        except Exception as e:
+            _tick("watch_pending_guardian", error=str(e))
+            log.debug("watch_pending_guardian error: %s", e)
+        await asyncio.sleep(PENDING_GUARDIAN_POLL_SEC)
+
+
 def start_all(bot: Bot) -> None:
     triage.init(bot, _send)
     from core import incident_escalation
@@ -3632,6 +3678,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_infra(bot))
     loop.create_task(watch_active_threats(bot))
     loop.create_task(watch_port_errors(bot))
+    loop.create_task(watch_pending_guardian(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
         "Monitores iniciados (29 tasks) — triage=%s auto_tasks=%s escalation=%s",
