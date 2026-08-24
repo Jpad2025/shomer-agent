@@ -462,22 +462,30 @@ async def watch_hunter(bot: Bot) -> None:
     """Cada 60s detecta nuevas IPs bloqueadas y las explica."""
     global _blocked_ips
     await asyncio.sleep(15)  # esperar que el bot esté listo
-
-    # Primera lectura: cargar el estado actual sin alertar.
-    # Evita spam al reiniciar el container cuando ya hay IPs bloqueadas.
-    try:
-        seed = shomer_api.get_blocked_ips()
-        if seed:
-            _blocked_ips = {item["ip"] for item in seed}
-            log.info("watch_hunter: %d IPs pre-existentes cargadas (sin alerta)", len(_blocked_ips))
-    except Exception:
-        pass
+    _seeded = False
 
     while True:
         try:
             data = shomer_api.get_blocked_ips()
             if data:
                 current = {item["ip"] for item in data}
+
+                # Primera lectura real (dentro del loop): carga el estado sin
+                # alertar y evita spam al reiniciar el container. Si el
+                # primer intento falla (transitorio, API aún no lista), se
+                # reintenta el próximo ciclo en vez de arrancar el loop
+                # "sembrado" con un set vacío para siempre.
+                if not _seeded:
+                    _blocked_ips = current
+                    _seeded = True
+                    if _blocked_ips:
+                        log.info(
+                            "watch_hunter: %d IPs pre-existentes cargadas (sin alerta)",
+                            len(_blocked_ips),
+                        )
+                    _tick("watch_hunter")
+                    await asyncio.sleep(60)
+                    continue
                 nuevas  = current - _blocked_ips
                 now     = time.time()
                 for ip in nuevas:
@@ -1244,24 +1252,33 @@ async def watch_pipeline(bot: Bot) -> None:
     global _pipeline_alerted
     from core import repair
     await asyncio.sleep(90)
-
-    # Primera lectura: si el pipeline ya está degradado al arrancar,
-    # marcar como notificado para no re-alertar en cada reinicio del container.
-    try:
-        seed = shomer_api.get_pipeline_health()
-        if seed and not seed.get("overall_ok", True):
-            _pipeline_alerted = True
-            last_age = seed.get("checks", {}).get("last_event_age_sec")
-            age_str = f" (último evento hace {int(last_age // 60)} min)" if last_age else ""
-            log.info("watch_pipeline: pipeline ya degradado al arrancar%s — suprimiendo alerta inicial", age_str)
-    except Exception:
-        pass
+    _seeded = False
 
     while True:
         try:
             data = shomer_api.get_pipeline_health()
             if data:
                 ok = data.get("overall_ok", True)
+
+                # Primera lectura real (dentro del loop, no antes -- si falla
+                # se reintenta el próximo ciclo): si el pipeline ya está
+                # degradado al arrancar, marcar como notificado para no
+                # re-alertar en cada reinicio del container.
+                if not _seeded:
+                    _seeded = True
+                    if not ok:
+                        _pipeline_alerted = True
+                        checks = data.get("checks") or {}
+                        last_age = checks.get("last_event_age_sec")
+                        age_str = f" (último evento hace {int(last_age // 60)} min)" if last_age else ""
+                        log.info(
+                            "watch_pipeline: pipeline ya degradado al arrancar%s — suprimiendo alerta inicial",
+                            age_str,
+                        )
+                    _tick("watch_pipeline")
+                    await asyncio.sleep(180)
+                    continue
+
                 # Alertar en cada transición OK→degradado.
                 # La semilla al arrancar ya evita el falso positivo de restart.
                 if not ok and not _pipeline_alerted:
@@ -1963,21 +1980,30 @@ async def watch_hunter_verify(bot: Bot) -> None:
     await asyncio.sleep(100)
 
     _known_blocked: Set[str] = set()
-    try:
-        seed = shomer_api.get_blocked_ips() or []
-        _known_blocked = {item["ip"] for item in seed if item.get("ip")}
-        if _known_blocked:
-            log.info(
-                "watch_hunter_verify: %d IP(s) pre-existentes (sin re-verificación)",
-                len(_known_blocked),
-            )
-    except Exception:
-        pass
+    _seeded = False
 
     while True:
         try:
             blocked_data = shomer_api.get_blocked_ips() or []
             current_blocked = {item["ip"] for item in blocked_data}
+
+            # Primera lectura real (dentro del loop, no antes -- si falla se
+            # reintenta el próximo ciclo en vez de quedar sin sembrar para
+            # siempre). Evita spam al reiniciar el container: sin esto, un
+            # solo fallo transitorio de red durante el arranque hacía que
+            # TODAS las IPs privadas ya bloqueadas se reportaran como
+            # "IP interna bloqueada" de golpe en el primer ciclo real.
+            if not _seeded:
+                _known_blocked = current_blocked
+                _seeded = True
+                if _known_blocked:
+                    log.info(
+                        "watch_hunter_verify: %d IP(s) pre-existentes (sin re-verificación)",
+                        len(_known_blocked),
+                    )
+                _tick("watch_hunter_verify")
+                await asyncio.sleep(60)
+                continue
 
             # Nuevas IPs bloqueadas desde el último tick
             nuevas = current_blocked - _known_blocked
