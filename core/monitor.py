@@ -174,7 +174,7 @@ _DEV_CHAT_ID = os.environ.get("AGENT_DEVELOPER_CHAT_ID", "").strip()
 # Estado interno — detectar cambios
 _blocked_ips: Set[str] = set()
 _device_status: Dict[str, str] = {}   # ip -> "online"|"offline"
-_last_summary_day: Optional[int] = None
+_last_summary_day: Optional[object] = None
 _offline_counts: Dict[str, int] = {}  # ip -> ticks consecutivos offline
 
 # Ventana para considerar un bloqueo "reciente" (evento nuevo vs pre-existente al arrancar)
@@ -659,8 +659,8 @@ async def daily_summary(bot: Bot) -> None:
     while True:
         try:
             now = datetime.now()
-            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.day:
-                _last_summary_day = now.day
+            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.date():
+                _last_summary_day = now.date()
                 shomer_ctx = shomer_api.summary_text()
                 daily_health = shomer_api.get_daily_health()
                 visibility_block = ""
@@ -706,7 +706,7 @@ async def daily_summary(bot: Bot) -> None:
         await asyncio.sleep(60)
 
 
-_last_evening_day: Optional[int] = None
+_last_evening_day: Optional[object] = None
 
 
 async def evening_summary(bot: Bot) -> None:
@@ -722,8 +722,8 @@ async def evening_summary(bot: Bot) -> None:
     while True:
         try:
             now = datetime.now()
-            if now.hour == 22 and now.minute < 2 and _last_evening_day != now.day:
-                _last_evening_day = now.day
+            if now.hour == 22 and now.minute < 2 and _last_evening_day != now.date():
+                _last_evening_day = now.date()
                 server_line = _build_server_line()
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
@@ -829,7 +829,7 @@ async def watch_resources(bot: Bot) -> None:
 
 # ── 6. Backup por equipo — horario configurable ──────────────────────────────
 
-_backup_alerted: Dict[str, int] = {}   # device_name -> último día alertado
+_backup_alerted: Dict[str, object] = {}   # device_name -> última fecha alertada (date)
 
 async def watch_backups(bot: Bot) -> None:
     """
@@ -862,10 +862,10 @@ async def watch_backups(bot: Bot) -> None:
 
                 if now.hour != check_hour or now.minute >= 5:
                     continue
-                if _backup_alerted.get(nombre) == now.day:
+                if _backup_alerted.get(nombre) == now.date():
                     continue
 
-                _backup_alerted[nombre] = now.day
+                _backup_alerted[nombre] = now.date()
                 problema = None
 
                 if not ultimo:
@@ -1189,7 +1189,7 @@ async def watch_disk(bot: Bot) -> None:
 
 # ── TASK-005: truncar logs Shomer grandes (03:00 diario) ─────────────────────
 
-_last_log_truncate_day: Optional[int] = None
+_last_log_truncate_day: Optional[object] = None
 
 
 async def watch_log_truncate(bot: Bot) -> None:
@@ -1203,10 +1203,10 @@ async def watch_log_truncate(bot: Bot) -> None:
             if (
                 now.hour == 3
                 and now.minute < 5
-                and _last_log_truncate_day != now.day
+                and _last_log_truncate_day != now.date()
                 and auto_tasks.get_task_mode("TASK-005") != "off"
             ):
-                _last_log_truncate_day = now.day
+                _last_log_truncate_day = now.date()
                 await auto_tasks.maybe_run("TASK-005", bot, {}, _send, _send_critical)
             _tick("watch_log_truncate")
         except Exception as e:
@@ -1232,10 +1232,10 @@ async def watch_protector_sample(bot: Bot) -> None:
                 now.weekday() == 6
                 and now.hour == 8
                 and now.minute < 5
-                and _last_protector_sample_week != now.isocalendar()[1]
+                and _last_protector_sample_week != now.isocalendar()[:2]
                 and auto_tasks.get_task_mode("TASK-006") != "off"
             ):
-                _last_protector_sample_week = now.isocalendar()[1]
+                _last_protector_sample_week = now.isocalendar()[:2]
                 await auto_tasks.maybe_run("TASK-006", bot, {}, _send, _send_critical)
             _tick("watch_protector_sample")
         except Exception as e:
@@ -1840,8 +1840,8 @@ async def weekly_backup(bot: Bot) -> None:
             now = datetime.now()
             # Domingo = 6, entre 02:00 y 02:05
             if (now.weekday() == 6 and now.hour == 2 and now.minute < 5
-                    and _last_weekly_backup_week != now.isocalendar()[1]):
-                _last_weekly_backup_week = now.isocalendar()[1]
+                    and _last_weekly_backup_week != now.isocalendar()[:2]):
+                _last_weekly_backup_week = now.isocalendar()[:2]
                 ok, msg, size_mb = backup_manager.create_backup()
                 if ok:
                     log.info("Backup semanal OK: %s — sin Telegram", msg)
