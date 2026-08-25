@@ -665,7 +665,6 @@ async def daily_summary(bot: Bot) -> None:
         try:
             now = datetime.now()
             if now.hour == 7 and now.minute < 2 and _last_summary_day != now.date():
-                _last_summary_day = now.date()
                 shomer_ctx = shomer_api.summary_text()
                 daily_health = shomer_api.get_daily_health()
                 visibility_block = ""
@@ -699,13 +698,18 @@ async def daily_summary(bot: Bot) -> None:
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else ""
 
-                _tick("daily_summary", alerted=True)
                 await _send(
                     bot,
                     f"☀️ <b>Resumen de la mañana</b>\n\n{resumen}{visibility_block}{server_line}"
                     f"{notas_block}\n\n" + "\n".join(ia_lines),
                 monitor="daily_summary",
                 )
+                # Marcar como enviado solo tras el _send real -- si algo antes
+                # falla (API, LLM, etc.) se reintenta en el próximo ciclo (dentro
+                # de la ventana hour==7/minute<2) en vez de perder el reporte
+                # del día entero en silencio (Sesión 75).
+                _last_summary_day = now.date()
+                _tick("daily_summary", alerted=True)
         except Exception as e:
             _tick("daily_summary", error=str(e)); log.debug("daily_summary error: %s", e)
         await asyncio.sleep(60)
@@ -728,17 +732,20 @@ async def evening_summary(bot: Bot) -> None:
         try:
             now = datetime.now()
             if now.hour == 22 and now.minute < 2 and _last_evening_day != now.date():
-                _last_evening_day = now.date()
                 server_line = _build_server_line()
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
 
-                _tick("evening_summary", alerted=True)
                 await _send(
                     bot,
                     f"🌙 <b>Cierre del día</b>{server_line}{notas_block}",
                     monitor="evening_summary",
                 )
+                # Marcar como enviado solo tras el _send real -- mismo criterio
+                # que daily_summary (Sesión 75): un fallo antes del envío se
+                # reintenta en el próximo ciclo en vez de perder el reporte.
+                _last_evening_day = now.date()
+                _tick("evening_summary", alerted=True)
         except Exception as e:
             _tick("evening_summary", error=str(e)); log.debug("evening_summary error: %s", e)
         await asyncio.sleep(60)
