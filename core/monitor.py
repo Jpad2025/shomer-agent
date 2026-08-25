@@ -176,6 +176,7 @@ _blocked_ips: Set[str] = set()
 _device_status: Dict[str, str] = {}   # ip -> "online"|"offline"
 _last_summary_day: Optional[object] = None
 _offline_counts: Dict[str, int] = {}  # ip -> ticks consecutivos offline
+_device_down_alerted: Set[str] = set()  # ips con alerta de caída ya enviada (evita "recuperado" huérfano)
 
 # Ventana para considerar un bloqueo "reciente" (evento nuevo vs pre-existente al arrancar)
 HUNTER_NEW_BLOCK_WINDOW_SECS = 600  # 10 minutos
@@ -586,7 +587,6 @@ async def watch_devices(bot: Bot) -> None:
                 nombre = dev.get("name", ip)
                 result = dm.ping_device(ip)
                 nuevo = "online" if result["ok"] else "offline"
-                anterior = _device_status.get(ip)
 
                 if nuevo == "offline":
                     _offline_counts[ip] = _offline_counts.get(ip, 0) + 1
@@ -595,6 +595,7 @@ async def watch_devices(bot: Bot) -> None:
 
                 # Alerta caída — solo tras 3 ticks consecutivos (6 min)
                 if nuevo == "offline" and _offline_counts.get(ip, 0) == 3:
+                    _device_down_alerted.add(ip)
                     await _send_critical(
                         bot,
                         _a(
@@ -605,8 +606,12 @@ async def watch_devices(bot: Bot) -> None:
                     monitor="watch_devices",
                     )
 
-                # Confirmación recuperación
-                if nuevo == "online" and anterior == "offline":
+                # Confirmación recuperación -- solo si hubo alerta de caída real
+                # antes (blips de 1-2 ciclos, bajo el umbral de 3, no generan un
+                # "recuperado" huérfano sin su "caído" correspondiente -- mismo
+                # criterio que watch_guardian_nodes/watch_groq, ver Sesión 75).
+                if nuevo == "online" and ip in _device_down_alerted:
+                    _device_down_alerted.discard(ip)
                     await _send(
                         bot,
                         _a("✅", "Equipo recuperado", msgfmt.host(nombre, ip), raw=True),
