@@ -237,7 +237,8 @@ def active_provider() -> str:
             return f"groq (openai no disponible: {_oai.availability_error()})"
         except Exception:
             return "groq (openai no importable)"
-    return "groq (llama-3.3-70b)"
+    from core import groq_helper as _gh
+    return f"groq ({_gh.GROQ_MODEL})"
 
 
 def status_lines(*, html: bool = True) -> list[str]:

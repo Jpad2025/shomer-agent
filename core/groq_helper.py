@@ -13,6 +13,12 @@ from groq import Groq, RateLimitError, APIConnectionError, APITimeoutError, APIS
 log = logging.getLogger("groq-helper")
 _client = None
 
+# 24 ago 2026: llama-3.3-70b-versatile fue retirado del catálogo Groq (404
+# model_not_found desde al menos el 23 ago -- verificado con models.list()
+# real que ya no aparece). Configurable por env var para que un futuro
+# retiro de modelo no vuelva a requerir un deploy de código.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+
 _CAMPO_DIR = "/app/docs/campo"
 _DEV_DIR = "/app/docs/developer"
 
@@ -345,7 +351,7 @@ def _register_usage(resp, endpoint: str = "chat") -> None:
             if tokens > 0:
                 from core.memory import record_tokens
                 model = getattr(
-                    getattr(resp, "model", None) or "llama-3.3-70b-versatile", "__str__", str
+                    getattr(resp, "model", None) or GROQ_MODEL, "__str__", str
                 )()
                 record_tokens(tokens, model=model, endpoint=endpoint)
     except Exception:
@@ -398,7 +404,7 @@ def _call_groq(messages: list[dict], max_tokens: int, background: bool = False) 
             return budget_msg
     try:
         resp = _get_client().chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.1,
@@ -411,7 +417,7 @@ def _call_groq(messages: list[dict], max_tokens: int, background: bool = False) 
         time.sleep(4)
         try:
             resp = _get_client().chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=GROQ_MODEL,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=0.1,
@@ -449,7 +455,7 @@ def _call_groq(messages: list[dict], max_tokens: int, background: bool = False) 
             time.sleep(6)
             try:
                 resp = _get_client().chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=GROQ_MODEL,
                     messages=messages,
                     max_tokens=max_tokens,
                     temperature=0.1,
@@ -550,7 +556,7 @@ def chat(history: list[dict], level: str = "tecnico") -> str:
 
     def _do_create(msgs, use_tools: bool):
         kwargs: dict = dict(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             messages=msgs,
             max_tokens=max_tokens,
             temperature=0.1,
