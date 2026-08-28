@@ -41,6 +41,8 @@ _PROMPT_TEMPLATE = (
     "NO agregues candidatos nuevos — describí únicamente los de la lista. Si un "
     "candidato no es realmente preocupante (ej. parpadeos de 30-60s que se "
     "recuperan solos), decilo así tal cual, no lo infles a algo grave. "
+    "Sé breve: máximo una frase corta por campo — la respuesta debe entrar "
+    "completa dentro del límite de tokens de salida. "
     "Responde ÚNICAMENTE JSON válido, lista de objetos: "
     '{{"entidad": "...", "patron_descripcion": "...", "impacto": "...", '
     '"sugerencia_tecnica": "..."}}.\n\n'
@@ -144,6 +146,46 @@ def _tendencia_entidad(entity_ip: str, entity_name: str) -> dict:
     return {"semana_actual": c7, "semana_previa": c14, "tendencia": tend}
 
 
+def _salvage_truncated_json_array(text: str) -> List[Dict[str, Any]]:
+    """Recupera los objetos completos de un array JSON `[{...}, {...}, ...]`
+    cortado a mitad de camino (típico cuando la salida del LLM choca contra
+    max_tokens). Cuenta llaves respetando strings/escapes y corta justo
+    después del último `}` de nivel superior antes de intentar json.loads
+    de nuevo. Si no hay ningún objeto completo, devuelve []."""
+    text = text.strip()
+    if not text.startswith("["):
+        return []
+    depth = 0
+    in_string = False
+    escape = False
+    last_complete_end = None
+    for i, ch in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                last_complete_end = i
+    if last_complete_end is None:
+        return []
+    salvaged = text[: last_complete_end + 1] + "]"
+    try:
+        data = json.loads(salvaged)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
 def run_pattern_detection_sync() -> List[Dict[str, Any]]:
     """Síncrono a propósito — se llama desde asyncio.to_thread() en el watcher."""
     from core import groq_helper
@@ -192,16 +234,27 @@ def run_pattern_detection_sync() -> List[Dict[str, Any]]:
         log.info("pattern_analysis: Groq sin respuesta útil (límite/plan free) — se omite este ciclo")
         return []
 
+    cleaned = out.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").lstrip("json").strip()
     try:
-        cleaned = out.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`").lstrip("json").strip()
         hallazgos = json.loads(cleaned)
         if not isinstance(hallazgos, list):
             return []
     except Exception as e:
-        log.warning("pattern_analysis: respuesta no es JSON válido (%s): %s", e, out[:200])
-        return []
+        # Con varios candidatos reales (producción) la respuesta a veces se corta
+        # a mitad de un string por el tope de max_tokens -- en vez de descartar
+        # todo el lote, rescatamos los objetos que sí quedaron completos antes
+        # del corte (ver _salvage_truncated_json_array).
+        hallazgos = _salvage_truncated_json_array(cleaned)
+        if hallazgos:
+            log.info(
+                "pattern_analysis: respuesta JSON truncada -- rescatados %d hallazgo(s) completos",
+                len(hallazgos),
+            )
+        else:
+            log.warning("pattern_analysis: respuesta no es JSON válido (%s): %s", e, out[:200])
+            return []
 
     guardados = []
     actualizados = 0
