@@ -3064,12 +3064,31 @@ async def watch_infra(bot: Bot) -> None:
                     continue
                 mins = _infra_duration_mins(d.get("state_duration"))
                 if mins >= _INFRA_STALE_MINS:
+                    name = d.get("name", ip)
+                    # Tarea pendiente 2, opción 3 (2 sep 2026, extendido 3 sep):
+                    # este recordatorio es un mecanismo aparte del aviso inicial
+                    # -- también debe respetar patrón crónico ya diagnosticado,
+                    # si no, un flapper conocido (ej. Bixolon .243) sigue
+                    # generando "sigue caído" cada vez que supera el umbral.
+                    _pat = {}
+                    try:
+                        from core import pattern_analysis as _pa
+                        _pat = _pa.get_pattern_for_entity(entity_ip=ip, entity_name=name) or {}
+                    except Exception:
+                        pass
+                    if _pat.get("ocurrencias", 0) >= _CHRONIC_ALERT_MIN_OCURRENCIAS:
+                        from core import incident_escalation as _esc
+                        _esc.record_filtered_event(
+                            ip, name, "watch_infra", motivo="patron_cronico_recordatorio",
+                        )
+                        _infra_stale_reminded.add(ip)
+                        continue
                     icon = d.get("icon", "📡")
                     await _send(
                         bot,
                         _a(
                             "🔴", "Equipo sigue caído",
-                            f"{msgfmt.host(d.get('name', ip), ip)} — "
+                            f"{msgfmt.host(name, ip)} — "
                             f"~{mins // 60}h {mins % 60}m sin respuesta",
                             raw=True,
                         ),
