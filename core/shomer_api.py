@@ -122,6 +122,25 @@ def get_pipeline_health():
 def get_backup_health():
     return _get("/backups/health")
 
+def get_mac_reconcile_recent(hours: int = 24) -> list:
+    """Cambios de IP-por-MAC aplicados por network_monitor en las últimas N horas."""
+    DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
+    try:
+        con = _sq.connect(DB, uri=True)
+        con.row_factory = _sq.Row
+        try:
+            rows = con.execute(
+                "SELECT ts, fuente, name, mac, ip_vieja, ip_nueva FROM mac_reconcile_log "
+                "WHERE datetime(ts) >= datetime('now', ?) ORDER BY ts DESC",
+                (f"-{int(hours)} hours",),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            con.close()
+    except Exception:
+        return []
+
+
 def get_backup_devices() -> list:
     DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
     try:
@@ -1012,6 +1031,22 @@ def summary_text() -> str:
             lines.append(f"  • …y {extra} más caídos")
         if infra.get("low_toner"):
             lines.append(f"Impresoras con tóner bajo: {len(infra['low_toner'])}")
+    # Pedido Juan Pablo (3 sep 2026): que el resumen diario siempre diga algo
+    # sobre reconciliación IP-por-MAC, incluso cuando no hubo cambios -- para
+    # que el técnico sepa que el sistema sí revisó, no que se le olvidó.
+    reconciliados = get_mac_reconcile_recent(24)
+    if reconciliados:
+        lines.append(f"Cambios de IP por MAC (24h): {len(reconciliados)} equipo(s)")
+        for r in reconciliados[:8]:
+            lines.append(
+                f"  • {r.get('name', '?')} ({r.get('fuente', '?')}) — "
+                f"{r.get('ip_vieja', '?')} → {r.get('ip_nueva', '?')}"
+            )
+        extra = len(reconciliados) - 8
+        if extra > 0:
+            lines.append(f"  • …y {extra} más")
+    else:
+        lines.append("Cambios de IP por MAC (24h): ninguno")
     daily = get_daily_health()
     if daily.get("success"):
         if daily.get("text_blips"):
