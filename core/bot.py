@@ -268,13 +268,13 @@ def _ayuda_text() -> str:
         f"/reboot &lt;ip&gt; — reiniciar AP o equipo (<i>/reiniciar</i> igual)\n"
         f"/investigar &lt;ip|nombre&gt; — reporte profundo: perfil Tracker + historial + patrones\n"
         f"/clientes &lt;ip&gt; — dispositivos WiFi conectados al AP\n"
-        f"/modo on|off — pausar reboots automáticos (<i>/mantenimiento</i> igual)\n"
-        f"<i>Alias:</i> /guardian_equipos · /guardian_diagnostico · /guardian_reiniciar · "
-        f"/guardian_clientes · /guardian_mantenimiento\n\n"
+        f"/modo on|off — pausar reboots automáticos (<i>/mantenimiento</i> igual)\n\n"
 
         f"<b>🏗️ Infra</b> (cámaras, switches, servidores, impresoras, NAS)\n"
         f"/infra — lista todos los equipos Infra\n"
         f"/infra &lt;ip&gt; — conexión: ping, TCP, SNMP, tóner (impresoras)\n"
+        f"/criticidad &lt;ip&gt; — ver tipo/criticidad de negocio del equipo\n"
+        f"/criticidad &lt;ip&gt; &lt;tipo&gt; — cambiarlo (ej. pos, router, printer)\n"
         f"/puertos &lt;ip&gt; — puertos SNMP UP/DOWN, tráfico y errores (switch/router/server)\n"
         f"Panel web: Infraestructura — agregar equipos y comunidad SNMP\n\n"
 
@@ -284,7 +284,7 @@ def _ayuda_text() -> str:
         f"/liberar — ver IPs bloqueadas y liberar con botón\n"
         f"/bloquear &lt;ip&gt; — bloquear IP en firewall\n"
         f"/desbloquear &lt;ip&gt; — liberar IP bloqueada\n"
-        f"<i>Alias:</i> /autobloqueo · /hunter_alertas · /hunter_bloquear · /hunter_desbloquear\n\n"
+        f"<i>Alias:</i> /autobloqueo (igual que /seguro)\n\n"
 
         f"<b>🛡️ Protector</b> (backups)\n"
         f"Panel web <code>/backups</code> — programar, sync B2, restaurar\n"
@@ -297,16 +297,14 @@ def _ayuda_text() -> str:
         f"/guardar &lt;ip&gt; &lt;descripción&gt; — guardar qué pasó y cómo se resolvió\n"
         f"/historial — últimos cambios del bot (bloqueos, reboots…)\n"
         f"/bitacora [horas|csv] — fallos guardados en memoria.db (consulta remediación)\n"
-        f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo (ver /historial)\n"
-        f"<i>Alias:</i> /shomer_historial · /shomer_revertir · /shomer_nueva_consulta\n\n"
+        f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo/mantenimiento (ver /historial)\n\n"
 
         f"<b>🛠️ Instalación</b>\n"
         f"/instalar — guía paso a paso del sitio\n"
         f"/usuario — crear usuario de servicio shomer (Linux/Mac/Windows)\n"
         f"/verificar — checklist final de instalación\n"
         f"/agregar &lt;ip&gt; &lt;nombre&gt; [vendor] — equipo extra en el agente\n"
-        f"/eliminar &lt;ip&gt; — quitar equipo del agente\n"
-        f"<i>Alias:</i> /diag · /reiniciar · /mantenimiento · /guardian_* · /hunter_* · /shomer_salud\n\n"
+        f"/eliminar &lt;ip&gt; — quitar equipo del agente\n\n"
 
         f"<b>📡 Monitores automáticos</b> (alertan solos — /monitores o /salud monitores)\n"
         + "\n".join(monitor_lines)
@@ -655,6 +653,87 @@ async def cmd_infra(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await _infra_list_impl(update.message, ctx)
     else:
         await _infra_detail_impl(update.message, ctx, args[0])
+
+
+_TIPOS_INFRA = {
+    "generic": "Genérico", "ap": "AP WiFi", "router": "Router", "switch": "Switch",
+    "server": "Servidor", "nas": "NAS", "camera": "Cámara", "printer": "Impresora",
+    "pos": "POS (datáfono)", "reader": "Lectora", "controller": "Controladora",
+    "pc": "PC", "phone": "Teléfono IP", "ups": "UPS",
+}
+_TIPOS_CRITICOS = {"pos", "router", "server", "controller", "switch"}
+
+
+async def cmd_criticidad(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Ver o cambiar el tipo de equipo Infra (Tarea pendiente 2, opción 4: los
+    tipos pos/router/server/controller/switch avisan de inmediato si caen; el
+    resto espera al resumen). Pedido Juan Pablo 3 sep 2026: poder hacerlo
+    también por Telegram, no solo desde el panel web."""
+    level = await _guard(update)
+    if not level:
+        return
+    if not ctx.args:
+        opciones = "\n".join(f"  <code>{k}</code> — {v}" for k, v in _TIPOS_INFRA.items())
+        await update.message.reply_text(
+            "Uso: <code>/criticidad &lt;ip&gt;</code> — ver tipo actual\n"
+            "     <code>/criticidad &lt;ip&gt; &lt;tipo&gt;</code> — cambiar tipo\n\n"
+            f"<b>Tipos disponibles:</b>\n{opciones}\n\n"
+            f"<i>Críticos (avisan de inmediato si caen): "
+            f"{', '.join(sorted(_TIPOS_CRITICOS))}</i>",
+            parse_mode=PM,
+        )
+        return
+
+    ip = ctx.args[0]
+    dev = shomer_api.find_infra_device_by_ip(ip)
+    if not dev:
+        await update.message.reply_text(
+            f"❌ No encontré <code>{fmt.e(ip)}</code> en Infra. Verificá con /infra.",
+            parse_mode=PM,
+        )
+        return
+
+    if len(ctx.args) == 1:
+        tipo_actual = dev.get("device_type", "generic")
+        criticidad = "🔴 crítico (avisa de inmediato)" if tipo_actual in _TIPOS_CRITICOS \
+            else "🟢 no crítico (espera al resumen)"
+        await update.message.reply_text(
+            f"<b>{fmt.e(dev.get('name', ip))}</b> (<code>{fmt.e(ip)}</code>)\n"
+            f"Tipo: <b>{_TIPOS_INFRA.get(tipo_actual, tipo_actual)}</b> — {criticidad}\n\n"
+            f"Para cambiarlo: <code>/criticidad {fmt.e(ip)} &lt;tipo&gt;</code>",
+            parse_mode=PM,
+        )
+        return
+
+    tipo_nuevo = ctx.args[1].lower()
+    if tipo_nuevo not in _TIPOS_INFRA:
+        await update.message.reply_text(
+            f"❌ Tipo inválido: <code>{fmt.e(tipo_nuevo)}</code>.\n"
+            f"Usa <code>/criticidad</code> sin argumentos para ver la lista.",
+            parse_mode=PM,
+        )
+        return
+
+    tipo_anterior = dev.get("device_type", "generic")
+    ok, resp = shomer_api.edit_infra_device(dev["id"], device_type=tipo_nuevo)
+    if ok:
+        changelog.log_change(
+            update.effective_user.id, level, "edit_device_type", ip,
+            details=f"{tipo_anterior} → {tipo_nuevo}",
+            reverse_data={"type": "edit_device_type", "device_id": dev["id"], "device_type": tipo_anterior},
+        )
+        criticidad = "🔴 crítico (avisa de inmediato)" if tipo_nuevo in _TIPOS_CRITICOS \
+            else "🟢 no crítico (espera al resumen)"
+        await update.message.reply_text(
+            f"✅ <b>{fmt.e(dev.get('name', ip))}</b> ahora es tipo "
+            f"<b>{_TIPOS_INFRA[tipo_nuevo]}</b> — {criticidad}",
+            parse_mode=PM,
+        )
+    else:
+        detalle = resp.get("detail") if isinstance(resp, dict) else resp
+        await update.message.reply_text(
+            f"❌ No se pudo actualizar: {fmt.e(str(detalle))}", parse_mode=PM,
+        )
 
 
 async def cmd_puertos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2066,10 +2145,10 @@ async def cmd_revertir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 "⛔ Solo podés deshacer cambios que hiciste vos mismo.", parse_mode=PM
             )
             return
-        if action not in ("block", "unblock"):
+        if action not in ("block", "unblock", "maintenance", "edit_device_type"):
             await update.message.reply_text(
-                "⛔ Solo podés deshacer bloqueos y desbloqueos.\n"
-                "Para otros cambios contactá a soporte USB.",
+                "⛔ Solo podés deshacer bloqueos, desbloqueos, modo mantenimiento "
+                "y cambios de tipo de equipo.\nPara otros cambios contactá a soporte USB.",
                 parse_mode=PM,
             )
             return
@@ -2371,9 +2450,16 @@ async def cb_instalar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── /mantenimiento ────────────────────────────────────────────────────────────
 
-async def _mantenimiento_set(message, on: bool):
+async def _mantenimiento_set(message, on: bool, user_id=None, level: str = ""):
+    estado_anterior = shomer_api.get_maintenance()
     ok = shomer_api.set_maintenance(on)
     if ok:
+        if user_id is not None:
+            changelog.log_change(
+                user_id, level, "maintenance", "global",
+                details=f"{'activado' if on else 'desactivado'}",
+                reverse_data={"type": "maintenance", "on": estado_anterior},
+            )
         if on:
             await message.reply_text(
                 fmt.card("🔧", "Mantenimiento ACTIVADO", [
@@ -2398,7 +2484,10 @@ async def cmd_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not level:
         return
     if ctx.args and ctx.args[0].lower() in ("on", "off"):
-        await _mantenimiento_set(update.message, ctx.args[0].lower() == "on")
+        await _mantenimiento_set(
+            update.message, ctx.args[0].lower() == "on",
+            user_id=update.effective_user.id, level=level,
+        )
         return
     activo = shomer_api.get_maintenance()
     estado = "🔧 <b>ACTIVO</b> — reboots automáticos pausados" if activo else "✅ <b>Inactivo</b> — reboots normales"
@@ -2417,11 +2506,14 @@ async def cmd_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    if not await _guard(update):
+    level = await _guard(update)
+    if not level:
         return
     on = query.data.split(":")[1] == "on"
     await query.edit_message_reply_markup(reply_markup=None)
-    await _mantenimiento_set(query.message, on)
+    await _mantenimiento_set(
+        query.message, on, user_id=update.effective_user.id, level=level,
+    )
 
 
 async def cb_salud(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2834,6 +2926,7 @@ def run():
         # Red
         ("equipos",        cmd_equipos),
         ("infra",          cmd_infra),
+        ("criticidad",     cmd_criticidad),
         ("puertos",        cmd_puertos),
         ("diagnostico",    cmd_diagnostico),
         ("diag",           cmd_diagnostico),
@@ -2858,28 +2951,6 @@ def run():
         ("verificar",      cmd_verificar),
         ("eliminar",       cmd_eliminar),
         ("agregar",        cmd_agregar),
-        # Aliases compatibilidad (nombres anteriores siguen funcionando)
-        ("shomer_salud",           cmd_salud),
-        ("shomer_monitores",       cmd_monitores),
-        ("shomer_resumen",         cmd_resumen),
-        ("shomer_historial",       cmd_historial),
-        ("shomer_bitacora",        cmd_bitacora),
-        ("shomer_revertir",        cmd_revertir),
-        ("shomer_nueva_consulta",  cmd_nuevo),
-        ("guardian_equipos",       cmd_equipos),
-        ("infra_equipos",          cmd_infra),
-        ("infra_puertos",          cmd_puertos),
-        ("guardian_diagnostico",   cmd_diagnostico),
-        ("guardian_reiniciar",     cmd_reiniciar),
-        ("guardian_clientes",      cmd_clientes),
-        ("guardian_mantenimiento", cmd_mantenimiento),
-        ("hunter_alertas",         cmd_alertas),
-        ("hunter_seguro",          cmd_seguro),
-        ("hunter_liberar",         cmd_liberar),
-        ("hunter_bloquear",        cmd_bloquear),
-        ("hunter_desbloquear",     cmd_desbloquear),
-        ("instalar_usuario",       cmd_usuario),
-        ("instalar_verificar",     cmd_verificar),
     ]:
         app.add_handler(CommandHandler(cmd, fn))
 
@@ -2922,6 +2993,7 @@ def run():
             BotCommand("modo", "Mantenimiento on/off"),
             BotCommand("mantenimiento", "Igual que /modo"),
             BotCommand("infra", "Infra — lista o detalle por IP"),
+            BotCommand("criticidad", "Ver/cambiar tipo (criticidad) de un equipo"),
             BotCommand("puertos", "SNMP — puertos switch/server"),
             BotCommand("alertas", "Hunter — alertas y bloqueos"),
             BotCommand("seguro", "Autobloqueo Hunter on/off"),

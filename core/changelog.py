@@ -129,6 +129,12 @@ def revert(change_id: int) -> tuple[bool, str]:
                 d.get("vendor_hint", ""), d.get("port", 22)
             )
             ok, msg = True, "Equipo re-agregado al agente"
+        elif rtype == "maintenance":
+            ok = shomer_api.set_maintenance(rd["on"])
+            msg = f"Mantenimiento {'activado' if rd['on'] else 'desactivado'}"
+        elif rtype == "edit_device_type":
+            ok, resp = shomer_api.edit_infra_device(rd["device_id"], device_type=rd["device_type"])
+            msg = "Tipo de equipo revertido" if ok else str(resp)
         else:
             return False, f"Tipo de reversión desconocido: {rtype}"
     except Exception as e:

@@ -82,6 +82,25 @@ def _post(path: str, data: dict = None) -> tuple[bool, Any]:
         return False, str(e)
 
 
+def _patch(path: str, data: dict = None) -> tuple[bool, Any]:
+    global _session_token
+    try:
+        r = requests.patch(f"{SHOMER_BASE}{path}", json=data or {},
+                           headers=_headers(), timeout=10)
+        if r.status_code == 401:
+            _login()
+            r = requests.patch(f"{SHOMER_BASE}{path}", json=data or {},
+                               headers=_headers(), timeout=10)
+        try:
+            body = r.json()
+        except Exception:
+            body = r.text
+        return r.ok, body
+    except Exception as e:
+        log.warning("PATCH %s error: %s", path, e)
+        return False, str(e)
+
+
 # ── Lecturas ──────────────────────────────────────────────────────────────────
 
 def get_guardian_nodes():
@@ -784,6 +803,31 @@ def get_firewall_security_log() -> dict:
 def get_infra_devices() -> list:
     """Lista equipos Inframonitor con estado ICMP, TCP y SNMP."""
     return get_infra_snapshot().get("devices", [])
+
+
+def find_infra_device_by_ip(ip: str) -> Optional[dict]:
+    ip = (ip or "").strip()
+    for d in get_infra_devices():
+        if d.get("ip") == ip:
+            return d
+    return None
+
+
+def edit_infra_device(device_id: int, *, name: str = None,
+                       device_type: str = None, location: str = None) -> tuple[bool, Any]:
+    """Editar nombre/tipo/ubicación de un equipo Inframonitor ya existente
+    (pedido Juan Pablo 3 sep 2026: poder marcar criticidad de negocio -- Tarea
+    pendiente 2 opción 4 -- también por Telegram, no solo desde el panel)."""
+    body = {}
+    if name is not None:
+        body["name"] = name
+    if device_type is not None:
+        body["device_type"] = device_type
+    if location is not None:
+        body["location"] = location
+    if not body:
+        return False, "Nada para actualizar"
+    return _patch(f"/infra/devices/{device_id}", body)
 
 
 def get_infra_snapshot() -> dict:
