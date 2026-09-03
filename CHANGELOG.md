@@ -4,6 +4,20 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.9 — 2026-09-03
+
+- **Usar el aprendizaje acumulado (`agente_skills`) en más lugares**, no solo como contexto
+  invisible de la IA: `/diagnostico <ip>` y `/criticidad <ip>` ahora muestran el historial de
+  soluciones ya confirmadas para ese equipo; el resumen matutino agrega una sección de
+  "patrones confirmados" (equipos con 3+ arreglos remotos confirmados — candidatos a revisión
+  física, no solo celebrar que el auto-fix funciona). Se descartó explícitamente cualquier
+  skill ligada a una TASK-* automática (ej. auditoría de backups) para no confundir una tarea
+  rutinaria exitosa con un equipo que sigue fallando.
+- **Fix: el resumen matutino podía mandarse dos veces** si el bot se reiniciaba justo dentro de
+  la ventana 07:00-07:02 (pasó hoy mismo, en vivo, desplegando este mismo cambio). El día del
+  último envío ahora se guarda también en disco (`bot_state` en `knowledge.db`), no solo en
+  memoria — sobrevive a un reinicio. Mismo fix aplicado al resumen de las 22:00.
+
 ## 1.1.8 — 2026-09-03
 
 - **UX del bot: más fácil de usar sin memorizar comandos** (pedido Juan Pablo tras revisar el
