@@ -141,6 +141,24 @@ def get_mac_reconcile_recent(hours: int = 24) -> list:
         return []
 
 
+def get_blocked_recent(hours: int = 24) -> list:
+    """IPs bloqueadas por Hunter en las últimas N horas (subconjunto de
+    get_blocked_ips(), filtrado por blocked_at)."""
+    blocked = get_blocked_ips() or []
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    recientes = []
+    for b in blocked:
+        try:
+            ts = datetime.fromisoformat((b.get("blocked_at") or "").replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts >= cutoff:
+                recientes.append(b)
+        except Exception:
+            continue
+    return recientes
+
+
 def get_backup_devices() -> list:
     DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
     try:
@@ -991,17 +1009,7 @@ def summary_text() -> str:
         lines.append(f"Protección Hunter: {len(blocked)} IP(s) contenida(s) — red protegida")
         # Pedido Juan Pablo (3 sep 2026): cuántas se bloquearon en las últimas
         # 24h (no solo el total histórico activo) y por qué, para el resumen.
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-        recientes = []
-        for b in blocked:
-            try:
-                ts = datetime.fromisoformat((b.get("blocked_at") or "").replace("Z", "+00:00"))
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-                if ts >= cutoff:
-                    recientes.append(b)
-            except Exception:
-                continue
+        recientes = get_blocked_recent(24)
         if recientes:
             lines.append(f"IPs bloqueadas hoy (24h): {len(recientes)}")
             for b in recientes[:8]:

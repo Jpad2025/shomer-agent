@@ -665,54 +665,115 @@ async def daily_summary(bot: Bot) -> None:
         try:
             now = datetime.now()
             if now.hour == 7 and now.minute < 2 and _last_summary_day != now.date():
-                shomer_ctx = shomer_api.summary_text()
-                daily_health = shomer_api.get_daily_health()
-                visibility_block = ""
-                if daily_health.get("success") and daily_health.get("text_combined"):
-                    visibility_block = f"\n\n{daily_health['text_combined']}"
-                devices = dm.list_devices()
-                dev_ctx = ""
-                if devices:
-                    online = sum(1 for d in devices if d.get("status") == "online")
-                    dev_ctx = f"\nEquipos agente: {online}/{len(devices)} online"
-
-                import functools
                 from core import llm_router as _llm
-                loop = asyncio.get_event_loop()
-                resumen = await loop.run_in_executor(
-                    None,
-                    functools.partial(
-                        explain,
-                        "Genera un resumen matutino del estado de la red. "
-                        "Incluye Infra (equipos caídos), protección Hunter (IPs contenidas, "
-                        "cuántas se bloquearon en las últimas 24h y por qué, riesgos de red "
-                        "pendientes), y reconciliación de IP por MAC: menciona explícitamente si "
-                        "hubo cambios de IP en las últimas 24h o di 'sin cambios de IP por MAC' "
-                        "si no hubo ninguno -- no omitas esta línea nunca, aunque no haya nada que "
-                        "reportar. Si un equipo está marcado '(EN MANTENIMIENTO, sin auto-reboot)', "
-                        "dilo así explícitamente -- no lo trates como falla sin explicar. Indica si "
-                        "hay algo urgente. REGLA ESTRICTA: nunca generalices nombres, IPs o "
-                        "interfaces -- usa siempre el identificador EXACTO que aparece en los datos "
-                        "(ej. 'NIC eno1', '192.168.0.148', 'AP HAB 103'), nunca 'el servidor', 'un "
-                        "equipo' o 'el puerto' sin decir cuál. Tono tranquilizador: Hunter protege, "
-                        "no alarmista. Máximo 8 líneas.",
-                        shomer_ctx + dev_ctx,
-                    ),
-                )
+                fecha = now.strftime("%d/%m/%Y")
+                secciones: list[str] = []
+
+                # Pedido Juan Pablo (3 sep 2026): resumen con secciones claras,
+                # ícono de color por sistema (🟢/🟡/🔴) y datos exactos (nombre +
+                # IP siempre) en vez de un párrafo de IA que a veces generalizaba
+                # ("el servidor", "un equipo") -- se arma directo de los datos,
+                # sin pasar por el LLM, para no perder precisión al redactar.
+
+                nodes = shomer_api.get_guardian_nodes() or []
+                if nodes:
+                    online_g = sum(1 for n in nodes if n.get("status") == "online")
+                    problemas_g = [n for n in nodes if n.get("status") != "online"]
+                    hay_falla_real = any(
+                        not n.get("node_maintenance") for n in problemas_g
+                    )
+                    icon_g = "🔴" if hay_falla_real else ("🟡" if problemas_g else "🟢")
+                    lines_g = [f"{icon_g} <b>Guardian</b> — {online_g}/{len(nodes)} online"]
+                    for n in problemas_g[:8]:
+                        nombre, ip = n.get("name", "?"), n.get("ip", "?")
+                        if n.get("node_maintenance"):
+                            lines_g.append(f"  🔧 {nombre} ({ip}) — mantenimiento, sin auto-reboot")
+                        else:
+                            lines_g.append(f"  🔴 {nombre} ({ip}) — {n.get('status', '?')}")
+                    if len(problemas_g) > 8:
+                        lines_g.append(f"  …y {len(problemas_g) - 8} más")
+                    secciones.append("\n".join(lines_g))
+
+                infra = shomer_api.get_infra_summary()
+                if infra.get("total"):
+                    # Los AP quedan en infra_devices solo como inventario -- ya
+                    # los reporta Guardian arriba (watch_infra tampoco los
+                    # alerta, mismo criterio: "if dtype == 'ap': continue").
+                    off = [d for d in infra.get("offline", []) if d.get("device_type") != "ap"]
+                    hay_critico = any(
+                        d.get("device_type") in _INFRA_CRITICAL_TYPES for d in off
+                    )
+                    icon_i = "🔴" if hay_critico else ("🟡" if off else "🟢")
+                    lines_i = [f"{icon_i} <b>Infra</b> — {infra['online']}/{infra['total']} online"]
+                    for d in off[:8]:
+                        lines_i.append(
+                            f"  {d.get('icon', '📡')} {d.get('name', '?')} ({d.get('ip', '?')}) — caído"
+                        )
+                    if len(off) > 8:
+                        lines_i.append(f"  …y {len(off) - 8} más")
+                    if infra.get("low_toner"):
+                        lines_i.append(f"  🖨️ Tóner bajo: {len(infra['low_toner'])} impresora(s)")
+                    secciones.append("\n".join(lines_i))
+
+                blocked = shomer_api.get_blocked_ips() or []
+                recientes = shomer_api.get_blocked_recent(24)
+                audit = shomer_api.get_network_audit_summary()
+                crit = alto = 0
+                if isinstance(audit, dict) and audit.get("by_severity"):
+                    crit = audit["by_severity"].get("critico", 0)
+                    alto = audit["by_severity"].get("alto", 0)
+                icon_h = "🟡" if (recientes or crit or alto) else "🟢"
+                lines_h = [f"{icon_h} <b>Hunter</b> — {len(blocked)} IP(s) contenida(s)"]
+                if recientes:
+                    lines_h.append(f"  🚫 Bloqueadas hoy (24h): {len(recientes)}")
+                    for b in recientes[:5]:
+                        motivo = (b.get("alert_signature") or "").strip()[:55]
+                        motivo = f" — {motivo}" if motivo else ""
+                        lines_h.append(f"    • {b.get('ip', '?')} ({b.get('blocked_by', '?')}){motivo}")
+                    if len(recientes) > 5:
+                        lines_h.append(f"    …y {len(recientes) - 5} más")
+                if crit or alto:
+                    lines_h.append(f"  ⚠️ Riesgos pendientes: {crit} crítico(s), {alto} alto(s)")
+                secciones.append("\n".join(lines_h))
+
+                reconciliados = shomer_api.get_mac_reconcile_recent(24)
+                if reconciliados:
+                    lines_m = [f"🔄 <b>IP por MAC (24h)</b> — {len(reconciliados)} cambio(s)"]
+                    for r in reconciliados[:5]:
+                        lines_m.append(
+                            f"  • {r.get('name', '?')} ({r.get('fuente', '?')}) — "
+                            f"{r.get('ip_vieja', '?')} → {r.get('ip_nueva', '?')}"
+                        )
+                    if len(reconciliados) > 5:
+                        lines_m.append(f"  …y {len(reconciliados) - 5} más")
+                else:
+                    lines_m = ["🟢 <b>IP por MAC (24h)</b> — sin cambios"]
+                secciones.append("\n".join(lines_m))
+
+                daily_health = shomer_api.get_daily_health()
+                server_line = _build_server_line().strip()
+                lines_s = ["🖥️ <b>Servidor Shomer</b>"]
+                if server_line:
+                    lines_s.append(f"  {server_line}")
+                if daily_health.get("success") and daily_health.get("text_nic"):
+                    lines_s.append(f"  {daily_health['text_nic']}")
+                secciones.append("\n".join(lines_s))
+
                 ia_lines = _llm.status_lines()
-                server_line = _build_server_line()
+                secciones.append("🤖 <b>IA</b>\n" + "\n".join(ia_lines))
 
                 # 24 ago: notas acumuladas de watch_docker/watch_network_audit/
                 # watch_port_errors desde el reporte anterior -- un solo mensaje.
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else ""
 
-                await _send(
-                    bot,
-                    f"☀️ <b>Resumen de la mañana</b>\n\n{resumen}{visibility_block}{server_line}"
-                    f"{notas_block}\n\n" + "\n".join(ia_lines),
-                monitor="daily_summary",
+                texto = (
+                    f"☀️ <b>Resumen de la mañana</b> — {fecha}\n\n"
+                    + "\n\n".join(secciones)
+                    + notas_block
                 )
+
+                await _send(bot, texto, monitor="daily_summary")
                 # Marcar como enviado solo tras el _send real -- si algo antes
                 # falla (API, LLM, etc.) se reintenta en el próximo ciclo (dentro
                 # de la ventana hour==7/minute<2) en vez de perder el reporte
