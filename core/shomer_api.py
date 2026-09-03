@@ -176,6 +176,41 @@ def get_backup_devices() -> list:
         return []
 
 
+def get_last_b2_sync() -> str | None:
+    """Última vez que Protector sincronizó backups a la nube (B2), guardado
+    por network_monitor cuando el sync programado o manual termina OK."""
+    DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
+    try:
+        con = _sq.connect(DB, uri=True)
+        try:
+            row = con.execute(
+                "SELECT value FROM system_state WHERE key='protector.last_b2_sync_at'"
+            ).fetchone()
+            return row[0] if row else None
+        finally:
+            con.close()
+    except Exception:
+        return None
+
+
+def get_last_inventory_scan() -> dict | None:
+    """Metadatos del último inventario (snapshot) hecho por Tracker."""
+    DB = "file:/storage/db/inventory.db?mode=ro&immutable=1"
+    try:
+        con = _sq.connect(DB, uri=True)
+        con.row_factory = _sq.Row
+        try:
+            row = con.execute(
+                "SELECT name, created_at, asset_count FROM inventory_snapshots "
+                "ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            con.close()
+    except Exception:
+        return None
+
+
 # ── Acciones Hunter ───────────────────────────────────────────────────────────
 
 def block_ip(ip: str, reason: str = "manual-agente") -> tuple[bool, str]:

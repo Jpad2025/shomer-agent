@@ -766,6 +766,50 @@ async def daily_summary(bot: Bot) -> None:
                     ]
                 secciones.append("\n".join(lines_m))
 
+                # Pedido Juan Pablo (3 sep 2026): backup local + cuándo se
+                # subió a la nube, y el último inventario hecho por Tracker.
+                def _dias_desde(ts_str: str | None) -> int | None:
+                    if not ts_str:
+                        return None
+                    try:
+                        ts = datetime.fromisoformat(ts_str.replace("Z", ""))
+                        return (now - ts).days
+                    except Exception:
+                        return None
+
+                backup_devs = shomer_api.get_backup_devices()
+                b2_sync = shomer_api.get_last_b2_sync()
+                if backup_devs:
+                    peor = max(
+                        (d for d in backup_devs if d.get("last_status") != "ok"),
+                        key=lambda d: d.get("last_backup_at") or "", default=None,
+                    )
+                    dias_b2 = _dias_desde(b2_sync)
+                    icon_p = "🔴" if peor else ("🟡" if dias_b2 is None or dias_b2 > 1 else "🟢")
+                    lines_p = [f"{icon_p} <b>Protector — respaldo de datos</b>"]
+                    for d in backup_devs[:5]:
+                        estado = "✅" if d.get("last_status") == "ok" else "🔴"
+                        lines_p.append(
+                            f"  {estado} {d.get('name', '?')} ({d.get('ip', '?')}) — "
+                            f"último backup local: {d.get('last_backup_at', 'nunca')}"
+                        )
+                    if b2_sync:
+                        lines_p.append(f"  ☁️ Última subida a la nube (B2): {b2_sync}")
+                    else:
+                        lines_p.append("  ☁️ Última subida a la nube (B2): sin registro todavía")
+                    secciones.append("\n".join(lines_p))
+
+                inv = shomer_api.get_last_inventory_scan()
+                if inv:
+                    dias_inv = _dias_desde(inv.get("created_at"))
+                    icon_t = "🟡" if (dias_inv is not None and dias_inv > 35) else "🔵"
+                    dias_txt = f" (hace {dias_inv} día{'s' if dias_inv != 1 else ''})" if dias_inv is not None else ""
+                    lines_t = [
+                        f"{icon_t} <b>Tracker — último inventario de la red</b>: "
+                        f"{inv.get('created_at', '?')}{dias_txt} — {inv.get('asset_count', '?')} equipos registrados"
+                    ]
+                    secciones.append("\n".join(lines_t))
+
                 daily_health = shomer_api.get_daily_health()
                 server_line = _build_server_line().strip()
                 lines_s = ["🖥️ <b>Servidor Shomer</b>"]
