@@ -775,9 +775,7 @@ async def daily_summary(bot: Bot) -> None:
                 reconciliados = shomer_api.get_mac_reconcile_recent(24)
                 if reconciliados:
                     lines_m = [
-                        f"🔄 <b>Equipos que cambiaron de dirección de red (24h)</b>: "
-                        f"{len(reconciliados)} — el sistema los reconoció por su identificador "
-                        f"físico (MAC) y corrigió la IP solo, no es una caída real"
+                        f"🔄 <b>Cambios de IP por MAC (24h)</b>: {len(reconciliados)} equipo(s)"
                     ]
                     for r in reconciliados[:5]:
                         lines_m.append(
@@ -787,10 +785,7 @@ async def daily_summary(bot: Bot) -> None:
                     if len(reconciliados) > 5:
                         lines_m.append(f"  …y {len(reconciliados) - 5} más")
                 else:
-                    lines_m = [
-                        "🟢 <b>Cambios de IP detectados (24h)</b>: ninguno — "
-                        "todos los equipos siguen en su misma dirección de red"
-                    ]
+                    lines_m = ["🟢 <b>Cambios de IP por MAC (24h)</b>: ninguno"]
                 secciones.append("\n".join(lines_m))
 
                 # Pedido Juan Pablo (3 sep 2026): backup local + cuándo se
