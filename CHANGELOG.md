@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.7 — 2026-09-03
+
+- **Resumen matutino: backup + inventario, y limpieza de comentarios editoriales.**
+  Se agregó backup local + última subida a B2 (Protector) y último inventario (Tracker) al
+  resumen de las 07:00. `app/api/backups.py` (network_monitor) ahora guarda
+  `protector.last_b2_sync_at` al terminar el sync — antes esa confirmación solo se mandaba por
+  Telegram y no quedaba en ningún lado consultable.
+  Se quitaron 3 comentarios editoriales que se habían colado en el texto de reportes reales
+  ("nunca se liberan solas", explicación de MAC-reconcile, instrucciones de `ethtool` en el
+  mensaje de NIC) — un reporte debe traer datos limpios, no explicaciones del asistente. La
+  línea de Hunter ahora trae la fecha de la IP bloqueada más antigua, en vez de solo un número
+  sin contexto temporal.
+- **Bot de Telegram: 3 mejoras pedidas tras revisar el estado del bot.**
+  1. Se quitaron 21 alias legacy (`shomer_*`, `guardian_*`, `hunter_*`, `infra_*`,
+     `instalar_*`) que duplicaban comandos ya existentes sin aportar nada — quedan los nombres
+     cortos y los alias genuinamente útiles (`/diag`, `/reiniciar`, `/mantenimiento`,
+     `/autobloqueo`).
+  2. `/revertir` ahora también deshace cambios de modo mantenimiento y de tipo de equipo
+     (antes solo bloqueos/desbloqueos de Hunter y agregar/quitar equipo).
+  3. Comando nuevo `/criticidad <ip> [tipo]` — ver o cambiar el tipo/criticidad de negocio de
+     un equipo Infra desde Telegram (antes solo desde el panel web), reutilizando el endpoint
+     `PATCH /infra/devices/{id}` de la Tarea pendiente 2 opción 4.
+
 ## 1.1.6 — 2026-09-02
 
 - **Telegram separado por hotel/cliente, nunca compartido:** se encontró que shomer243 y
