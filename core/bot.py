@@ -788,12 +788,22 @@ async def cmd_criticidad(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         tipo_actual = dev.get("device_type", "generic")
         criticidad = "🔴 crítico (avisa de inmediato)" if tipo_actual in _TIPOS_CRITICOS \
             else "🟢 no crítico (espera al resumen)"
-        await update.message.reply_text(
+        texto = (
             f"<b>{fmt.e(dev.get('name', ip))}</b> (<code>{fmt.e(ip)}</code>)\n"
             f"Tipo: <b>{_TIPOS_INFRA.get(tipo_actual, tipo_actual)}</b> — {criticidad}\n\n"
-            f"Para cambiarlo: <code>/criticidad {fmt.e(ip)} &lt;tipo&gt;</code>",
-            parse_mode=PM,
+            f"Para cambiarlo: <code>/criticidad {fmt.e(ip)} &lt;tipo&gt;</code>"
         )
+        try:
+            from core import agente_skills
+            skills_ip = agente_skills.list_skills(device_ip=ip, limit=3)
+        except Exception:
+            skills_ip = []
+        if skills_ip:
+            texto += "\n\n🧠 <b>Historial de soluciones:</b>\n" + "\n".join(
+                f"  • {fmt.e(s.get('action_label', '?'))} — confirmado {s.get('success_count') or 0}x"
+                for s in skills_ip
+            )
+        await update.message.reply_text(texto, parse_mode=PM)
         return
 
     tipo_nuevo = ctx.args[1].lower()
@@ -1303,6 +1313,23 @@ async def _diag_impl(message, ctx, level: str, ip: str, *, remediate: bool = Fal
 
     if shomer_api.get_maintenance():
         lines.append("  🔧 <b>Mantenimiento activo</b> — reboots auto pausados")
+
+    # Pedido Juan Pablo (3 sep 2026): mostrar el historial de soluciones ya
+    # confirmadas para este equipo (agente_skills), en vez de tener que ir a
+    # /skills aparte -- si ya se sabe qué lo arregla, decirlo de una vez.
+    try:
+        from core import agente_skills
+        skills_ip = agente_skills.list_skills(device_ip=ip, limit=3)
+    except Exception:
+        skills_ip = []
+    if skills_ip:
+        lines.append("")
+        lines.append("  🧠 <b>Ya se resolvió antes:</b>")
+        for s in skills_ip:
+            ok = s.get("success_count") or 0
+            lines.append(f"    • {fmt.e(s.get('action_label', '?'))} — confirmado {ok}x")
+        if any(not s.get("task_id") and (s.get("success_count") or 0) >= 3 for s in skills_ip):
+            lines.append("    <i>Patrón repetido — evaluar revisión física/reemplazo.</i>")
 
     rem_action = None
     rem_ok = False

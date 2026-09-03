@@ -824,6 +824,30 @@ async def daily_summary(bot: Bot) -> None:
                     ]
                     secciones.append("\n".join(lines_t))
 
+                # Pedido Juan Pablo (3 sep 2026): usar el aprendizaje acumulado
+                # (agente_skills) para señalar equipos con un patrón de falla
+                # ya confirmado varias veces -- candidatos a revisión física,
+                # no solo celebrar que el auto-arreglo funciona cada vez.
+                try:
+                    from core import agente_skills
+                    todas = agente_skills.list_skills(limit=50)
+                except Exception:
+                    todas = []
+                desgaste = [
+                    s for s in todas
+                    if s.get("device_ip") and not s.get("task_id")
+                    and (s.get("success_count") or 0) >= 3
+                ]
+                if desgaste:
+                    lines_w = ["🟡 <b>Patrones confirmados (revisar físicamente)</b>"]
+                    for s in desgaste[:5]:
+                        lines_w.append(
+                            f"  • {s.get('device_name') or s.get('device_ip')} "
+                            f"({s.get('device_ip')}) — {s.get('action_label', '?')}, "
+                            f"confirmado {s.get('success_count')}x"
+                        )
+                    secciones.append("\n".join(lines_w))
+
                 daily_health = shomer_api.get_daily_health()
                 server_line = _build_server_line().strip()
                 lines_s = ["🖥️ <b>Servidor Shomer</b>"]
