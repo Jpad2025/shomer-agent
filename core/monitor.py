@@ -1524,7 +1524,6 @@ async def watch_guardian_nodes(bot: Bot) -> None:
             recoveries: list[tuple[str, str]] = []
 
             # Procesar verificaciones post-reboot pendientes
-            verify_ok: list[str] = []
             for ip, verify_at in list(_guardian_verify_pending.items()):
                 if now_ts < verify_at:
                     continue
@@ -1536,8 +1535,11 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                 nombre = node.get("name", ip)
                 status = node.get("status", "unknown")
                 if status == "online":
-                    verify_ok.append(nombre)
                     _guardian_status[ip] = "online"
+                    from core import incident_escalation as _esc
+                    _esc.record_filtered_event(
+                        ip, nombre, "watch_guardian_nodes", motivo="auto_reboot_exitoso",
+                    )
                 else:
                     icon = "🔴" if status == "offline" else "🟠"
                     await _emit_guardian(
@@ -1553,20 +1555,9 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         bypass_buffer=True,
                         critical=True,
                     )
-            if len(verify_ok) == 1:
-                await _emit_guardian(
-                    bot, "batch",
-                    [_a("✅", "Nodo recuperado", f"{_html.escape(verify_ok[0])} tras reinicio", raw=True)],
-                )
-            elif len(verify_ok) > 1:
-                txt = ", ".join(_html.escape(n) for n in verify_ok[:6])
-                if len(verify_ok) > 6:
-                    txt += f" (+{len(verify_ok) - 6})"
-                await _send(
-                    bot,
-                    _a("✅", f"{len(verify_ok)} nodos recuperados tras reinicio", txt, raw=True),
-                monitor="equipos_red",
-                )
+            # Tarea pendiente 2, opción 1: reinicio automático exitoso = no
+            # interrumpe (ya quedó registrado arriba como auto_reboot_exitoso,
+            # disponible para auditoría/resumen).
 
             for n in nodes:
                 ip     = n.get("ip") or n.get("ip_address", "?")
@@ -1595,18 +1586,13 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                     _guardian_reboot_count[ip] = hoy_reboots
 
                     if reboot_age <= _GUARDIAN_REBOOT_VERIFY_MAX_AGE:
+                        # Tarea pendiente 2, opción 1 (2 sep 2026): no interrumpir
+                        # todavía -- se avisa solo si la verificación de 3 min
+                        # (abajo) confirma que el reinicio automático NO funcionó.
                         _guardian_verify_pending[ip] = now_ts + 180
-                        fails = data.get("failures", 0)
-                        await _emit_guardian(
-                            bot, ip,
-                            [
-                                _a(
-                                    "⚡", "Reinicio automático Guardian",
-                                    f"{_html.escape(str(nombre))} — {fails} alertas",
-                                    raw=True,
-                                ),
-                            ],
-                            severity="warn",
+                        from core import incident_escalation as _esc
+                        _esc.record_filtered_event(
+                            ip, nombre, "watch_guardian_nodes", motivo="auto_reboot_pendiente",
                         )
 
                     # Patrón recurrente: 3+ reboots en 24h
@@ -1639,7 +1625,6 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         and ip not in _guardian_down_alerted
                         and not _is_suppressed(ip)
                     ):
-                        icon = "🔴" if status == "offline" else "🟠"
                         motivo = "sin LAN" if status == "offline" else "sin internet"
                         fails = data.get("failures", 0)
                         boton_label = f"⚡ Reiniciar {nombre}"
@@ -1679,15 +1664,15 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                         _chronic = _pat.get("ocurrencias", 0) >= _CHRONIC_ALERT_MIN_OCURRENCIAS
 
                         if _chronic:
-                            lines = [
-                                _a(
-                                    icon, f"{nombre} {motivo}",
-                                    f"caída #{_pat['ocurrencias']} de un patrón ya conocido "
-                                    f"({_pat.get('tendencia', 'estable')}) — sin novedad, "
-                                    "ver /consultar_memoria para histórico",
-                                    raw=True,
-                                ),
-                            ]
+                            # Tarea pendiente 2, opción 3 (2 sep 2026): patrón ya
+                            # diagnosticado (5+ ocurrencias) -- deja de interrumpir
+                            # en tiempo real, solo queda registrado para el
+                            # resumen de la próxima visita.
+                            from core import incident_escalation as _esc
+                            _esc.record_filtered_event(
+                                ip, nombre, "watch_guardian_nodes", motivo="patron_cronico",
+                            )
+                            _guardian_down_alerted.add(ip)
                         else:
                             lines = [
                                 msgfmt.executive_alert(
@@ -1698,26 +1683,26 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                                 ) + _kn(ip),
                             ]
 
-                        _sev = "critical" if status == "offline" else "warn"
+                            _sev = "critical" if status == "offline" else "warn"
 
-                        async def _send_first(
-                            _bot=bot, _ip=ip, _lines=lines, _sev=_sev,
-                            _markup=markup, _allow_ia=(status == "offline"),
-                        ):
-                            await _emit_guardian(
-                                _bot, _ip, _lines,
-                                severity=_sev, reply_markup=_markup, allow_ia=_allow_ia,
+                            async def _send_first(
+                                _bot=bot, _ip=ip, _lines=lines, _sev=_sev,
+                                _markup=markup, _allow_ia=(status == "offline"),
+                            ):
+                                await _emit_guardian(
+                                    _bot, _ip, _lines,
+                                    severity=_sev, reply_markup=_markup, allow_ia=_allow_ia,
+                                )
+
+                            # Mapa de decisión de alertas (CLAUDE.md), paso 5 —
+                            # escalamiento crónico: agrupa repetidas del MISMO
+                            # equipo en la ventana de agregación, no avisa una x una.
+                            from core import incident_escalation as _esc
+                            await _esc.handle_event(
+                                bot, ip, nombre, "offline",
+                                send_first_fn=_send_first, severity=_sev,
                             )
-
-                        # Mapa de decisión de alertas (CLAUDE.md), paso 5 —
-                        # escalamiento crónico: agrupa repetidas del MISMO
-                        # equipo en la ventana de agregación, no avisa una x una.
-                        from core import incident_escalation as _esc
-                        await _esc.handle_event(
-                            bot, ip, nombre, "offline",
-                            send_first_fn=_send_first, severity=_sev,
-                        )
-                        _guardian_down_alerted.add(ip)
+                            _guardian_down_alerted.add(ip)
 
                 elif status == "degraded" and prev not in ("degraded",) and not _is_suppressed(ip):
                     _guardian_down_streak[ip] = 0
@@ -2850,14 +2835,16 @@ async def watch_infra(bot: Bot) -> None:
                         _chronic = _pat.get("ocurrencias", 0) >= _CHRONIC_ALERT_MIN_OCURRENCIAS
 
                         if _chronic:
-                            etiqueta = "Impresora" if dtype in ("printer", "pos") else "Equipo"
-                            msg = _a(
-                                "🔴", f"{etiqueta} {name} no responde",
-                                f"caída #{_pat['ocurrencias']} de un patrón ya conocido "
-                                f"({_pat.get('tendencia', 'estable')}) — sin novedad, "
-                                "ver /consultar_memoria para histórico",
-                                raw=True,
+                            # Tarea pendiente 2, opción 3 (2 sep 2026): patrón ya
+                            # diagnosticado (5+ ocurrencias) -- deja de interrumpir
+                            # en tiempo real, solo queda registrado para el
+                            # resumen de la próxima visita.
+                            from core import incident_escalation as _esc
+                            _esc.record_filtered_event(
+                                ip, name, "watch_infra", motivo="patron_cronico",
                             )
+                            _infra_prev_status[ip] = "offline"
+                            continue
                         elif dtype in ("printer", "pos"):
                             msg = msgfmt.executive_alert(
                                 "alto", "Inframonitor",

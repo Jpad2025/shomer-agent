@@ -1555,7 +1555,14 @@ async def cmd_agregar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ip     = args[0]
     name   = args[1]
     vendor = args[2] if len(args) > 2 else ""
-    port   = int(args[3]) if len(args) > 3 else 22
+    if len(args) > 3 and not args[3].isdigit():
+        await update.message.reply_text(
+            f"❌ Puerto inválido: <code>{fmt.e(args[3])}</code> — debe ser un número.\n"
+            f"Uso: <code>/agregar &lt;ip&gt; &lt;nombre&gt; [vendor] [puerto]</code>",
+            parse_mode=PM,
+        )
+        return
+    port = int(args[3]) if len(args) > 3 else 22
     # Usar credenciales de servicio globales configuradas en Shomer
     user = shomer_api.get_config("base.service_user") or "shomer"
     pwd  = shomer_api.get_config("base.service_password") or ""
