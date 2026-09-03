@@ -7,6 +7,7 @@ import os
 import logging
 import requests
 import sqlite3 as _sq
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 log = logging.getLogger("shomer-api")
@@ -962,6 +963,28 @@ def summary_text() -> str:
     blocked = get_blocked_ips() or []
     if blocked:
         lines.append(f"Protección Hunter: {len(blocked)} IP(s) contenida(s) — red protegida")
+        # Pedido Juan Pablo (3 sep 2026): cuántas se bloquearon en las últimas
+        # 24h (no solo el total histórico activo) y por qué, para el resumen.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recientes = []
+        for b in blocked:
+            try:
+                ts = datetime.fromisoformat((b.get("blocked_at") or "").replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                if ts >= cutoff:
+                    recientes.append(b)
+            except Exception:
+                continue
+        if recientes:
+            lines.append(f"IPs bloqueadas hoy (24h): {len(recientes)}")
+            for b in recientes[:8]:
+                motivo = (b.get("alert_signature") or "").strip()
+                motivo = f" — {motivo[:60]}" if motivo else ""
+                lines.append(f"  • {b.get('ip', '?')} ({b.get('blocked_by', '?')}){motivo}")
+            extra = len(recientes) - 8
+            if extra > 0:
+                lines.append(f"  • …y {extra} más")
     audit = get_network_audit_summary()
     if isinstance(audit, dict) and audit.get("by_severity"):
         by = audit["by_severity"]
