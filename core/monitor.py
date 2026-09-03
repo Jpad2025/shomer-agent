@@ -1490,11 +1490,20 @@ _guardian_down_streak: Dict[str, int] = {}  # ip -> polls consecutivos offline/n
 _guardian_down_alerted: Set[str] = set()    # IPs con alerta caída ya enviada (incidente actual)
 _GUARDIAN_ALERT_CYCLES = max(1, int(os.environ.get("BOT_GUARDIAN_ALERT_CYCLES", "2")))
 _GUARDIAN_REBOOT_VERIFY_MAX_AGE = max(60, int(os.environ.get("BOT_GUARDIAN_REBOOT_VERIFY_MAX_AGE", "600")))
-# Sesión 69 — a partir de N caídas activas en patrones_detectados, la alerta de caída
-# pasa a formato compacto (ver watch_guardian_nodes). No suprime avisos, solo acorta
-# el texto para equipos ya identificados como flapping crónico.
+# Sesión 69 — a partir de N caídas activas en patrones_detectados, el equipo ya
+# se considera flapping crónico diagnosticado (ver watch_guardian_nodes /
+# watch_infra). Tarea pendiente 2, opción 3 (2 sep 2026): desde entonces deja
+# de interrumpir en tiempo real -- solo queda registrado en eventos_filtrados.
 _CHRONIC_ALERT_MIN_OCURRENCIAS = max(2, int(os.environ.get("BOT_CHRONIC_ALERT_MIN_OCURRENCIAS", "5")))
 _AUTO_UNBLOCK_HOURS = int(os.environ.get("BOT_AUTO_UNBLOCK_HOURS", "0"))
+# Tarea pendiente 2, opción 4 (2 sep 2026): criticidad de negocio por tipo de
+# equipo (infra_devices.device_type) -- datáfono/router/servidor/switch/control
+# de acceso interrumpen ya; impresora normal o cámara quedan para el resumen.
+_INFRA_CRITICAL_TYPES = set(
+    t.strip() for t in os.environ.get(
+        "INFRA_CRITICAL_DEVICE_TYPES", "pos,router,server,controller,switch",
+    ).split(",") if t.strip()
+)
 
 
 async def watch_guardian_nodes(bot: Bot) -> None:
@@ -2508,6 +2517,10 @@ _infra_loc_alert_ts: Dict[str, float] = {}
 _infra_flap_times: Dict[str, list] = {}
 _infra_flap_alerted: Set[str] = set()
 _infra_offline_streak: Dict[str, int] = {}
+# Tarea pendiente 2 (2 sep 2026): IPs cuya caída se silenció (patrón crónico u
+# opción 4 "no crítico") -- al recuperarse tampoco debe avisar "recuperado",
+# para no confundir con la recuperación de algo que nunca se avisó como caído.
+_infra_silent_offline: Set[str] = set()
 _infra_last_checked_at: Dict[str, str] = {}
 _infra_snmp_ports_alerted: Dict[str, Set[str]] = {}
 _infra_snmp_ports_up: Dict[str, Set[str]] = {}
@@ -2844,8 +2857,22 @@ async def watch_infra(bot: Bot) -> None:
                                 ip, name, "watch_infra", motivo="patron_cronico",
                             )
                             _infra_prev_status[ip] = "offline"
+                            _infra_silent_offline.add(ip)
+                            continue
+                        elif dtype not in _INFRA_CRITICAL_TYPES:
+                            # Tarea pendiente 2, opción 4 (2 sep 2026): equipo sin
+                            # criticidad de negocio (no es datáfono/router/
+                            # servidor/switch/control de acceso) -- no interrumpe
+                            # en tiempo real, queda registrado para el resumen.
+                            from core import incident_escalation as _esc
+                            _esc.record_filtered_event(
+                                ip, name, "watch_infra", motivo="no_critico",
+                            )
+                            _infra_prev_status[ip] = "offline"
+                            _infra_silent_offline.add(ip)
                             continue
                         elif dtype in ("printer", "pos"):
+                            _infra_silent_offline.discard(ip)
                             msg = msgfmt.executive_alert(
                                 "alto", "Inframonitor",
                                 impacto=f"Impresora {name} no responde — sin imprimir",
@@ -2853,6 +2880,7 @@ async def watch_infra(bot: Bot) -> None:
                                 sugerencia="Verificar alimentación/cable físicamente",
                             ) + _kn(ip)
                         else:
+                            _infra_silent_offline.discard(ip)
                             ubic = f" — {loc}" if loc else ""
                             msg = msgfmt.executive_alert(
                                 "alto", "Inframonitor",
@@ -2888,34 +2916,44 @@ async def watch_infra(bot: Bot) -> None:
                     if poll_fresh:
                         _infra_offline_streak[ip] = 0
                     if confirmed_prev == "offline" and poll_fresh and status in ("online", "degraded"):
-                        dur = d.get("state_duration") or ""
-                        detail = msgfmt.host(name, ip)
-                        if dur:
-                            detail += f" · estuvo caído {_html.escape(dur)}"
-                        evt = "Impresora recuperada" if dtype in ("printer", "pos") else "Equipo Infra recuperado"
-                        rec = {
-                            "ip": ip,
-                            "name": name,
-                            "detail": detail,
-                            "evt": evt,
-                        }
-                        if ip in _infra_wave_active_ips:
-                            _cycle_recoveries.append(rec)
-                        else:
-                            # Mapa de decisión de alertas (CLAUDE.md), paso 6 —
-                            # recuperación repetida (mismo criterio que Sesión 71
-                            # en Guardian): si el equipo ya está flapeando, no
-                            # repetir "recuperado" en cada blip.
+                        if ip in _infra_silent_offline:
+                            # Tarea pendiente 2 (2 sep 2026): la caída no se avisó
+                            # (patrón crónico u opción 4 "no crítico") -- la
+                            # recuperación tampoco avisa, solo queda registrada.
                             from core import incident_escalation as _esc
-                            if not _esc.is_flapping(ip):
-                                await _send(
-                                    bot, _a("🟢", evt, detail, raw=True),
-                                    reply_markup=_save_kb_recovery(ip),
-                                    monitor="equipos_red",
-                                )
-                                eq_alert = True
+                            _esc.record_filtered_event(
+                                ip, name, "watch_infra", motivo="recuperacion_no_avisada",
+                            )
+                            _infra_silent_offline.discard(ip)
+                        else:
+                            dur = d.get("state_duration") or ""
+                            detail = msgfmt.host(name, ip)
+                            if dur:
+                                detail += f" · estuvo caído {_html.escape(dur)}"
+                            evt = "Impresora recuperada" if dtype in ("printer", "pos") else "Equipo Infra recuperado"
+                            rec = {
+                                "ip": ip,
+                                "name": name,
+                                "detail": detail,
+                                "evt": evt,
+                            }
+                            if ip in _infra_wave_active_ips:
+                                _cycle_recoveries.append(rec)
                             else:
-                                _esc.record_filtered_event(ip, name, "watch_infra")
+                                # Mapa de decisión de alertas (CLAUDE.md), paso 6 —
+                                # recuperación repetida (mismo criterio que Sesión 71
+                                # en Guardian): si el equipo ya está flapeando, no
+                                # repetir "recuperado" en cada blip.
+                                from core import incident_escalation as _esc
+                                if not _esc.is_flapping(ip):
+                                    await _send(
+                                        bot, _a("🟢", evt, detail, raw=True),
+                                        reply_markup=_save_kb_recovery(ip),
+                                        monitor="equipos_red",
+                                    )
+                                    eq_alert = True
+                                else:
+                                    _esc.record_filtered_event(ip, name, "watch_infra")
                     if poll_fresh and status in ("online", "degraded"):
                         _infra_prev_status[ip] = status
                         _infra_wave_active_ips.pop(ip, None)
