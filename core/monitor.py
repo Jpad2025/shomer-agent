@@ -7,6 +7,7 @@ import html as _html
 import logging
 import os
 import re
+import sqlite3
 import time
 from contextvars import ContextVar
 from datetime import datetime, time as dtime, timedelta
@@ -171,10 +172,45 @@ def _save_kb_recovery(ip: str) -> InlineKeyboardMarkup:
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 _DEV_CHAT_ID = os.environ.get("AGENT_DEVELOPER_CHAT_ID", "").strip()
 
+# 3 sep 2026: guardar en disco (no solo en memoria) qué día se mandó el
+# resumen -- un reinicio del bot justo dentro de la ventana 07:00-07:02 hacía
+# que se mandara dos veces (pasó hoy mismo, desplegando este archivo). El
+# valor en memoria sigue siendo la fuente rápida; disco es solo el respaldo
+# que sobrevive a un reinicio.
+def _bot_state_get(key: str) -> str | None:
+    try:
+        con = sqlite3.connect("/app/data/knowledge.db")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        row = con.execute("SELECT value FROM bot_state WHERE key=?", (key,)).fetchone()
+        con.close()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
+def _bot_state_set(key: str, value: str) -> None:
+    try:
+        con = sqlite3.connect("/app/data/knowledge.db")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        con.execute(
+            "INSERT INTO bot_state (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        con.commit()
+        con.close()
+    except Exception as e:
+        log.debug("_bot_state_set(%s): %s", key, e)
+
+
 # Estado interno — detectar cambios
 _blocked_ips: Set[str] = set()
 _device_status: Dict[str, str] = {}   # ip -> "online"|"offline"
-_last_summary_day: Optional[object] = None
+_last_summary_day: Optional[object] = _bot_state_get("last_summary_day")
 _offline_counts: Dict[str, int] = {}  # ip -> ticks consecutivos offline
 _device_down_alerted: Set[str] = set()  # ips con alerta de caída ya enviada (evita "recuperado" huérfano)
 
@@ -664,7 +700,7 @@ async def daily_summary(bot: Bot) -> None:
     while True:
         try:
             now = datetime.now()
-            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.date():
+            if now.hour == 7 and now.minute < 2 and _last_summary_day != now.date().isoformat():
                 from core import llm_router as _llm
                 fecha = now.strftime("%d/%m/%Y")
                 secciones: list[str] = []
@@ -876,14 +912,15 @@ async def daily_summary(bot: Bot) -> None:
                 # falla (API, LLM, etc.) se reintenta en el próximo ciclo (dentro
                 # de la ventana hour==7/minute<2) en vez de perder el reporte
                 # del día entero en silencio (Sesión 75).
-                _last_summary_day = now.date()
+                _last_summary_day = now.date().isoformat()
+                _bot_state_set("last_summary_day", _last_summary_day)
                 _tick("daily_summary", alerted=True)
         except Exception as e:
             _tick("daily_summary", error=str(e)); log.debug("daily_summary error: %s", e)
         await asyncio.sleep(60)
 
 
-_last_evening_day: Optional[object] = None
+_last_evening_day: Optional[object] = _bot_state_get("last_evening_day")
 
 
 async def evening_summary(bot: Bot) -> None:
@@ -899,7 +936,7 @@ async def evening_summary(bot: Bot) -> None:
     while True:
         try:
             now = datetime.now()
-            if now.hour == 22 and now.minute < 2 and _last_evening_day != now.date():
+            if now.hour == 22 and now.minute < 2 and _last_evening_day != now.date().isoformat():
                 server_line = _build_server_line()
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
@@ -912,7 +949,8 @@ async def evening_summary(bot: Bot) -> None:
                 # Marcar como enviado solo tras el _send real -- mismo criterio
                 # que daily_summary (Sesión 75): un fallo antes del envío se
                 # reintenta en el próximo ciclo en vez de perder el reporte.
-                _last_evening_day = now.date()
+                _last_evening_day = now.date().isoformat()
+                _bot_state_set("last_evening_day", _last_evening_day)
                 _tick("evening_summary", alerted=True)
         except Exception as e:
             _tick("evening_summary", error=str(e)); log.debug("evening_summary error: %s", e)
