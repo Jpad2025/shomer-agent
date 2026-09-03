@@ -4,6 +4,20 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.8 — 2026-09-03
+
+- **UX del bot: más fácil de usar sin memorizar comandos** (pedido Juan Pablo tras revisar el
+  estado del bot). Cuatro cambios:
+  1. Botones "🔍 Ver detalle" en las listas de `/equipos` e `/infra` para cada equipo con
+     problema — ya no hay que copiar la IP a mano para diagnosticar.
+  2. Comando `/menu` — botones grandes por categoría (WiFi, Infra, Seguridad, Servidor,
+     Reporte, Ayuda), navegación sin escribir nada.
+  3. Teclado fijo de accesos rápidos (Salud, Equipos, Alertas, Menú) que aparece tras el primer
+     saludo o `/ayuda` y queda pegado abajo del chat.
+  4. `/start` — no existía; alguien nuevo que tocaba "Iniciar" en Telegram no recibía nada.
+     También se reforzó el texto libre como primera opción en `/ayuda` (antes la lista de
+     comandos aparecía antes que la opción de simplemente preguntar).
+
 ## 1.1.7 — 2026-09-03
 
 - **Resumen matutino: backup + inventario, y limpieza de comentarios editoriales.**
