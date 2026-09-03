@@ -4,6 +4,40 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.1.6 — 2026-09-02
+
+- **Telegram separado por hotel/cliente, nunca compartido:** se encontró que shomer243 y
+  shomer245 usaban el mismo bot que shomer205 (clonado por `fleet_sync.sh` sin regenerar
+  token), y los 4 sitios (Ópera incluida) mandaban a un mismo chat personal. Se crearon 3 bots
+  nuevos vía BotFather y 4 grupos de Telegram separados, cada uno verificado con mensaje de
+  prueba real antes de dar por hecho el cambio.
+- **Tarea pendiente 2 (parte 2), opciones 1, 3 y 4** (`core/monitor.py`, commits `0f7fb28` y
+  `c9e7e1e`): completa el trabajo de la 1.1.4 (que solo registraba, no cambiaba nada).
+  - Opción 1: si el auto-reboot de Guardian funciona, ya no interrumpe (solo si sigue caído
+    a los 3 min).
+  - Opción 3: patrón crónico (5+ ocurrencias) deja de interrumpir en tiempo real — antes solo
+    acortaba el texto del mensaje, ahora no manda nada, queda en `eventos_filtrados`.
+  - Opción 4 (solo Inframonitor): criticidad de negocio por `device_type` —
+    `pos`/`router`/`server`/`controller`/`switch` avisan ya; `printer` no-POS y `camera`
+    esperan al resumen. Configurable con `INFRA_CRITICAL_DEVICE_TYPES`. Incluye fix de
+    consistencia: la recuperación de un equipo cuya caída se silenció tampoco avisa (antes
+    hubiera mandado un "recuperado" de algo que nunca se avisó como caído).
+  - Opción 2 evaluada y descartada — se solapaba con 3+4+6 y aplicarla tal cual habría
+    apagado el aviso inmediato de un router/gateway caído, que la opción 4 marca como crítico.
+  Ver `PENDIENTES_LAB.md` § Tarea pendiente 2 para el detalle completo de las 6 opciones.
+
+## 1.1.5 — 2026-08-27
+
+- **Fix: `pattern_analysis` perdía hallazgos por JSON truncado** (`core/pattern_analysis.py`):
+  el LLM cortaba la respuesta a mitad de un array JSON (~4 veces/24h en producción) y se
+  descartaba el lote completo. `_salvage_truncated_json_array()` nuevo rescata los objetos ya
+  completos antes del corte, en vez de perderlos todos. También se acortó el prompt para
+  reducir la frecuencia del corte.
+- **Fix: `/agregar` crasheaba en silencio con puerto no numérico** (`core/bot.py`,
+  `cmd_agregar`): faltaba validar `args[3]` antes de `int(args[3])` — el error solo quedaba en
+  logs, sin respuesta al usuario en Telegram. Ahora responde con el error claro antes de
+  intentar convertir.
+
 ## 1.1.4 — 2026-08-16
 
 - **Tarea pendiente 2 (parte 1):** nueva tabla `eventos_filtrados` en
