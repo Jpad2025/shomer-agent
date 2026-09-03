@@ -967,7 +967,14 @@ def summary_text() -> str:
         online = sum(1 for n in nodes if n.get("status") == "online")
         lines.append(f"Guardian: {online}/{len(nodes)} nodos online")
         for n in nodes:
-            lines.append(f"  • {n.get('name', n.get('ip'))} — {n.get('status','?')}")
+            # Pedido Juan Pablo (3 sep 2026): un nodo en mantenimiento (Guardian
+            # no lo reinicia solo, pero sigue vigilándolo) debe distinguirse de
+            # una caída real -- si no, el resumen no explica por qué no se
+            # arregló solo, y parece una falla sin resolver.
+            etiqueta = n.get("status", "?")
+            if n.get("node_maintenance") and etiqueta != "online":
+                etiqueta = f"{etiqueta} (EN MANTENIMIENTO, sin auto-reboot)"
+            lines.append(f"  • {n.get('name', n.get('ip'))} ({n.get('ip', '?')}) — {etiqueta}")
     metrics = get_server_metrics()
     if metrics and metrics.get("success"):
         now = metrics.get("now", {})

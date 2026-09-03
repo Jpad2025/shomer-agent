@@ -689,8 +689,13 @@ async def daily_summary(bot: Bot) -> None:
                         "pendientes), y reconciliación de IP por MAC: menciona explícitamente si "
                         "hubo cambios de IP en las últimas 24h o di 'sin cambios de IP por MAC' "
                         "si no hubo ninguno -- no omitas esta línea nunca, aunque no haya nada que "
-                        "reportar. Indica si hay algo urgente. Tono tranquilizador: Hunter "
-                        "protege, no alarmista. Máximo 7 líneas.",
+                        "reportar. Si un equipo está marcado '(EN MANTENIMIENTO, sin auto-reboot)', "
+                        "dilo así explícitamente -- no lo trates como falla sin explicar. Indica si "
+                        "hay algo urgente. REGLA ESTRICTA: nunca generalices nombres, IPs o "
+                        "interfaces -- usa siempre el identificador EXACTO que aparece en los datos "
+                        "(ej. 'NIC eno1', '192.168.0.148', 'AP HAB 103'), nunca 'el servidor', 'un "
+                        "equipo' o 'el puerto' sin decir cuál. Tono tranquilizador: Hunter protege, "
+                        "no alarmista. Máximo 8 líneas.",
                         shomer_ctx + dev_ctx,
                     ),
                 )
