@@ -685,8 +685,12 @@ async def daily_summary(bot: Bot) -> None:
                         explain,
                         "Genera un resumen matutino del estado de la red. "
                         "Incluye Infra (equipos caídos), protección Hunter (IPs contenidas, "
-                        "riesgos de red pendientes) y si hay algo urgente. "
-                        "Tono tranquilizador: Hunter protege, no alarmista. Máximo 6 líneas.",
+                        "cuántas se bloquearon en las últimas 24h y por qué, riesgos de red "
+                        "pendientes), y reconciliación de IP por MAC: menciona explícitamente si "
+                        "hubo cambios de IP en las últimas 24h o di 'sin cambios de IP por MAC' "
+                        "si no hubo ninguno -- no omitas esta línea nunca, aunque no haya nada que "
+                        "reportar. Indica si hay algo urgente. Tono tranquilizador: Hunter "
+                        "protege, no alarmista. Máximo 7 líneas.",
                         shomer_ctx + dev_ctx,
                     ),
                 )
