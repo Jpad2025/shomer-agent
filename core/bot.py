@@ -13,7 +13,7 @@ import asyncio
 from functools import partial
 from datetime import datetime
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, ReplyKeyboardMarkup
 from telegram.constants import ChatAction
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -109,6 +109,16 @@ MONITOR_GROUPS = [
         "watch_pending_guardian", "watch_memoria_sync", "watch_pattern_analysis",
     ]),
 ]
+
+_MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [["🩺 Salud", "📶 Equipos"], ["🎯 Alertas", "☰ Menú"]],
+    resize_keyboard=True,
+)
+
+_KEYBOARD_ACTIONS = {
+    "🩺 Salud": "salud", "📶 Equipos": "equipos",
+    "🎯 Alertas": "alertas", "☰ Menú": "menu",
+}
 
 _GREETINGS = {
     "hola", "holas", "buenos dias", "buenos días", "buen dia", "buen día",
@@ -251,10 +261,12 @@ def _ayuda_text() -> str:
         f"{fmt.SEP_WIDE}\n\n"
 
         f"<b>🤖 General</b>\n"
+        f"<i>Texto libre</i> — lo más simple: preguntame como a un colega, sin comando "
+        f"(ej. <i>¿está caída la cámara del lobby?</i>) — ver /consultas para más ejemplos\n"
+        f"/menu — botones por categoría, sin escribir nada\n"
         f"/consultas — ejemplos de texto libre\n"
         f"/ayuda — esta lista\n"
-        f"/nuevo — limpiar historial del chat con IA\n"
-        f"<i>Texto libre</i> — escribí tu pregunta sin comando\n\n"
+        f"/nuevo — limpiar historial del chat con IA\n\n"
 
         f"<b>🖥️ Servidor Shomer</b>\n"
         f"/salud — CPU, RAM, disco, servicios, WAN, Guardian, Infra, Hunter\n"
@@ -347,16 +359,76 @@ def _consultas_text() -> str:
     )
 
 
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """No existía -- alguien nuevo que toca 'Iniciar' en Telegram no recibía
+    nada (pedido Juan Pablo 3 sep 2026: que sea fácil de usar desde el primer
+    contacto)."""
+    if not await _guard(update):
+        return
+    await update.message.reply_text(
+        f"<b>Hola, soy {fmt.e(SITE_NAME)} — Shomer Sentinel</b>\n\n"
+        f"Lo más simple: preguntame como a un colega, sin comandos "
+        f"(ej. <i>¿está caída la cámara del lobby?</i>).\n\n"
+        f"O tocá <b>☰ Menú</b> abajo para navegar por categorías.",
+        parse_mode=PM,
+        reply_markup=_MAIN_KEYBOARD,
+    )
+
+
 async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not await _guard(update):
         return
-    await update.message.reply_text(_ayuda_text(), parse_mode=PM)
+    await update.message.reply_text(_ayuda_text(), parse_mode=PM, reply_markup=_MAIN_KEYBOARD)
 
 
 async def cmd_consultas(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not await _guard(update):
         return
     await update.message.reply_text(_consultas_text(), parse_mode=PM)
+
+
+_MENU_BOTONES = [
+    [InlineKeyboardButton("📶 WiFi (Guardian)", callback_data="menu:equipos"),
+     InlineKeyboardButton("🏗️ Equipos (Infra)", callback_data="menu:infra")],
+    [InlineKeyboardButton("🎯 Seguridad (Hunter)", callback_data="menu:alertas"),
+     InlineKeyboardButton("🖥️ Servidor Shomer", callback_data="menu:salud")],
+    [InlineKeyboardButton("☀️ Reporte del día", callback_data="menu:resumen"),
+     InlineKeyboardButton("❓ Ayuda completa", callback_data="menu:ayuda")],
+]
+
+
+async def cmd_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Menú de botones (pedido Juan Pablo 3 sep 2026): para no tener que
+    recordar nombres de comandos -- tocás una categoría en vez de escribir."""
+    if not await _guard(update):
+        return
+    await update.message.reply_text(
+        f"<b>¿Qué querés ver?</b>\n<i>O simplemente preguntame en texto libre.</i>",
+        parse_mode=PM,
+        reply_markup=InlineKeyboardMarkup(_MENU_BOTONES),
+    )
+
+
+async def cb_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+    if not level:
+        return
+    accion = query.data.split(":", 1)[1]
+    if accion == "equipos":
+        await _equipos_impl(query.message, ctx, level)
+    elif accion == "infra":
+        await _infra_list_impl(query.message, ctx)
+    elif accion == "alertas":
+        await _alertas_impl(query.message, ctx, level)
+    elif accion == "salud":
+        await _salud_impl(query.message, ctx, level)
+    elif accion == "resumen":
+        await _typing_q(query, ctx)
+        await _resumen_impl(query.message, level)
+    elif accion == "ayuda":
+        await query.message.reply_text(_ayuda_text(), parse_mode=PM)
 
 
 async def cmd_version(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -386,6 +458,7 @@ async def _equipos_impl(message, ctx, level: str):
         "unknown":     "Desconocido",
     }
     nodes = shomer_api.get_guardian_nodes()
+    problema_btns = []
     if nodes:
         lines = []
         for n in nodes:
@@ -397,6 +470,10 @@ async def _equipos_impl(message, ctx, level: str):
             lines.append(
                 f"  {icon} <b>{fmt.e(nombre)}</b> <code>{fmt.e(ip)}</code> — {fmt.e(st_label)}"
             )
+            if st != "online" and len(problema_btns) < 8:
+                problema_btns.append(
+                    InlineKeyboardButton(f"🔍 {nombre}"[:30], callback_data=f"ver_ip:{ip}")
+                )
         sections.append(fmt.section("👁️", "Guardian — equipos monitoreados", lines))
 
     devices = dm.list_devices()
@@ -419,7 +496,11 @@ async def _equipos_impl(message, ctx, level: str):
 
     header = f"{fmt.SEP_WIDE}\n👁️ <b>EQUIPOS — {fmt.e(SITE_NAME)}</b>\n{fmt.SEP_WIDE}"
     texto  = header + "\n\n" + f"\n\n{fmt.SEP}\n\n".join(sections)
-    await message.reply_text(texto, parse_mode=PM)
+    markup = None
+    if problema_btns:
+        filas = [problema_btns[i:i + 2] for i in range(0, len(problema_btns), 2)]
+        markup = InlineKeyboardMarkup(filas)
+    await message.reply_text(texto, parse_mode=PM, reply_markup=markup)
 
 
 async def cmd_equipos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -500,11 +581,17 @@ async def _infra_list_impl(message, ctx) -> None:
             f" — {fmt.e(_INFRA_TYPE_LABEL.get(dtype, dtype))}{lat_txt}{extra}{snmp}"
         )
 
+    problema_btns = []
     if offline:
         lines.append("")
         lines.append("<b>Caídos:</b>")
         for d in sorted(offline, key=lambda x: (x.get("location") or "", x.get("name") or "")):
             lines.append(_row(d))
+            if len(problema_btns) < 8:
+                nombre = d.get("name", d.get("ip", "?"))
+                problema_btns.append(
+                    InlineKeyboardButton(f"🔍 {nombre}"[:30], callback_data=f"ver_ip:{d.get('ip','')}")
+                )
 
     if online:
         lines.append("")
@@ -516,7 +603,11 @@ async def _infra_list_impl(message, ctx) -> None:
     lines.append("<i>Detalle: /infra &lt;ip&gt; · Puertos SNMP: /puertos &lt;ip&gt;</i>")
 
     header = f"{fmt.SEP_WIDE}\n🏗️ <b>INFRA — {fmt.e(SITE_NAME)}</b>\n{fmt.SEP_WIDE}"
-    await message.reply_text(header + "\n\n" + "\n".join(lines), parse_mode=PM)
+    markup = None
+    if problema_btns:
+        filas = [problema_btns[i:i + 2] for i in range(0, len(problema_btns), 2)]
+        markup = InlineKeyboardMarkup(filas)
+    await message.reply_text(header + "\n\n" + "\n".join(lines), parse_mode=PM, reply_markup=markup)
 
 
 async def _infra_detail_impl(message, ctx, ip: str) -> None:
@@ -2542,6 +2633,22 @@ async def cb_diag_fix(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await _diag_impl(query.message, ctx, level, ip, remediate=True)
 
 
+async def cb_ver_ip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Botón 'Ver detalle' agregado a /equipos y /infra (pedido Juan Pablo 3
+    sep 2026: que el técnico no tenga que copiar la IP a mano). No borra los
+    botones de la lista -- así puede revisar varios equipos seguidos."""
+    query = update.callback_query
+    await query.answer()
+    level = acc.get_level(update)
+    if not level:
+        return
+    ip = query.data.split(":", 1)[1]
+    if shomer_api.find_infra_device_by_ip(ip):
+        await _infra_detail_impl(query.message, ctx, ip)
+    else:
+        await _diag_impl(query.message, ctx, level, ip)
+
+
 # ── cb_repair ────────────────────────────────────────────────────────────────
 
 async def cb_dismiss(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2855,15 +2962,33 @@ async def msg_natural(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Botones del teclado fijo (_MAIN_KEYBOARD) → mismas funciones que sus comandos
+    if text in _KEYBOARD_ACTIONS:
+        accion = _KEYBOARD_ACTIONS[text]
+        if accion == "salud":
+            await _salud_impl(update.message, ctx, level)
+        elif accion == "equipos":
+            await _equipos_impl(update.message, ctx, level)
+        elif accion == "alertas":
+            await _alertas_impl(update.message, ctx, level)
+        elif accion == "menu":
+            await update.message.reply_text(
+                "<b>¿Qué querés ver?</b>", parse_mode=PM,
+                reply_markup=InlineKeyboardMarkup(_MENU_BOTONES),
+            )
+        return
+
     # Preguntas de identidad → respuesta fija sin LLM
     if _is_identity_question(text):
         await update.message.reply_text(_IDENTITY_RESPONSE, parse_mode=PM)
         return
 
-    # Saludos → respuesta corta sin Groq
+    # Saludos → respuesta corta sin Groq. Primer contacto natural: deja el
+    # teclado fijo puesto (pedido Juan Pablo 3 sep 2026, accesos rápidos sin
+    # escribir comandos) -- Telegram lo mantiene hasta que se reemplace.
     if _is_greeting(text):
         resp = random.choice(_GREETING_RESPONSES)
-        await update.message.reply_text(resp, parse_mode=PM)
+        await update.message.reply_text(resp, parse_mode=PM, reply_markup=_MAIN_KEYBOARD)
         return
 
     # Lenguaje natural con tool calling y memoria
@@ -2910,8 +3035,10 @@ def run():
     # Comandos — nombres cortos (sin prefijo de módulo)
     for cmd, fn in [
         # Global
+        ("start",          cmd_start),
         ("ayuda",          cmd_ayuda),
         ("consultas",      cmd_consultas),
+        ("menu",           cmd_menu),
         # Servidor
         ("salud",          cmd_salud),
         ("monitores",      cmd_monitores),
@@ -2957,6 +3084,8 @@ def run():
     # Callbacks
     app.add_handler(CallbackQueryHandler(cb_salud,           pattern="^salud:"))
     app.add_handler(CallbackQueryHandler(cb_diag_fix,        pattern="^diag_fix:"))
+    app.add_handler(CallbackQueryHandler(cb_ver_ip,          pattern="^ver_ip:"))
+    app.add_handler(CallbackQueryHandler(cb_menu,            pattern="^menu:"))
     app.add_handler(CallbackQueryHandler(cb_reboot,          pattern="^reboot_"))
     app.add_handler(CallbackQueryHandler(cb_mantenimiento,   pattern="^maint:"))
     app.add_handler(CallbackQueryHandler(cb_seguro,           pattern="^seguro:"))
@@ -2978,6 +3107,7 @@ def run():
     async def post_init(application):
         monitor.start_all(application.bot)
         await application.bot.set_my_commands([
+            BotCommand("menu", "Menú de botones — sin escribir comandos"),
             BotCommand("consultas", "Ejemplos de texto libre"),
             BotCommand("ayuda", "Lista completa de comandos"),
             BotCommand("salud", "Estado del servidor Shomer"),
