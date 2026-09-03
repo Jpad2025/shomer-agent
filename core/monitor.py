@@ -669,6 +669,28 @@ async def daily_summary(bot: Bot) -> None:
                 fecha = now.strftime("%d/%m/%Y")
                 secciones: list[str] = []
 
+                def _parse_ts(ts_str: str | None):
+                    if not ts_str:
+                        return None
+                    try:
+                        ts = datetime.fromisoformat(ts_str.replace("Z", ""))
+                        # blocked_at trae offset (+00:00, UTC); el resto de
+                        # fechas del sistema son naive -- se quita el offset
+                        # para poder restar contra `now` (naive, hora local).
+                        # Puede desviar unas horas, sin impacto real en "hace
+                        # cuántos días".
+                        return ts.replace(tzinfo=None) if ts.tzinfo else ts
+                    except Exception:
+                        return None
+
+                def _dias_desde(ts_str: str | None) -> int | None:
+                    ts = _parse_ts(ts_str)
+                    return (now - ts).days if ts else None
+
+                def _fmt_fecha(ts_str: str | None) -> str:
+                    ts = _parse_ts(ts_str)
+                    return ts.strftime("%d/%m/%Y %H:%M") if ts else (ts_str or "?")
+
                 # Pedido Juan Pablo (3 sep 2026): resumen con secciones claras,
                 # ícono de color por sistema (🟢/🟡/🔴) y datos exactos (nombre +
                 # IP siempre) en vez de un párrafo de IA que a veces generalizaba
@@ -729,9 +751,14 @@ async def daily_summary(bot: Bot) -> None:
                     crit = audit["by_severity"].get("critico", 0)
                     alto = audit["by_severity"].get("alto", 0)
                 icon_h = "🟡" if (recientes or crit or alto) else "🟢"
+                mas_antigua = min(
+                    (b.get("blocked_at") for b in blocked if b.get("blocked_at")),
+                    default=None,
+                )
+                desde_txt = f", la más antigua desde {_fmt_fecha(mas_antigua)}" if mas_antigua else ""
                 lines_h = [
                     f"{icon_h} <b>Hunter — seguridad de la red</b>: {len(blocked)} IP(s) "
-                    f"de internet bloqueadas por intentar atacar la red (nunca se liberan solas)"
+                    f"bloqueadas{desde_txt}"
                 ]
                 if recientes:
                     lines_h.append(f"  🚫 Bloqueadas hoy (24h): {len(recientes)}")
@@ -768,22 +795,6 @@ async def daily_summary(bot: Bot) -> None:
 
                 # Pedido Juan Pablo (3 sep 2026): backup local + cuándo se
                 # subió a la nube, y el último inventario hecho por Tracker.
-                def _parse_ts(ts_str: str | None):
-                    if not ts_str:
-                        return None
-                    try:
-                        return datetime.fromisoformat(ts_str.replace("Z", ""))
-                    except Exception:
-                        return None
-
-                def _dias_desde(ts_str: str | None) -> int | None:
-                    ts = _parse_ts(ts_str)
-                    return (now - ts).days if ts else None
-
-                def _fmt_fecha(ts_str: str | None) -> str:
-                    ts = _parse_ts(ts_str)
-                    return ts.strftime("%d/%m/%Y %H:%M") if ts else (ts_str or "?")
-
                 backup_devs = shomer_api.get_backup_devices()
                 b2_sync = shomer_api.get_last_b2_sync()
                 if backup_devs:
