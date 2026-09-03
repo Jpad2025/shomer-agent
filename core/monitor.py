@@ -683,7 +683,10 @@ async def daily_summary(bot: Bot) -> None:
                         not n.get("node_maintenance") for n in problemas_g
                     )
                     icon_g = "🔴" if hay_falla_real else ("🟡" if problemas_g else "🟢")
-                    lines_g = [f"{icon_g} <b>Guardian</b> — {online_g}/{len(nodes)} online"]
+                    lines_g = [
+                        f"{icon_g} <b>Guardian — WiFi del hotel</b>: "
+                        f"{online_g}/{len(nodes)} antenas (APs) funcionando"
+                    ]
                     for n in problemas_g[:8]:
                         nombre, ip = n.get("name", "?"), n.get("ip", "?")
                         if n.get("node_maintenance"):
@@ -704,7 +707,10 @@ async def daily_summary(bot: Bot) -> None:
                         d.get("device_type") in _INFRA_CRITICAL_TYPES for d in off
                     )
                     icon_i = "🔴" if hay_critico else ("🟡" if off else "🟢")
-                    lines_i = [f"{icon_i} <b>Infra</b> — {infra['online']}/{infra['total']} online"]
+                    lines_i = [
+                        f"{icon_i} <b>Infra — equipos del hotel</b> (switches, impresoras, "
+                        f"cámaras, datáfonos): {infra['online']}/{infra['total']} funcionando"
+                    ]
                     for d in off[:8]:
                         lines_i.append(
                             f"  {d.get('icon', '📡')} {d.get('name', '?')} ({d.get('ip', '?')}) — caído"
@@ -723,7 +729,10 @@ async def daily_summary(bot: Bot) -> None:
                     crit = audit["by_severity"].get("critico", 0)
                     alto = audit["by_severity"].get("alto", 0)
                 icon_h = "🟡" if (recientes or crit or alto) else "🟢"
-                lines_h = [f"{icon_h} <b>Hunter</b> — {len(blocked)} IP(s) contenida(s)"]
+                lines_h = [
+                    f"{icon_h} <b>Hunter — seguridad de la red</b>: {len(blocked)} IP(s) "
+                    f"de internet bloqueadas por intentar atacar la red (nunca se liberan solas)"
+                ]
                 if recientes:
                     lines_h.append(f"  🚫 Bloqueadas hoy (24h): {len(recientes)}")
                     for b in recientes[:5]:
@@ -738,7 +747,11 @@ async def daily_summary(bot: Bot) -> None:
 
                 reconciliados = shomer_api.get_mac_reconcile_recent(24)
                 if reconciliados:
-                    lines_m = [f"🔄 <b>IP por MAC (24h)</b> — {len(reconciliados)} cambio(s)"]
+                    lines_m = [
+                        f"🔄 <b>Equipos que cambiaron de dirección de red (24h)</b>: "
+                        f"{len(reconciliados)} — el sistema los reconoció por su identificador "
+                        f"físico (MAC) y corrigió la IP solo, no es una caída real"
+                    ]
                     for r in reconciliados[:5]:
                         lines_m.append(
                             f"  • {r.get('name', '?')} ({r.get('fuente', '?')}) — "
@@ -747,7 +760,10 @@ async def daily_summary(bot: Bot) -> None:
                     if len(reconciliados) > 5:
                         lines_m.append(f"  …y {len(reconciliados) - 5} más")
                 else:
-                    lines_m = ["🟢 <b>IP por MAC (24h)</b> — sin cambios"]
+                    lines_m = [
+                        "🟢 <b>Cambios de IP detectados (24h)</b>: ninguno — "
+                        "todos los equipos siguen en su misma dirección de red"
+                    ]
                 secciones.append("\n".join(lines_m))
 
                 daily_health = shomer_api.get_daily_health()
