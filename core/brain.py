@@ -46,6 +46,8 @@ BRAIN_ENABLED = os.environ.get("BRAIN_ENABLED", "1").strip().lower() in ("1", "t
 BRAIN_MODEL = os.environ.get("BRAIN_MODEL", "gpt-4o").strip()
 BRAIN_INTERVAL_MIN = int(os.environ.get("BRAIN_INTERVAL_MIN", "20"))
 CLUSTER_WINDOW_MIN = int(os.environ.get("BRAIN_CLUSTER_WINDOW_MIN", "10"))
+MAX_EVENTS_IN_PROMPT = 20
+MAX_ENTITIES_IN_PROMPT = 10
 
 _SEVERITY_RANK = {"critical": 3, "warn": 2, "info": 1}
 
@@ -238,8 +240,10 @@ _SYSTEM_PROMPT = (
     "tecnico, respaldada en la evidencia real (ej.: 'reinicio remoto ya "
     "funciono 4 de 4 veces en este equipo -> intentalo primero' o 'nunca ha "
     "funcionado remoto, revision fisica'). Si la evidencia es debil, decilo "
-    "asi, no lo infles a algo grave. Responde SOLO JSON, sin texto extra, sin "
-    "bloques de codigo: "
+    "asi, no lo infles a algo grave. Se BREVE: maximo 1-2 frases cortas por "
+    "campo -- la respuesta completa debe entrar dentro del limite de tokens "
+    "de salida, una respuesta cortada a mitad de camino no sirve de nada. "
+    "Responde SOLO JSON, sin texto extra, sin bloques de codigo: "
     '{"correlacionados": true|false, "causa_raiz": "...", "recomendacion": "...", '
     '"urgencia": "alta|media|baja", "resumen": "..."}'
 )
@@ -258,7 +262,7 @@ def _call_openai_reasoning(user_prompt: str) -> str | None:
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=700,
+            max_tokens=900,
             temperature=0.2,
             response_format={"type": "json_object"},
         )
@@ -287,13 +291,34 @@ def _call_groq_reasoning(user_prompt: str) -> str | None:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
-        out = groq_helper._call_groq(messages, max_tokens=700, background=True)
+        out = groq_helper._call_groq(messages, max_tokens=900, background=True)
         if not out or out.lstrip()[:1] in ("⏳", "❌", "⚠️"):
             return None
         return out
     except Exception as e:
         log.warning("brain: Groq fallback tambien fallo: %s", e)
         return None
+
+
+def _salvage_truncated_object(text: str) -> dict | None:
+    """Recupera campos de un objeto JSON cortado a mitad de camino (típico
+    cuando la salida choca contra max_tokens) -- mismo problema que
+    pattern_analysis.py resuelve para listas, aquí para un solo objeto: si
+    algún campo quedó completo antes del corte, se rescata en vez de perder
+    todo el hallazgo (visto real en producción el 4 sep con un cluster grande)."""
+    import re
+    campos = {}
+    for campo in ("causa_raiz", "recomendacion", "urgencia", "resumen"):
+        m = re.search(rf'"{campo}"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        if m:
+            campos[campo] = m.group(1).replace('\\"', '"').replace("\\n", " ")
+    if "causa_raiz" not in campos and "recomendacion" not in campos:
+        return None
+    campos.setdefault("causa_raiz", "(respuesta cortada -- ver recomendación)")
+    campos.setdefault("recomendacion", "(respuesta cortada -- revisar manualmente)")
+    campos.setdefault("urgencia", "media")
+    campos.setdefault("resumen", "Hallazgo recuperado de una respuesta truncada.")
+    return campos
 
 
 def _call_reasoning_model(user_prompt: str) -> dict | None:
@@ -314,6 +339,11 @@ def _call_reasoning_model(user_prompt: str) -> dict | None:
         data["_engine"] = engine
         return data
     except Exception as e:
+        salvaged = _salvage_truncated_object(cleaned)
+        if salvaged:
+            log.info("brain: respuesta truncada -- campos rescatados parcialmente")
+            salvaged["_engine"] = engine
+            return salvaged
         log.warning("brain: respuesta no es JSON valido (%s): %s", e, raw[:200])
         return None
 
@@ -358,20 +388,32 @@ def run_cycle() -> list[dict]:
         entities = _cluster_entities(cluster)
         if not _should_escalate_to_llm(cluster, entities):
             continue
-        contexto_entidades = {ent["name"]: _entity_learning_context(ent["ip"]) for ent in entities}
+        # Máximo MAX_ENTITIES_IN_PROMPT entidades con contexto completo -- un
+        # grupo grande (ej. caída masiva de 30 eventos) no necesita el detalle
+        # de aprendizaje de cada una para que el modelo entienda la causa común.
+        entities_for_context = entities[:MAX_ENTITIES_IN_PROMPT]
+        contexto_entidades = {ent["name"]: _entity_learning_context(ent["ip"]) for ent in entities_for_context}
+        # Eventos acotados por CANTIDAD (no por caracteres) -- cortar el JSON a
+        # ciegas con [:N] rompe la estructura y le manda al modelo datos
+        # corruptos como si fueran "hechos reales" (bug real visto en producción
+        # el 4 sep: un grupo de 30 eventos truncado a mitad de un string generó
+        # una respuesta también truncada e inutilizable).
+        eventos_incluidos = cluster[:MAX_EVENTS_IN_PROMPT]
+        omitidos = len(cluster) - len(eventos_incluidos)
         payload = {
             "eventos": [
                 {
                     "ts": e["ts"], "fuente": e["source"],
                     "entidad": e.get("entity_name") or e.get("entity_ip"),
-                    "evento": e["event"], "detalle": (e.get("detail") or "")[:200],
+                    "evento": e["event"], "detalle": (e.get("detail") or "")[:150],
                     "severidad": e.get("severity"),
                 }
-                for e in cluster
+                for e in eventos_incluidos
             ],
+            "eventos_omitidos_por_espacio": omitidos,
             "aprendizaje_por_entidad": contexto_entidades,
         }
-        user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)[:4000]
+        user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         result = _call_reasoning_model(user_prompt)
         if not result:
             log.warning("brain: sin respuesta del modelo para grupo de %d evento(s)", len(cluster))
