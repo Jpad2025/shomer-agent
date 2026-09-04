@@ -4,6 +4,32 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.4.0 — 2026-09-04
+
+- **Protagonismo real del cerebro — pedido explícito de Juan Pablo tras ver que, aunque
+  funcionaba, "sigue siendo un punto aparte, debería ser algo central".** Evidencia concreta
+  que motivó esto: el incidente real del rack (15:36) generó 1 mensaje del cerebro + 6 avisos
+  sueltos idénticos de `equipos_red` sobre los mismos equipos — el cerebro tenía la explicación
+  correcta pero cero autoridad sobre el ruido a su alrededor. Cambios:
+  - **`/pendientes` y el sistema de tickets ya existente pasan a ser el hogar real del cerebro.**
+    Un hallazgo de 2+ equipos con urgencia alta abre un pendiente de verdad (`chronic_tickets`,
+    `fuente='cerebro'`) — aparece en `/pendientes` junto a los tickets de Guardian/Infra, no en
+    un comando aparte que hay que acordarse de escribir.
+  - **`recently_covered(ip)`**: si un equipo ya salió en un hallazgo del cerebro en los últimos
+    20 min, `watch_infra` ya no repite el aviso completo — manda una referencia corta ("ya
+    explicado por el 🧠 cerebro, ver /pendientes #N") en su lugar. Aplica tanto a caídas nuevas
+    como a recuperaciones.
+  - **`BRAIN_INTERVAL_MIN` 20 → 5 minutos** — reacciona mucho más cerca del tiempo real.
+  - **Visible en los reportes que ya se leen a diario**: `/salud` muestra el hallazgo más
+    reciente arriba de todo; `daily_summary` y `evening_summary` incluyen una sección "🧠
+    Cerebro" con lo encontrado ese día — sin tener que escribir `/cerebro`.
+  - **Bug real encontrado al probar antes de desplegar:** abrir el ticket desde dentro de la
+    misma transacción de `sqlite3` que grababa la conclusión producía `database is locked`
+    (dos conexiones de escritura simultáneas al mismo archivo). Corregido separando el commit
+    de la conclusión del paso de abrir el ticket. Reprobado extremo a extremo: hallazgo de 3
+    equipos con urgencia alta → ticket abierto correctamente, visible junto a los tickets reales
+    existentes, y `recently_covered()` lo encuentra por IP.
+
 ## 1.3.1 — 2026-09-04
 
 - **Fix real encontrado en producción a los pocos minutos de desplegar el cerebro (1.3.0):**

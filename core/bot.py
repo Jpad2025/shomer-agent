@@ -944,6 +944,21 @@ async def _salud_impl(message, ctx, level: str):
 
     parts = []
 
+    # Cerebro — protagonismo real (sesión 81 cont.): su hallazgo más reciente
+    # va primero, no como un comando aparte que hay que acordarse de escribir.
+    try:
+        from core import brain
+        ultimo = brain.list_recent(limit=1)
+        if ultimo:
+            c = ultimo[0]
+            icon_b = {"alta": "🔴", "media": "🟡", "baja": "🟢"}.get(c["urgency"], "•")
+            parts.append(fmt.section("🧠", "Cerebro — último hallazgo", [
+                f"  {icon_b} <b>{fmt.e(c['entities'][:100])}</b> ({c['ts'][:16]})",
+                f"  {fmt.e(c['root_cause'][:150])}",
+            ]))
+    except Exception:
+        pass
+
     # Recursos servidor
     metrics = shomer_api.get_server_metrics()
     if metrics and metrics.get("success"):

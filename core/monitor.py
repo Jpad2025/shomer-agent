@@ -928,6 +928,24 @@ async def daily_summary(bot: Bot) -> None:
                         )
                     secciones.append("\n".join(lines_w))
 
+                # Protagonismo real del cerebro (sesión 81 cont., pedido de
+                # Juan Pablo): su hallazgo más reciente aparece aquí, no solo
+                # si alguien se acuerda de escribir /cerebro.
+                try:
+                    from core import brain
+                    recientes_cerebro = [
+                        c for c in brain.list_recent(limit=3)
+                        if _dias_desde(c["ts"]) == 0
+                    ]
+                except Exception:
+                    recientes_cerebro = []
+                if recientes_cerebro:
+                    lines_b = ["🧠 <b>Cerebro — hallazgos correlacionados de hoy</b>"]
+                    for c in recientes_cerebro:
+                        icon_b = {"alta": "🔴", "media": "🟡", "baja": "🟢"}.get(c["urgency"], "•")
+                        lines_b.append(f"  {icon_b} {c['entities'][:100]} — {c['root_cause'][:120]}")
+                    secciones.append("\n".join(lines_b))
+
                 daily_health = shomer_api.get_daily_health()
                 server_line = _build_server_line().strip()
                 lines_s = ["🖥️ <b>Servidor Shomer</b>"]
@@ -985,9 +1003,23 @@ async def evening_summary(bot: Bot) -> None:
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
 
+                try:
+                    from core import brain
+                    hoy_iso = now.strftime("%Y-%m-%d")
+                    hallazgos_hoy = [c for c in brain.list_recent(limit=5) if c["ts"][:10] == hoy_iso]
+                except Exception:
+                    hallazgos_hoy = []
+                cerebro_block = ""
+                if hallazgos_hoy:
+                    icon_b = {"alta": "🔴", "media": "🟡", "baja": "🟢"}
+                    cerebro_block = "\n\n🧠 <b>Cerebro hoy:</b>\n" + "\n".join(
+                        f"  {icon_b.get(c['urgency'], '•')} {c['entities'][:100]}"
+                        for c in hallazgos_hoy
+                    )
+
                 await _send(
                     bot,
-                    f"🌙 <b>Cierre del día</b>{server_line}{notas_block}",
+                    f"🌙 <b>Cierre del día</b>{server_line}{notas_block}{cerebro_block}",
                     monitor="evening_summary",
                 )
                 # Marcar como enviado solo tras el _send real -- mismo criterio
@@ -3307,7 +3339,26 @@ async def watch_infra(bot: Bot) -> None:
                     # igual que le pasaba a OFC-COCINA en Guardian (Sesión 71).
                     for item in _cycle_new_offline:
                         async def _send_first(_bot=bot, _item=item):
-                            await _send(_bot, _item["msg"], monitor="equipos_red")
+                            # Protagonismo real del cerebro (sesión 81 cont.):
+                            # si ya explicó esta misma caída hace poco (mismo
+                            # equipo, ventana reciente), no repetir el aviso
+                            # completo -- referenciar su hallazgo en su lugar.
+                            # Antes: un incidente de rack generaba 1 mensaje
+                            # del cerebro + 6 avisos sueltos idénticos (visto
+                            # real hoy, 15:36-15:42).
+                            from core import brain as _brain
+                            cov = _brain.recently_covered(_item["ip"])
+                            if cov:
+                                await _send(
+                                    _bot,
+                                    f"↳ {msgfmt.host(_item['name'], _item['ip'])} — "
+                                    f"ya explicado por el 🧠 cerebro (ver /pendientes"
+                                    + (f" #{cov['ticket_id']}" if cov.get("ticket_id") else "")
+                                    + ")",
+                                    monitor="equipos_red",
+                                )
+                            else:
+                                await _send(_bot, _item["msg"], monitor="equipos_red")
 
                         from core import incident_escalation as _esc
                         await _esc.handle_event(
@@ -3330,15 +3381,25 @@ async def watch_infra(bot: Bot) -> None:
                 pulse_alert = True
             else:
                 from core import incident_escalation as _esc
+                from core import brain as _brain
                 for item in _cycle_recoveries:
                     # Mapa de decisión de alertas (CLAUDE.md), paso 6 (igual que arriba).
                     if not _esc.is_flapping(item["ip"]):
-                        await _send(
-                            bot,
-                            _a("🟢", item["evt"], item["detail"], raw=True),
-                            reply_markup=_save_kb_recovery(item["ip"]),
-                            monitor="equipos_red",
-                        )
+                        cov = _brain.recently_covered(item["ip"])
+                        if cov:
+                            await _send(
+                                bot,
+                                f"↳ {msgfmt.host(item['name'], item['ip'])} recuperado — "
+                                f"ya explicado por el 🧠 cerebro",
+                                monitor="equipos_red",
+                            )
+                        else:
+                            await _send(
+                                bot,
+                                _a("🟢", item["evt"], item["detail"], raw=True),
+                                reply_markup=_save_kb_recovery(item["ip"]),
+                                monitor="equipos_red",
+                            )
                         eq_alert = True
                     else:
                         _esc.record_filtered_event(item["ip"], item["name"], "watch_infra")

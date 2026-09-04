@@ -44,7 +44,7 @@ MEMORIA_DB = os.environ.get("MEMORIA_DB_PATH", "/app/data/memoria.db")
 
 BRAIN_ENABLED = os.environ.get("BRAIN_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 BRAIN_MODEL = os.environ.get("BRAIN_MODEL", "gpt-4o").strip()
-BRAIN_INTERVAL_MIN = int(os.environ.get("BRAIN_INTERVAL_MIN", "20"))
+BRAIN_INTERVAL_MIN = int(os.environ.get("BRAIN_INTERVAL_MIN", "5"))
 CLUSTER_WINDOW_MIN = int(os.environ.get("BRAIN_CLUSTER_WINDOW_MIN", "10"))
 MAX_EVENTS_IN_PROMPT = 20
 MAX_ENTITIES_IN_PROMPT = 10
@@ -71,6 +71,11 @@ def _init_db() -> None:
             )
             """
         )
+        cols = {r[1] for r in con.execute("PRAGMA table_info(brain_conclusions)").fetchall()}
+        if "entity_ips" not in cols:
+            con.execute("ALTER TABLE brain_conclusions ADD COLUMN entity_ips TEXT DEFAULT ''")
+        if "ticket_id" not in cols:
+            con.execute("ALTER TABLE brain_conclusions ADD COLUMN ticket_id INTEGER")
         con.execute(
             "CREATE TABLE IF NOT EXISTS brain_state (key TEXT PRIMARY KEY, value TEXT)"
         )
@@ -423,23 +428,47 @@ def run_cycle() -> list[dict]:
         if urgencia not in ("alta", "media", "baja"):
             urgencia = "baja"
         entities_str = ", ".join(e["name"] for e in entities)
+        ips_str = ",".join(e["ip"] for e in entities if e["ip"])
         sources_str = ", ".join(sorted({e["source"] for e in cluster}))
         is_dup = _is_duplicate(con, entities_str)
 
         cur = con.execute(
             "INSERT INTO brain_conclusions "
-            "(entities, sources, root_cause, recommendation, urgency, evidence_count, engine) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(entities, sources, root_cause, recommendation, urgency, evidence_count, engine, entity_ips) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entities_str, sources_str,
                 str(result.get("causa_raiz") or "")[:1000],
                 str(result.get("recomendacion") or "")[:1000],
-                urgencia, len(cluster), result.get("_engine") or "",
+                urgencia, len(cluster), result.get("_engine") or "", ips_str,
             ),
         )
-        con.commit()
+        conclusion_id = cur.lastrowid
+        con.commit()  # cerrar esta transacción ANTES de que chronic_tickets abra
+                      # su propia conexión de escritura -- sin esto, sqlite tira
+                      # "database is locked" (bug real encontrado al probar).
+
+        # Protagonismo real (sesion 81 cont., pedido explicito de Juan Pablo):
+        # un hallazgo de varios equipos con urgencia alta abre un pendiente de
+        # verdad -- mismo sistema que ya usa /pendientes -- en vez de vivir
+        # solo como un mensaje de Telegram que se pierde en el historial. Asi
+        # el cerebro queda dentro del flujo de trabajo real, no aparte de el.
+        ticket_id = None
+        if urgencia == "alta" and len(entities) >= 2 and not is_dup:
+            try:
+                from core import chronic_tickets
+                anchor_ip = entities[0]["ip"] or f"cerebro-{conclusion_id}"
+                nombre_ticket = f"🧠 {entities_str[:150]}"
+                ticket_id, _nuevo = chronic_tickets.get_or_create(anchor_ip, nombre_ticket, "cerebro")
+                con.execute(
+                    "UPDATE brain_conclusions SET ticket_id=? WHERE id=?",
+                    (ticket_id, conclusion_id),
+                )
+                con.commit()
+            except Exception as e:
+                log.warning("brain: no se pudo abrir pendiente para hallazgo #%d: %s", conclusion_id, e)
         conclusiones.append({
-            "id": cur.lastrowid,
+            "id": conclusion_id,
             "entities": entities_str,
             "sources": sources_str,
             "root_cause": result.get("causa_raiz") or "",
@@ -449,6 +478,7 @@ def run_cycle() -> list[dict]:
             "evidence_count": len(cluster),
             "_dup": is_dup,
             "_engine": result.get("_engine"),
+            "ticket_id": ticket_id,
         })
     con.close()
     _set_state("last_incident_id", str(max_id))
@@ -465,7 +495,28 @@ def format_telegram(c: dict) -> str:
         f"<b>Recomendación:</b> {c['recommendation']}",
         f"<i>Basado en {c['evidence_count']} evento(s) correlacionados</i>",
     ]
+    if c.get("ticket_id"):
+        lines.append(f"🎫 Abierto como pendiente #{c['ticket_id']} — ver /pendientes")
     return "\n".join(lines)
+
+
+def recently_covered(ip: str, minutes: int = 20) -> dict | None:
+    """¿Este equipo ya salió en un hallazgo del cerebro hace poco? Lo usan los
+    watchers individuales (Guardian/Infra) para no repetir una alerta aparte
+    de algo que el cerebro ya explicó -- protagonismo real, no solo un mensaje
+    de más al lado de los de siempre."""
+    if not ip:
+        return None
+    con = sqlite3.connect(KNOWLEDGE_DB)
+    con.row_factory = sqlite3.Row
+    row = con.execute(
+        "SELECT id, root_cause, ticket_id FROM brain_conclusions "
+        "WHERE (',' || entity_ips || ',') LIKE ? AND ts > datetime('now', ?) "
+        "ORDER BY ts DESC LIMIT 1",
+        (f"%,{ip},%", f"-{minutes} minutes"),
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None
 
 
 def mark_sent(conclusion_id: int) -> None:
