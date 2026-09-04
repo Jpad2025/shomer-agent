@@ -311,7 +311,9 @@ def _ayuda_text() -> str:
         f"/bitacora [horas|csv] — fallos guardados en memoria.db (consulta remediación)\n"
         f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo/mantenimiento (ver /historial)\n"
         f"/pendientes — equipos con patrón crónico sin cerrar (recordatorio 3x/día: "
-        f"10am, 3pm, 8pm) — botones para cerrar o pausar 3 días\n\n"
+        f"10am, 3pm, 8pm) — botones para cerrar o pausar 3 días\n"
+        f"/cerebro [ahora] — hallazgos correlacionados entre sistemas (causa raíz + "
+        f"recomendación respaldada en aprendizaje real); 'ahora' fuerza un análisis\n\n"
 
         f"<b>🛠️ Instalación</b>\n"
         f"/instalar — guía paso a paso del sitio\n"
@@ -1726,6 +1728,49 @@ async def cmd_pendientes(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "\n".join(lines), parse_mode=PM, reply_markup=InlineKeyboardMarkup(kb_rows),
     )
+
+
+async def cmd_cerebro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Cerebro unificado (sesión 81, 4 sep 2026): últimos hallazgos correlacionados
+    entre sistemas (Guardian+Infra+Hunter) con causa raíz + recomendación
+    respaldada en aprendizaje real. `/cerebro ahora` fuerza un ciclo manual."""
+    if not await _guard(update):
+        return
+    from core import brain
+    import asyncio as _asyncio
+
+    args = ctx.args or []
+    if args and args[0].lower() in ("ahora", "forzar", "run"):
+        await update.message.reply_text("🧠 Analizando eventos recientes...")
+        conclusiones = await _asyncio.to_thread(brain.run_cycle)
+        if not conclusiones:
+            await update.message.reply_text(
+                "Sin hallazgos nuevos que merezcan análisis en este ciclo "
+                "(no hay eventos suficientes o correlacionados)."
+            )
+            return
+        for c in conclusiones:
+            await update.message.reply_text(brain.format_telegram(c), parse_mode=PM)
+        return
+
+    recientes = brain.list_recent(limit=8)
+    if not recientes:
+        await update.message.reply_text(
+            "🧠 El cerebro todavía no tiene hallazgos registrados.\n"
+            "Usa <code>/cerebro ahora</code> para forzar un análisis manual.",
+            parse_mode=PM,
+        )
+        return
+    icon = {"alta": "🔴", "media": "🟡", "baja": "🟢"}
+    lines = [f"🧠 <b>Cerebro Shomer — últimos {len(recientes)} hallazgos</b>"]
+    for c in recientes:
+        lines.append(
+            f"\n{icon.get(c['urgency'], '•')} <b>{fmt.e(c['entities'])}</b> "
+            f"({fmt.e(c['sources'])}) — {c['ts'][:16]}\n"
+            f"  {fmt.e(c['root_cause'])}\n"
+            f"  → {fmt.e(c['recommendation'])}"
+        )
+    await update.message.reply_text("\n".join(lines), parse_mode=PM)
 
 
 async def cb_ticket_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -3159,6 +3204,7 @@ def run():
         ("guardar",        cmd_guardar_conocimiento),
         ("skills",         cmd_skills),
         ("pendientes",     cmd_pendientes),
+        ("cerebro",        cmd_cerebro),
         ("aprobar_task",   cmd_aprobar_task),
         # Red
         ("equipos",        cmd_equipos),
@@ -3245,6 +3291,7 @@ def run():
             BotCommand("guardar", "Guardar solución en historial"),
             BotCommand("skills", "Skills aprendidas del sitio"),
             BotCommand("pendientes", "Pendientes cronicos abiertos"),
+            BotCommand("cerebro", "Hallazgos correlacionados entre sistemas"),
             BotCommand("historial", "Cambios recientes del bot"),
             BotCommand("bitacora", "Bitácora fallos memoria.db"),
             BotCommand("revertir", "Deshacer bloqueo/desbloqueo"),

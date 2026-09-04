@@ -3905,6 +3905,46 @@ async def watch_memoria_sync(bot: Bot) -> None:
         await asyncio.sleep(MEMORIA_SYNC_INTERVAL)
 
 
+# ── Cerebro unificado (sesión 81, 4 sep 2026) ───────────────────────────────
+# Cada BRAIN_INTERVAL_MIN minutos: lee memoria_incidentes (ya unificado por
+# watch_memoria_sync — Guardian+Infra+Hunter), agrupa por proximidad temporal
+# SIN importar el sistema de origen (cosa que pattern_analysis.py no hace —
+# ese agrupa por entidad individual, nunca cruza sistemas), cruza cada equipo
+# con su aprendizaje real (agente_skills + patrones crónicos + tickets
+# abiertos) y le pide a un modelo de razonamiento una causa raíz +
+# recomendación respaldada. No reemplaza ninguna alerta existente — es una
+# capa adicional que solo interrumpe por Telegram si encuentra algo con
+# urgencia media o alta, para no sumar ruido sobre lo que ya funciona.
+def brain_watch_interval_sec() -> int:
+    from core import brain
+    return max(60, brain.BRAIN_INTERVAL_MIN * 60)
+
+
+async def watch_brain(bot: Bot) -> None:
+    from core import brain
+
+    if not brain.BRAIN_ENABLED:
+        log.info("watch_brain: deshabilitado (BRAIN_ENABLED=0)")
+        return
+    await asyncio.sleep(240)
+    while True:
+        try:
+            conclusiones = await asyncio.to_thread(brain.run_cycle)
+            for c in conclusiones:
+                if c["urgency"] in ("alta", "media") and not c.get("_dup"):
+                    text = brain.format_telegram(c)
+                    sev = "critical" if c["urgency"] == "alta" else "warning"
+                    await _send(bot, text, monitor="brain", severity=sev)
+                    brain.mark_sent(c["id"])
+            if conclusiones:
+                log.info("brain: %d conclusión(es) este ciclo", len(conclusiones))
+            _tick("watch_brain")
+        except Exception as e:
+            _tick("watch_brain", error=str(e))
+            log.warning("watch_brain error: %s", e)
+        await asyncio.sleep(brain_watch_interval_sec())
+
+
 # ── Opción 2 (24 ago) — releva lo que Guardian encola en vez de mandar
 # directo. Formato consistente (mismo _send que todo lo demás, mismo
 # prefijo de sitio, misma auditoría en memoria_alertas + telegram_enviados).
@@ -3997,9 +4037,10 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_active_threats(bot))
     loop.create_task(watch_port_errors(bot))
     loop.create_task(watch_pending_guardian(bot))
+    loop.create_task(watch_brain(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (29 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (30 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),

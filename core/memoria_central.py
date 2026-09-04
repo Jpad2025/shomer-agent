@@ -208,6 +208,52 @@ def _sync_infra_events(mem_con: sqlite3.Connection) -> int:
     return len(rows)
 
 
+def _sync_hunter_blocks(mem_con: sqlite3.Connection) -> int:
+    """blocked_ips (Hunter/Wazuh) -- bloqueos y desbloqueos como eventos unificados.
+
+    Antes de esto memoria_incidentes solo tenia Guardian+Infra+auto_task; Hunter
+    corria por su cuenta y nunca entraba a la bitacora comun. Sin esto el cerebro
+    (brain.py) no puede correlacionar, por ejemplo, un bloqueo de seguridad con
+    una caida de red que pasa al mismo tiempo -- quedaban en mundos separados.
+    """
+    try:
+        src = _open_source_ro(NETWORK_MONITOR_DB)
+    except Exception as e:
+        log.debug("memoria sync: blocked_ips no disponible: %s", e)
+        return 0
+    try:
+        last_id = _get_checkpoint(mem_con, "hunter_blocks")
+        rows = src.execute(
+            "SELECT id, ip, blocked_at, blocked_by, alert_signature, severity, unblocked_at "
+            "FROM blocked_ips WHERE id > ? ORDER BY id ASC LIMIT 500",
+            (last_id,),
+        ).fetchall()
+    except Exception as e:
+        log.debug("memoria sync: blocked_ips query: %s", e)
+        return 0
+    finally:
+        src.close()
+    for r in rows:
+        _id, ip, blocked_at, blocked_by, sig, sev, unblocked_at = r
+        sev_label = "critical" if (sev or 0) >= 3 else ("warn" if (sev or 0) >= 1 else "info")
+        mem_con.execute(
+            "INSERT OR IGNORE INTO memoria_incidentes "
+            "(ts, source, entity_ip, entity_name, event, detail, severity) "
+            "VALUES (?, 'hunter', ?, ?, 'bloqueo', ?, ?)",
+            (blocked_at, ip, ip, (sig or "")[:300], sev_label),
+        )
+        if unblocked_at:
+            mem_con.execute(
+                "INSERT OR IGNORE INTO memoria_incidentes "
+                "(ts, source, entity_ip, entity_name, event, detail, severity) "
+                "VALUES (?, 'hunter', ?, ?, 'desbloqueo', '', 'info')",
+                (unblocked_at, ip, ip),
+            )
+    if rows:
+        _set_checkpoint(mem_con, "hunter_blocks", rows[-1][0])
+    return len(rows)
+
+
 def _sync_auto_task_runs(mem_con: sqlite3.Connection) -> int:
     try:
         src = _open_source_ro(KNOWLEDGE_DB)
@@ -366,6 +412,7 @@ def run_sync_once() -> Dict[str, int]:
         else:
             counts["infra_legacy"] = 0
         counts["auto_task"] = _sync_auto_task_runs(mem_con)
+        counts["hunter_blocks"] = _sync_hunter_blocks(mem_con)
         _prune(mem_con)
         mem_con.commit()
     finally:

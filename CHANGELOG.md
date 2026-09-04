@@ -4,6 +4,40 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.3.0 — 2026-09-04
+
+- **Cerebro unificado (`core/brain.py`).** Pedido explícito de Juan Pablo: "el sistema
+  está bien pero está suelto, no es un conjunto con cerebro propio". Hasta hoy cada
+  sistema (Guardian/Hunter/Infra/pattern_analysis/chronic_tickets) decidía y avisaba
+  por su cuenta sin ver el cuadro completo. `watch_memoria_sync` ya unificaba
+  Guardian+Infra+auto_task en una bitácora común (`memoria_incidentes`) con la intención
+  explícita (ver su docstring) de que "todo el razonamiento futuro" leyera de ahí — pero
+  nada lo hacía. El cerebro es esa pieza:
+  - `memoria_central.py`: nueva sincronización de Hunter (`blocked_ips` → `memoria_incidentes`,
+    antes corría aparte y nunca entraba a la bitácora común).
+  - `brain.py`: cada 20 min (`BRAIN_INTERVAL_MIN`) agrupa eventos nuevos por **proximidad
+    temporal sin importar el sistema de origen** (a diferencia de `pattern_analysis.py`, que
+    agrupa por entidad individual y nunca cruza sistemas) — así detecta, por ejemplo, varios
+    equipos caídos juntos por una causa común en vez de tratarlos como problemas separados.
+    Cruza cada equipo del grupo con su aprendizaje real (`agente_skills`: éxitos/fallos de
+    remediaciones previas, patrón crónico, ticket abierto) — aprendizaje **activo** como
+    insumo de la decisión, no solo contexto pasivo pegado al chat. Le pide a un modelo de
+    razonamiento (`BRAIN_MODEL`) una causa raíz + recomendación respaldada en esa evidencia
+    (nunca inventada — los conteos los calcula código, igual que `pattern_analysis.py`).
+    Nunca reemplaza las alertas existentes: es una capa adicional que solo interrumpe por
+    Telegram con urgencia media/alta, para no sumar ruido. Fallback automático a Groq si
+    OpenAI no responde (probado apagando la key). Nuevas tablas `brain_conclusions` y
+    `brain_state` en `knowledge.db`.
+  - Comando nuevo `/cerebro` (`/cerebro ahora` fuerza un análisis manual).
+  - Probado extremo a extremo contra datos reales de producción (copia aislada, sin tocar
+    la BD viva): agrupó correctamente 2 APs caídos con 2 min de diferencia, los separó de un
+    bloqueo Hunter 35 min después, y generó una recomendación citando el historial real
+    (ej. "reinicio remoto funcionó 100% de las veces anteriores").
+  - Nota honesta: `BRAIN_MODEL` quedó en `gpt-4o-mini` porque el proyecto OpenAI actual no
+    tiene habilitado `gpt-4o` (403 model_not_found, confirmado en prueba real) — para el
+    salto de calidad que pidió Juan Pablo ("pagar otra IA") falta solo habilitarlo en
+    platform.openai.com y cambiar una variable, sin tocar código.
+
 ## 1.2.0 — 2026-09-03
 
 - **Sistema de "pendientes" (tickets) conectado al patrón crónico.** Antes, un equipo
