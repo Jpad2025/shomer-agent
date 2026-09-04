@@ -4,6 +4,25 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.2.0 — 2026-09-03
+
+- **Sistema de "pendientes" (tickets) conectado al patrón crónico.** Antes, un equipo
+  reconocido como crónico (opción 3) simplemente dejaba de avisar para siempre. Ahora:
+  al reconocerse como crónico se abre un pendiente (aviso único), y se recuerda 3 veces al
+  día (10am/3pm/8pm, `chronic_tickets_reminder`) hasta que el técnico lo **cierre** (se
+  resolvió de verdad) o lo **pause** (ej. esperando un repuesto — reusa el mismo mecanismo
+  de `/silenciar`, 3 días por defecto vía botón, o duración personalizada por comando).
+  Comando nuevo `/pendientes` para verlos todos on-demand. Nueva tabla `chronic_tickets` en
+  `knowledge.db`, módulo `core/chronic_tickets.py`.
+- **Fix: aviso duplicado de Hunter.** Cada bloqueo de Wazuh generaba dos mensajes — uno
+  instantáneo de network_monitor (vía la cola) y otro del bot ~1 min después (su propio
+  polling). Ahora el bot recuerda qué IPs ya se avisaron por la vía directa y no las repite.
+- **Fix: hueco real encontrado en auditoría — el aviso de "falló el reinicio" (network_monitor,
+  directo) no respetaba el patrón crónico.** Un equipo ya reconocido como crónico por el bot
+  (ej. AP PASILLO HAB 701-702, 17 ocurrencias desde junio) igual interrumpía por este camino
+  aparte. Corregido en `network_monitor/app/api/shomer_guardian_nodes.py` — mismo criterio y
+  umbral que usa el bot, leyendo `knowledge.db` de solo lectura.
+
 ## 1.1.9 — 2026-09-03
 
 - **Usar el aprendizaje acumulado (`agente_skills`) en más lugares**, no solo como contexto
