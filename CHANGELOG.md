@@ -4,6 +4,17 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.3.1 — 2026-09-04
+
+- **Fix real encontrado en producción a los pocos minutos de desplegar el cerebro (1.3.0):**
+  un incidente real (MikroTik gateway degradado → 30 eventos de switches/NVRs/cámaras/POS/
+  terminales de pago cayendo juntos, ciclo 08:07) se perdió en silencio — el payload se cortaba
+  con `[:4000]` caracteres a ciegas antes de mandarlo al modelo, rompiendo el JSON de entrada y
+  produciendo una respuesta también truncada. Corregido acotando eventos/entidades por
+  **cantidad** (nunca por caracteres), subiendo `max_tokens` 700→900 e instrucción explícita de
+  brevedad. Reprobado contra el mismo evento real: ahora genera el hallazgo correcto ("fallo
+  temporal del MikroTik Router — reiniciar remoto primero", urgencia alta). Ver `core/brain.py`.
+
 ## 1.3.0 — 2026-09-04
 
 - **Cerebro unificado (`core/brain.py`).** Pedido explícito de Juan Pablo: "el sistema
