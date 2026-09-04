@@ -309,7 +309,9 @@ def _ayuda_text() -> str:
         f"/guardar &lt;ip&gt; &lt;descripción&gt; — guardar qué pasó y cómo se resolvió\n"
         f"/historial — últimos cambios del bot (bloqueos, reboots…)\n"
         f"/bitacora [horas|csv] — fallos guardados en memoria.db (consulta remediación)\n"
-        f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo/mantenimiento (ver /historial)\n\n"
+        f"/revertir &lt;id&gt; — deshacer bloqueo/desbloqueo/mantenimiento (ver /historial)\n"
+        f"/pendientes — equipos con patrón crónico sin cerrar (recordatorio 3x/día: "
+        f"10am, 3pm, 8pm) — botones para cerrar o pausar 3 días\n\n"
 
         f"<b>🛠️ Instalación</b>\n"
         f"/instalar — guía paso a paso del sitio\n"
@@ -1688,6 +1690,86 @@ async def cmd_skills(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"  <i>OK:{s.get('success_count', 0)} · origen:{fmt.e(s.get('source', '?'))}</i>"
         )
     await update.message.reply_text("\n".join(lines)[:4000], parse_mode=PM)
+
+
+async def cmd_pendientes(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Pedido Juan Pablo (3 sep 2026): ver todos los pendientes crónicos
+    abiertos on-demand, no solo esperar el recordatorio de 3x al día."""
+    if not await _guard(update):
+        return
+    from core import chronic_tickets
+    from datetime import datetime as _dt
+
+    abiertos = chronic_tickets.list_open()
+    if not abiertos:
+        await update.message.reply_text(
+            "✅ No hay pendientes crónicos abiertos ahora mismo.", parse_mode=PM,
+        )
+        return
+    now = _dt.now()
+    lines = [f"🎫 <b>Pendientes abiertos ({len(abiertos)})</b>"]
+    kb_rows = []
+    for t in abiertos[:15]:
+        dias = 0
+        try:
+            dias = max(0, (now - _dt.fromisoformat(t["opened_at"])).days)
+        except Exception:
+            pass
+        lines.append(
+            f"  • #{t['id']} {fmt.e(t['entity_name'])} (<code>{fmt.e(t['ip'])}</code>) "
+            f"— abierto hace {dias} día{'s' if dias != 1 else ''}"
+        )
+        kb_rows.append([
+            InlineKeyboardButton(f"✅ Cerrar #{t['id']}", callback_data=f"ticket_close:{t['id']}"),
+            InlineKeyboardButton(f"⏸ Pausar #{t['id']}", callback_data=f"ticket_pause:{t['id']}"),
+        ])
+    await update.message.reply_text(
+        "\n".join(lines), parse_mode=PM, reply_markup=InlineKeyboardMarkup(kb_rows),
+    )
+
+
+async def cb_ticket_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("Cerrando...")
+    if not await _guard(update):
+        return
+    from core import chronic_tickets
+    tid = int(query.data.split(":", 1)[1])
+    t = chronic_tickets.get_ticket(tid)
+    if not t:
+        await query.message.reply_text("❌ No encontré ese pendiente.")
+        return
+    if chronic_tickets.close_ticket(tid):
+        await query.message.reply_text(
+            f"✅ Pendiente #{tid} ({fmt.e(t['entity_name'])}) cerrado. "
+            f"Si vuelve a fallar, se abre uno nuevo.",
+            parse_mode=PM,
+        )
+    else:
+        await query.message.reply_text(f"⚠️ El pendiente #{tid} ya estaba cerrado.")
+
+
+async def cb_ticket_pause(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Pausa reusando el mismo mecanismo de /silenciar (monitor.set_suppression)
+    -- no un sistema de pausa aparte. 3 días por defecto; para otro tiempo,
+    usar /silenciar <ip> <duración> directamente."""
+    query = update.callback_query
+    await query.answer("Pausando 3 días...")
+    if not await _guard(update):
+        return
+    from core import chronic_tickets
+    tid = int(query.data.split(":", 1)[1])
+    t = chronic_tickets.get_ticket(tid)
+    if not t:
+        await query.message.reply_text("❌ No encontré ese pendiente.")
+        return
+    monitor.set_suppression(t["ip"], t["entity_name"], 3 * 24 * 60)
+    await query.message.reply_text(
+        f"⏸ Pendiente #{tid} ({fmt.e(t['entity_name'])}) pausado 3 días — no se te "
+        f"va a recordar en ese tiempo. Para otro plazo: "
+        f"<code>/silenciar {fmt.e(t['ip'])} &lt;duración&gt;</code>",
+        parse_mode=PM,
+    )
 
 
 # ── /clientes ─────────────────────────────────────────────────────────────────
@@ -3076,6 +3158,7 @@ def run():
         ("nuevo",          cmd_nuevo),
         ("guardar",        cmd_guardar_conocimiento),
         ("skills",         cmd_skills),
+        ("pendientes",     cmd_pendientes),
         ("aprobar_task",   cmd_aprobar_task),
         # Red
         ("equipos",        cmd_equipos),
@@ -3113,6 +3196,8 @@ def run():
     app.add_handler(CallbackQueryHandler(cb_diag_fix,        pattern="^diag_fix:"))
     app.add_handler(CallbackQueryHandler(cb_ver_ip,          pattern="^ver_ip:"))
     app.add_handler(CallbackQueryHandler(cb_menu,            pattern="^menu:"))
+    app.add_handler(CallbackQueryHandler(cb_ticket_close,    pattern="^ticket_close:"))
+    app.add_handler(CallbackQueryHandler(cb_ticket_pause,    pattern="^ticket_pause:"))
     app.add_handler(CallbackQueryHandler(cb_reboot,          pattern="^reboot_"))
     app.add_handler(CallbackQueryHandler(cb_mantenimiento,   pattern="^maint:"))
     app.add_handler(CallbackQueryHandler(cb_seguro,           pattern="^seguro:"))
@@ -3159,6 +3244,7 @@ def run():
             BotCommand("desbloquear", "Liberar IP bloqueada"),
             BotCommand("guardar", "Guardar solución en historial"),
             BotCommand("skills", "Skills aprendidas del sitio"),
+            BotCommand("pendientes", "Pendientes cronicos abiertos"),
             BotCommand("historial", "Cambios recientes del bot"),
             BotCommand("bitacora", "Bitácora fallos memoria.db"),
             BotCommand("revertir", "Deshacer bloqueo/desbloqueo"),

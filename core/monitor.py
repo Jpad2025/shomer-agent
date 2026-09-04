@@ -209,6 +209,11 @@ def _bot_state_set(key: str, value: str) -> None:
 
 # Estado interno — detectar cambios
 _blocked_ips: Set[str] = set()
+# Sesión 80 (3 sep 2026): evitar el doble aviso de un mismo bloqueo Wazuh --
+# network_monitor manda "BLOQUEO (Wazuh -> Shomer)" instantáneo por la cola
+# (watch_pending_guardian lo releva), y watch_hunter detecta el mismo
+# bloqueo por su cuenta ~1 min después y mandaba OTRO aviso. ip -> epoch.
+_direct_relayed_ips: Dict[str, float] = {}
 _device_status: Dict[str, str] = {}   # ip -> "online"|"offline"
 _last_summary_day: Optional[object] = _bot_state_get("last_summary_day")
 _offline_counts: Dict[str, int] = {}  # ip -> ticks consecutivos offline
@@ -272,6 +277,34 @@ def _is_suppressed(ip: str) -> bool:
         _suppressions.pop(ip)
         return False
     return True
+
+
+async def _abrir_ticket_cronico(
+    bot: Bot, ip: str, nombre: str, fuente: str, ocurrencias: int,
+) -> None:
+    """Tarea pendiente 2 (3 sep 2026): conectar el patrón crónico (opción 3)
+    con un pendiente de largo plazo -- avisa una vez al abrirse, no cada vez
+    que se re-detecta el mismo patrón (get_or_create reutiliza el abierto)."""
+    try:
+        from core import chronic_tickets
+        tid, es_nuevo = chronic_tickets.get_or_create(ip, nombre, fuente)
+        if not es_nuevo:
+            return
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Cerrar (se resolvió)", callback_data=f"ticket_close:{tid}"),
+            InlineKeyboardButton("⏸ Pausar 3 días", callback_data=f"ticket_pause:{tid}"),
+        ]])
+        await _send(
+            bot,
+            f"🎫 <b>Nuevo pendiente #{tid}</b>: {nombre} (<code>{ip}</code>)\n"
+            f"Patrón crónico confirmado ({ocurrencias} veces) — deja de interrumpir en "
+            f"cada caída nueva. Se recuerda unas pocas veces al día hasta que se cierre "
+            f"o se pause.",
+            reply_markup=kb,
+            monitor="equipos_red",
+        )
+    except Exception as e:
+        log.debug("_abrir_ticket_cronico(%s): %s", ip, e)
 
 
 def _get_top_processes(n: int = 5) -> list[dict]:
@@ -550,6 +583,17 @@ async def watch_hunter(bot: Bot) -> None:
                             pass  # sin timestamp fiable → asumir nuevo
 
                     if not is_new_event:
+                        continue
+
+                    # Sesión 80: si network_monitor ya avisó este bloqueo por
+                    # la vía directa (BLOQUEO Wazuh -> Shomer) hace poco, no
+                    # repetirlo -- son el mismo evento, dos caminos distintos.
+                    relayed_ts = _direct_relayed_ips.get(ip)
+                    if relayed_ts and (now - relayed_ts) < 600:
+                        log.debug(
+                            "watch_hunter: %s ya avisado por la vía directa hace %.0fs — omitido",
+                            ip, now - relayed_ts,
+                        )
                         continue
 
                     sig         = item.get("alert_signature", "sin firma")
@@ -954,6 +998,68 @@ async def evening_summary(bot: Bot) -> None:
                 _tick("evening_summary", alerted=True)
         except Exception as e:
             _tick("evening_summary", error=str(e)); log.debug("evening_summary error: %s", e)
+        await asyncio.sleep(60)
+
+
+_TICKET_REMINDER_HOURS = (10, 15, 20)
+_last_ticket_reminder: Optional[str] = _bot_state_get("last_ticket_reminder")
+
+
+async def chronic_tickets_reminder(bot: Bot) -> None:
+    """Pedido Juan Pablo (3 sep 2026): en vez de que un patrón crónico se
+    silencie para siempre, recordar los pendientes abiertos 3 veces al día
+    (10am/3pm/8pm) hasta que el técnico los cierre o los pause -- ver
+    chronic_tickets.py y _abrir_ticket_cronico()."""
+    global _last_ticket_reminder
+    await asyncio.sleep(40)
+    while True:
+        try:
+            now = datetime.now()
+            checkpoint = f"{now.date().isoformat()}:{now.hour}"
+            if (
+                now.hour in _TICKET_REMINDER_HOURS
+                and now.minute < 2
+                and _last_ticket_reminder != checkpoint
+            ):
+                from core import chronic_tickets
+                abiertos = [
+                    t for t in chronic_tickets.list_open()
+                    if not _is_suppressed(t["ip"])
+                ]
+                if abiertos:
+                    lines = [f"🎫 <b>Pendientes abiertos ({len(abiertos)})</b>"]
+                    kb_rows = []
+                    for t in abiertos[:10]:
+                        dias = 0
+                        try:
+                            abierto = datetime.fromisoformat(t["opened_at"])
+                            dias = max(0, (now - abierto).days)
+                        except Exception:
+                            pass
+                        lines.append(
+                            f"  • #{t['id']} {t['entity_name']} (<code>{t['ip']}</code>) "
+                            f"— abierto hace {dias} día{'s' if dias != 1 else ''}"
+                        )
+                        kb_rows.append([
+                            InlineKeyboardButton(
+                                f"✅ Cerrar #{t['id']}", callback_data=f"ticket_close:{t['id']}",
+                            ),
+                            InlineKeyboardButton(
+                                f"⏸ Pausar #{t['id']}", callback_data=f"ticket_pause:{t['id']}",
+                            ),
+                        ])
+                        chronic_tickets.mark_reminded(t["id"])
+                    if len(abiertos) > 10:
+                        lines.append(f"  …y {len(abiertos) - 10} más — ver /pendientes")
+                    await _send(
+                        bot, "\n".join(lines),
+                        reply_markup=InlineKeyboardMarkup(kb_rows),
+                        monitor="equipos_red",
+                    )
+                _last_ticket_reminder = checkpoint
+                _bot_state_set("last_ticket_reminder", checkpoint)
+        except Exception as e:
+            log.debug("chronic_tickets_reminder error: %s", e)
         await asyncio.sleep(60)
 
 
@@ -1888,6 +1994,10 @@ async def watch_guardian_nodes(bot: Bot) -> None:
                                 ip, nombre, "watch_guardian_nodes", motivo="patron_cronico",
                             )
                             _guardian_down_alerted.add(ip)
+                            await _abrir_ticket_cronico(
+                                bot, ip, nombre, "watch_guardian_nodes",
+                                _pat.get("ocurrencias", 0),
+                            )
                         else:
                             lines = [
                                 msgfmt.executive_alert(
@@ -3064,6 +3174,9 @@ async def watch_infra(bot: Bot) -> None:
                             )
                             _infra_prev_status[ip] = "offline"
                             _infra_silent_offline.add(ip)
+                            await _abrir_ticket_cronico(
+                                bot, ip, name, "watch_infra", _pat.get("ocurrencias", 0),
+                            )
                             continue
                         elif dtype not in _INFRA_CRITICAL_TYPES:
                             # Tarea pendiente 2, opción 4 (2 sep 2026): equipo sin
@@ -3288,6 +3401,9 @@ async def watch_infra(bot: Bot) -> None:
                             ip, name, "watch_infra", motivo="patron_cronico_recordatorio",
                         )
                         _infra_stale_reminded.add(ip)
+                        await _abrir_ticket_cronico(
+                            bot, ip, name, "watch_infra", _pat.get("ocurrencias", 0),
+                        )
                         continue
                     icon = d.get("icon", "📡")
                     await _send(
@@ -3817,6 +3933,13 @@ async def watch_pending_guardian(bot: Bot) -> None:
                     "SELECT id, mensaje FROM notificaciones_pendientes WHERE estado='pendiente'"
                 ).fetchall()
                 for row in rows:
+                    # Sesión 80: si es un bloqueo Wazuh directo, marcar la IP
+                    # para que watch_hunter no mande el mismo aviso de nuevo
+                    # cuando lo detecte por su cuenta unos segundos después.
+                    if "BLOQUEO" in row["mensaje"]:
+                        m = re.search(r"IP:\s*(\d{1,3}(?:\.\d{1,3}){3})", row["mensaje"])
+                        if m:
+                            _direct_relayed_ips[m.group(1)] = time.time()
                     # Marcar DESPUÉS de enviar -- si el envío se cae a mitad de
                     # camino, la fila se queda "pendiente" y el respaldo de
                     # Guardian (60s) la agarra igual. Marcar antes arriesgaría
@@ -3847,6 +3970,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_devices(bot))
     loop.create_task(daily_summary(bot))
     loop.create_task(evening_summary(bot))
+    loop.create_task(chronic_tickets_reminder(bot))
     loop.create_task(watch_resources(bot))
     loop.create_task(watch_backups(bot))
     loop.create_task(watch_wan_outage(bot))
@@ -3875,7 +3999,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_pending_guardian(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (28 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (29 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),
