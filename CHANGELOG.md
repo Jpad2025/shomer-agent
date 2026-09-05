@@ -4,6 +4,25 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.5.0 — 2026-09-04
+
+- **Conocimiento operativo real conectado al chat y al cerebro.** Juan Pablo señaló que había
+  documentación real (no código) que fue guardando con el tiempo pero que la IA nunca leía:
+  `EQUIPOS.md` (inventario de los 4 servidores con lecciones reales sobre verificar antes de
+  afirmar) y dos notas de visitas en sitio dirigidas a personas reales (Ricardo Romero, Cristian
+  Romero) — revisado y confirmado: **el cerebro no leía ni siquiera `SITE.md`**, que el chat sí
+  usa desde antes. Cambios:
+  - `docker-compose.yml`: nuevos montajes de solo lectura para `EQUIPOS.md` y los 2 documentos
+    de campo (mismo patrón que `SITE.md`).
+  - `agente_skills.py`: nueva `load_operational_docs()` (cada documento con su propio tope de
+    caracteres) sumada a `get_learning_context()` — el chat se beneficia automáticamente.
+  - `brain.py`: ahora carga `SITE.md` + estos documentos **una vez por ciclo** (no por cada
+    hallazgo) y se los pasa al modelo de razonamiento como contexto real del sitio — antes
+    razonaba solo con datos crudos de la BD, sin las "mañas conocidas" del hotel.
+  - **Nota importante:** cambiar `docker-compose.yml` requiere recrear el contenedor
+    (`sudo systemctl restart shomer-agent`, que internamente hace `docker compose up`), un
+    `docker restart` simple NO aplica montajes nuevos.
+
 ## 1.4.0 — 2026-09-04
 
 - **Protagonismo real del cerebro — pedido explícito de Juan Pablo tras ver que, aunque

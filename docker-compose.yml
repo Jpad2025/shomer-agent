@@ -16,6 +16,11 @@ services:
       - ./data/agent_restart_key:/app/data/agent_restart_key:ro
       - /storage/db:/storage/db:ro  # BDs Shomer (tracker, network_monitor) solo lectura
       - /opt/network_monitor/SITE.md:/app/docs/SITE.md:ro
+      # Conocimiento operativo real (4 sep 2026) -- existía en disco pero ni el
+      # chat ni el cerebro lo leían nunca. Ver core/agente_skills.py.
+      - /opt/network_monitor/docs/EQUIPOS.md:/app/docs/EQUIPOS.md:ro
+      - /opt/network_monitor/docs/campo/REVISION-EN-SITIO-OPERA.md:/app/docs/campo/REVISION-EN-SITIO-OPERA.md:ro
+      - /opt/network_monitor/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md:/app/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md:ro
       # ── Solo laboratorio (AGENT_TECHNICIAN_ONLY=0): docs developer USB ─────
       # Descomenta si existen estos archivos en el host (Bogotá normalmente NO):
       # - /opt/network_monitor/CLAUDE.md:/app/docs/developer/CLAUDE.md:ro

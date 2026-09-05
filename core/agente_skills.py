@@ -16,6 +16,23 @@ SITE_MD_PATHS = (
 SITE_EXCERPT_MAX = int(os.environ.get("AGENT_SITE_MD_MAX", "3500"))
 SKILLS_CONTEXT_MAX = int(os.environ.get("AGENT_SKILLS_CONTEXT_MAX", "4000"))
 
+# Conocimiento operativo real (4 sep 2026): documentos que Juan Pablo fue
+# guardando -- inventario de equipos con lecciones reales, notas de visitas
+# en sitio -- que existían en disco pero ni el chat ni el cerebro los leían
+# nunca. Cada uno con su propio tope para no disparar el tamaño del prompt.
+OPERATIONAL_DOCS = (
+    ("/opt/network_monitor/docs/EQUIPOS.md", "/app/docs/EQUIPOS.md"),
+    (
+        "/opt/network_monitor/docs/campo/REVISION-EN-SITIO-OPERA.md",
+        "/app/docs/campo/REVISION-EN-SITIO-OPERA.md",
+    ),
+    (
+        "/opt/network_monitor/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md",
+        "/app/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md",
+    ),
+)
+OPERATIONAL_DOC_MAX = int(os.environ.get("AGENT_OPERATIONAL_DOC_MAX", "2000"))
+
 
 def _site_name() -> str:
     return (os.environ.get("SITE_NAME") or "").strip()
@@ -309,12 +326,34 @@ def load_site_excerpt() -> str:
     return ""
 
 
+def load_operational_docs() -> str:
+    """EQUIPOS.md + notas de sitio -- conocimiento operativo real que Juan
+    Pablo fue guardando pero que hasta ahora ni el chat ni el cerebro leían."""
+    parts = []
+    for paths in OPERATIONAL_DOCS:
+        for path in paths:
+            try:
+                if os.path.isfile(path):
+                    with open(path, encoding="utf-8", errors="replace") as f:
+                        raw = f.read(OPERATIONAL_DOC_MAX + 500)
+                    if raw.strip():
+                        name = os.path.basename(paths[0])
+                        parts.append(f"[{name}]\n{raw[:OPERATIONAL_DOC_MAX]}")
+                    break
+            except Exception:
+                continue
+    return "\n\n".join(parts)
+
+
 def get_learning_context(*, device_ip: str = "") -> str:
     """Skills + SITE + knowledge reciente para L5."""
     parts = []
     site = load_site_excerpt()
     if site:
         parts.append(site)
+    ops = load_operational_docs()
+    if ops:
+        parts.append(ops)
     skills = get_context_block(device_ip=device_ip)
     if skills:
         parts.append(skills)

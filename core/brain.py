@@ -48,6 +48,7 @@ BRAIN_INTERVAL_MIN = int(os.environ.get("BRAIN_INTERVAL_MIN", "5"))
 CLUSTER_WINDOW_MIN = int(os.environ.get("BRAIN_CLUSTER_WINDOW_MIN", "10"))
 MAX_EVENTS_IN_PROMPT = 20
 MAX_ENTITIES_IN_PROMPT = 10
+BRAIN_SITE_CONTEXT_MAX = 4000
 
 _SEVERITY_RANK = {"critical": 3, "warn": 2, "info": 1}
 
@@ -254,7 +255,19 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _call_openai_reasoning(user_prompt: str) -> str | None:
+def _build_messages(user_prompt: str, site_context: str = "") -> list[dict]:
+    messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
+    if site_context:
+        messages.append({
+            "role": "system",
+            "content": "Conocimiento real del sitio (usar si es relevante, "
+                       "no inventar más allá de esto):\n" + site_context[:BRAIN_SITE_CONTEXT_MAX],
+        })
+    messages.append({"role": "user", "content": user_prompt})
+    return messages
+
+
+def _call_openai_reasoning(user_prompt: str, site_context: str = "") -> str | None:
     try:
         from openai import OpenAI
         key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -263,10 +276,7 @@ def _call_openai_reasoning(user_prompt: str) -> str | None:
         client = OpenAI(api_key=key, timeout=30.0, max_retries=1)
         resp = client.chat.completions.create(
             model=BRAIN_MODEL,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=_build_messages(user_prompt, site_context),
             max_tokens=900,
             temperature=0.2,
             response_format={"type": "json_object"},
@@ -289,13 +299,10 @@ def _call_openai_reasoning(user_prompt: str) -> str | None:
         return None
 
 
-def _call_groq_reasoning(user_prompt: str) -> str | None:
+def _call_groq_reasoning(user_prompt: str, site_context: str = "") -> str | None:
     try:
         from core import groq_helper
-        messages = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+        messages = _build_messages(user_prompt, site_context)
         out = groq_helper._call_groq(messages, max_tokens=900, background=True)
         if not out or out.lstrip()[:1] in ("⏳", "❌", "⚠️"):
             return None
@@ -326,11 +333,11 @@ def _salvage_truncated_object(text: str) -> dict | None:
     return campos
 
 
-def _call_reasoning_model(user_prompt: str) -> dict | None:
-    raw = _call_openai_reasoning(user_prompt)
+def _call_reasoning_model(user_prompt: str, site_context: str = "") -> dict | None:
+    raw = _call_openai_reasoning(user_prompt, site_context)
     engine = "openai"
     if raw is None:
-        raw = _call_groq_reasoning(user_prompt)
+        raw = _call_groq_reasoning(user_prompt, site_context)
         engine = "groq"
     if raw is None:
         return None
@@ -388,6 +395,18 @@ def run_cycle() -> list[dict]:
     max_id = max(e["id"] for e in events)
     clusters = _cluster_by_time(events, CLUSTER_WINDOW_MIN)
     conclusiones: list[dict] = []
+    # Conocimiento operativo del sitio (4 sep 2026 cont.): SITE.md + EQUIPOS.md
+    # + notas de visitas en sitio -- antes el cerebro solo veia hechos crudos
+    # de la BD, sin las "mañas conocidas" del hotel. Se carga UNA vez por
+    # ciclo (es igual para todos los clusters de esta corrida), no por cluster.
+    site_context = ""
+    try:
+        from core import agente_skills
+        site_context = (
+            agente_skills.load_site_excerpt() + "\n\n" + agente_skills.load_operational_docs()
+        ).strip()
+    except Exception as e:
+        log.debug("brain: no se pudo cargar conocimiento del sitio: %s", e)
     con = sqlite3.connect(KNOWLEDGE_DB)
     for cluster in clusters:
         entities = _cluster_entities(cluster)
@@ -419,7 +438,7 @@ def run_cycle() -> list[dict]:
             "aprendizaje_por_entidad": contexto_entidades,
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
-        result = _call_reasoning_model(user_prompt)
+        result = _call_reasoning_model(user_prompt, site_context=site_context)
         if not result:
             log.warning("brain: sin respuesta del modelo para grupo de %d evento(s)", len(cluster))
             continue
