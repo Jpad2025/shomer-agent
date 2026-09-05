@@ -4,6 +4,17 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.5.1 — 2026-09-04
+
+- **Corrección sobre 1.5.0: se quitaron los 2 documentos de campo del conocimiento del cerebro/chat.**
+  Al revisarlos completos con Juan Pablo, resultaron ser tareas fechadas para una persona
+  (`OPERA-VISIBILIDAD-CAPA2-RICARDO.md`: "activa SNMP en estos switches", ya hecho hace meses;
+  `REVISION-EN-SITIO-OPERA.md`: foto de equipos caídos el 8 jul 2026, ya no vigente) — ruido
+  viejo, no conocimiento permanente. Queda solo `EQUIPOS.md` (arquitectura del sitio: VLANs,
+  tipo de firewall, excepciones Hunter — no vive en ninguna tabla). La topología física
+  (qué switch alimenta qué zona) no necesitaba documento: ya vive correcta y actualizada en
+  `infra_devices.location` de la base de datos en vivo.
+
 ## 1.5.0 — 2026-09-04
 
 - **Conocimiento operativo real conectado al chat y al cerebro.** Juan Pablo señaló que había

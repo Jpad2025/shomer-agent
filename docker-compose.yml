@@ -16,11 +16,14 @@ services:
       - ./data/agent_restart_key:/app/data/agent_restart_key:ro
       - /storage/db:/storage/db:ro  # BDs Shomer (tracker, network_monitor) solo lectura
       - /opt/network_monitor/SITE.md:/app/docs/SITE.md:ro
-      # Conocimiento operativo real (4 sep 2026) -- existía en disco pero ni el
-      # chat ni el cerebro lo leían nunca. Ver core/agente_skills.py.
+      # Conocimiento operativo real (4 sep 2026) -- EQUIPOS.md tiene
+      # arquitectura del sitio (VLANs, firewall, excepciones Hunter) que no
+      # vive en ninguna tabla. Los 2 documentos de campo que estaban acá antes
+      # (REVISION-EN-SITIO-OPERA.md, OPERA-VISIBILIDAD-CAPA2-RICARDO.md) se
+      # quitaron -- eran tareas fechadas para una persona, ya completadas o
+      # vencidas, no conocimiento permanente. La topología real (qué switch
+      # alimenta qué zona) ya vive en infra_devices.location, siempre al día.
       - /opt/network_monitor/docs/EQUIPOS.md:/app/docs/EQUIPOS.md:ro
-      - /opt/network_monitor/docs/campo/REVISION-EN-SITIO-OPERA.md:/app/docs/campo/REVISION-EN-SITIO-OPERA.md:ro
-      - /opt/network_monitor/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md:/app/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md:ro
       # ── Solo laboratorio (AGENT_TECHNICIAN_ONLY=0): docs developer USB ─────
       # Descomenta si existen estos archivos en el host (Bogotá normalmente NO):
       # - /opt/network_monitor/CLAUDE.md:/app/docs/developer/CLAUDE.md:ro

@@ -16,22 +16,16 @@ SITE_MD_PATHS = (
 SITE_EXCERPT_MAX = int(os.environ.get("AGENT_SITE_MD_MAX", "3500"))
 SKILLS_CONTEXT_MAX = int(os.environ.get("AGENT_SKILLS_CONTEXT_MAX", "4000"))
 
-# Conocimiento operativo real (4 sep 2026): documentos que Juan Pablo fue
-# guardando -- inventario de equipos con lecciones reales, notas de visitas
-# en sitio -- que existían en disco pero ni el chat ni el cerebro los leían
-# nunca. Cada uno con su propio tope para no disparar el tamaño del prompt.
+# Conocimiento operativo real (4 sep 2026, corregido mismo día): solo
+# EQUIPOS.md -- arquitectura del sitio (VLANs, firewall, excepciones Hunter)
+# que no vive en ninguna tabla. Se sacaron los 2 documentos de campo que
+# estaban acá antes (visitas fechadas a una persona, ya completadas/vencidas)
+# tras revisión: eran ruido viejo, no conocimiento permanente. La topología
+# real (qué switch alimenta qué zona) ya vive en infra_devices.location.
 OPERATIONAL_DOCS = (
     ("/opt/network_monitor/docs/EQUIPOS.md", "/app/docs/EQUIPOS.md"),
-    (
-        "/opt/network_monitor/docs/campo/REVISION-EN-SITIO-OPERA.md",
-        "/app/docs/campo/REVISION-EN-SITIO-OPERA.md",
-    ),
-    (
-        "/opt/network_monitor/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md",
-        "/app/docs/campo/OPERA-VISIBILIDAD-CAPA2-RICARDO.md",
-    ),
 )
-OPERATIONAL_DOC_MAX = int(os.environ.get("AGENT_OPERATIONAL_DOC_MAX", "2000"))
+OPERATIONAL_DOC_MAX = int(os.environ.get("AGENT_OPERATIONAL_DOC_MAX", "2500"))
 
 
 def _site_name() -> str:
