@@ -4,7 +4,7 @@
 No contiene información interna de código ni arquitectura del producto.
 Los valores específicos de cada instalación (IPs, comunidades SNMP, claves, tokens) te los entrega USB Ingeniería antes de cada visita.
 
-**Versión:** mayo 2026
+**Versión:** septiembre 2026 (corregida — la etiqueta decía "mayo" pero el contenido ya tenía comandos de junio en adelante)
 
 ---
 
