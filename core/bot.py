@@ -313,7 +313,9 @@ def _ayuda_text() -> str:
         f"/pendientes — equipos con patrón crónico sin cerrar (recordatorio 3x/día: "
         f"10am, 3pm, 8pm) — botones para cerrar o pausar 3 días\n"
         f"/cerebro [ahora] — hallazgos correlacionados entre sistemas (causa raíz + "
-        f"recomendación respaldada en aprendizaje real); 'ahora' fuerza un análisis\n\n"
+        f"recomendación respaldada en aprendizaje real); 'ahora' fuerza un análisis\n"
+        f"/conocimiento [dominio] — base de conocimiento técnico validado (redes, "
+        f"hardware, software, PMS) — genérico, no aprendizaje propio de este sitio\n\n"
 
         f"<b>🛠️ Instalación</b>\n"
         f"/instalar — guía paso a paso del sitio\n"
@@ -1743,6 +1745,46 @@ async def cmd_pendientes(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "\n".join(lines), parse_mode=PM, reply_markup=InlineKeyboardMarkup(kb_rows),
     )
+
+
+async def cmd_conocimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Base de conocimiento técnico validado (sesión 81 cont., 4 sep 2026):
+    reglas genéricas de redes/hardware/software/PMS -- no aprendizaje propio
+    de este sitio (eso es /skills), sino lo que cualquier ingeniero de
+    soporte con experiencia ya sabe. `/conocimiento <dominio>` filtra."""
+    if not await _guard(update):
+        return
+    from core import conocimiento_general as cg
+
+    dominio = (ctx.args[0].lower() if ctx.args else "").strip()
+    if not dominio:
+        dominios = cg.dominios()
+        total = len(cg.list_rules())
+        await update.message.reply_text(
+            f"📚 <b>Base de conocimiento técnico</b> — {total} reglas validadas\n\n"
+            f"Dominios: {', '.join(dominios)}\n\n"
+            f"Usa <code>/conocimiento &lt;dominio&gt;</code> para ver las reglas de uno "
+            f"(ej. <code>/conocimiento wifi</code>)",
+            parse_mode=PM,
+        )
+        return
+
+    reglas = cg.list_rules(dominio=dominio)
+    if not reglas:
+        await update.message.reply_text(
+            f"No hay reglas en el dominio '{fmt.e(dominio)}'. "
+            f"Dominios disponibles: {', '.join(cg.dominios())}",
+        )
+        return
+    lines = [f"📚 <b>{fmt.e(dominio)}</b> — {len(reglas)} reglas"]
+    for r in reglas[:15]:
+        lines.append(
+            f"\n• <b>{fmt.e(r['patron'])}</b>\n"
+            f"  → {fmt.e(r['causa_probable'])}\n"
+            f"  ✅ {fmt.e(r['recomendacion'])}\n"
+            f"  <i>fuente: {fmt.e(r['fuente'])}</i>"
+        )
+    await update.message.reply_text("\n".join(lines), parse_mode=PM)
 
 
 async def cmd_cerebro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -3220,6 +3262,7 @@ def run():
         ("skills",         cmd_skills),
         ("pendientes",     cmd_pendientes),
         ("cerebro",        cmd_cerebro),
+        ("conocimiento",   cmd_conocimiento),
         ("aprobar_task",   cmd_aprobar_task),
         # Red
         ("equipos",        cmd_equipos),
@@ -3307,6 +3350,7 @@ def run():
             BotCommand("skills", "Skills aprendidas del sitio"),
             BotCommand("pendientes", "Pendientes cronicos abiertos"),
             BotCommand("cerebro", "Hallazgos correlacionados entre sistemas"),
+            BotCommand("conocimiento", "Base de conocimiento técnico validado"),
             BotCommand("historial", "Cambios recientes del bot"),
             BotCommand("bitacora", "Bitácora fallos memoria.db"),
             BotCommand("revertir", "Deshacer bloqueo/desbloqueo"),

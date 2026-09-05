@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.7.0 — 2026-09-05
+
+- **`conocimiento_general` (nuevo, Fase 1 del plan de "ingeniero dentro del sistema").** Pedido de
+  Juan Pablo: además del aprendizaje propio del sitio (`agente_skills`), sembrar una base de
+  conocimiento técnico validado y **genérico** — útil desde el día 1 en cualquier cliente nuevo,
+  no solo después de acumular incidentes propios. Investigado con fuentes externas antes de
+  escribir una sola regla (no inventado): CompTIA Network+ (N10-009), CompTIA A+ Core 1
+  (220-1201) y Core 2 (220-1202), hallazgos reales de integración PMS↔POS en la industria
+  hotelera (Shiji Insights, BringIT), y problemas documentados en comunidad técnica al mezclar
+  marcas de red distintas (MikroTik + UniFi).
+  - Nueva tabla `conocimiento_general` en `knowledge.db`: 47 reglas sembradas en 10 dominios
+    (cableado, PoE, switching, WAN, WiFi, hardware/servidores, impresoras/POS, seguridad,
+    Windows/AD, integración PMS/POS) + metodología general. Cada regla queda con su fuente y
+    "aprobado_por" — nada entra como validado sin trazabilidad.
+  - Comando nuevo `/conocimiento [dominio]` para revisarla directo en Telegram.
+  - Siembra automática una sola vez al arrancar (`seed_if_empty`, idempotente — probado dos
+    veces seguidas antes de desplegar, no duplica).
+  - **Todavía NO conectado al razonamiento del cerebro** — eso es la Fase 2, pendiente de
+    aprobación explícita antes de tocarlo (así se acordó en la sesión).
+
 ## 1.6.0 — 2026-09-04
 
 - **`watch_poller_heartbeat` (nuevo).** Juan Pablo pidió auditar 4 documentos de "auditoría"

@@ -4117,6 +4117,13 @@ async def watch_pending_guardian(bot: Bot) -> None:
 
 
 def start_all(bot: Bot) -> None:
+    try:
+        from core import conocimiento_general
+        n = conocimiento_general.seed_if_empty(aprobado_por="Juan Pablo (sesión 81 cont., 4 sep 2026)")
+        if n:
+            log.info("conocimiento_general: sembradas %d reglas iniciales", n)
+    except Exception as e:
+        log.warning("conocimiento_general seed: %s", e)
     triage.init(bot, _send)
     from core import incident_escalation
     incident_escalation.init(bot, _send)
