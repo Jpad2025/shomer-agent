@@ -1756,17 +1756,47 @@ async def cmd_conocimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     from core import conocimiento_general as cg
 
-    dominio = (ctx.args[0].lower() if ctx.args else "").strip()
+    args = ctx.args or []
+    dominio = (args[0].lower() if args else "").strip()
+    modo_teoria = dominio == "teoria"
+    if modo_teoria:
+        dominio = (args[1].lower() if len(args) > 1 else "").strip()
+
     if not dominio:
         dominios = cg.dominios()
+        dominios_t = cg.dominios_teoria()
         total = len(cg.list_rules())
+        total_t = len(cg.list_teoria())
         await update.message.reply_text(
-            f"📚 <b>Base de conocimiento técnico</b> — {total} reglas validadas\n\n"
+            f"📚 <b>Base de conocimiento técnico</b>\n\n"
+            f"<b>{total} reglas de diagnóstico</b> (patrón → causa → acción)\n"
             f"Dominios: {', '.join(dominios)}\n\n"
-            f"Usa <code>/conocimiento &lt;dominio&gt;</code> para ver las reglas de uno "
-            f"(ej. <code>/conocimiento wifi</code>)",
+            f"<b>{total_t} conceptos de teoría</b> (protocolos/estándares/mecanismos)\n"
+            f"Dominios: {', '.join(dominios_t)}\n\n"
+            f"Uso: <code>/conocimiento &lt;dominio&gt;</code> — reglas de diagnóstico\n"
+            f"<code>/conocimiento teoria &lt;dominio&gt;</code> — teoría de fondo\n"
+            f"(ej. <code>/conocimiento teoria switching</code>)",
             parse_mode=PM,
         )
+        return
+
+    if modo_teoria:
+        conceptos = cg.list_teoria(dominio=dominio)
+        if not conceptos:
+            await update.message.reply_text(
+                f"No hay teoría en el dominio '{fmt.e(dominio)}'. "
+                f"Dominios disponibles: {', '.join(cg.dominios_teoria())}",
+            )
+            return
+        lines = [f"📚 <b>Teoría — {fmt.e(dominio)}</b> — {len(conceptos)} conceptos"]
+        for t in conceptos[:8]:
+            lines.append(
+                f"\n• <b>{fmt.e(t['concepto'])}</b>\n"
+                f"  {fmt.e(t['explicacion'])}\n"
+                f"  🔎 <i>relevancia:</i> {fmt.e(t['relevancia_diagnostica'])}\n"
+                f"  <i>fuente: {fmt.e(t['fuente'])}</i>"
+            )
+        await update.message.reply_text("\n".join(lines), parse_mode=PM)
         return
 
     reglas = cg.list_rules(dominio=dominio)

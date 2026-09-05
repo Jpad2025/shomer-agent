@@ -4119,9 +4119,13 @@ async def watch_pending_guardian(bot: Bot) -> None:
 def start_all(bot: Bot) -> None:
     try:
         from core import conocimiento_general
-        n = conocimiento_general.seed_if_empty(aprobado_por="Juan Pablo (sesión 81 cont., 4 sep 2026)")
-        if n:
-            log.info("conocimiento_general: sembradas %d reglas iniciales", n)
+        aprobado = "Juan Pablo (sesión 81 cont., 4 sep 2026)"
+        n1 = conocimiento_general.seed_if_empty(aprobado_por=aprobado)
+        n2 = conocimiento_general.seed_teoria_if_empty(aprobado_por=aprobado)
+        if n1:
+            log.info("conocimiento_general: sembradas %d reglas de diagnóstico", n1)
+        if n2:
+            log.info("conocimiento_general: sembrados %d conceptos de teoría", n2)
     except Exception as e:
         log.warning("conocimiento_general seed: %s", e)
     triage.init(bot, _send)

@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.8.0 — 2026-09-05
+
+- **`conocimiento_teoria` (nueva tabla) — corrección de escala sobre 1.7.0.** Juan Pablo señaló,
+  con razón, que 47 reglas de diagnóstico eran "un manual de 2 páginas", no una base de
+  conocimiento real para un ingeniero — y aclaró qué pedía: no enumerar cada marca de equipo,
+  sino la **teoría de fondo** (protocolos, estándares, mecanismos) que permite razonar sobre
+  cualquier equipo, de cualquier marca.
+  - 43 conceptos teóricos con profundidad real (no una línea — explicación del mecanismo +
+    por qué importa para el diagnóstico + fuente), en 13 dominios: cableado (categorías de
+    cable, PoE, fibra, presupuesto óptico), switching (STP/RSTP, BPDU guard, 802.1Q, duplex
+    mismatch, LACP, storm control), WAN (NAT/PAT, MTU, QoS, DNS), WiFi (canales, roaming
+    802.11k/v/r, MIMO/OFDMA, DFS), hardware (RAID, SMART, UPS), impresoras (térmica, puerto
+    9100), seguridad (ARP spoofing, DHCP starvation, PCI-DSS), Windows/AD (Kerberos, FSMO,
+    GPO), integración PMS/POS, virtualización, dispositivos móviles, sistemas operativos, y
+    metodología (OSI como marco de diagnóstico).
+  - Comando `/conocimiento teoria <dominio>` para revisar la teoría separada de las reglas de
+    diagnóstico rápido.
+  - Total combinado: 90 entradas (47 reglas + 43 conceptos), sembradas de forma idempotente
+    (probado dos veces antes de desplegar).
+
 ## 1.7.0 — 2026-09-05
 
 - **`conocimiento_general` (nuevo, Fase 1 del plan de "ingeniero dentro del sistema").** Pedido de
