@@ -1684,6 +1684,61 @@ async def watch_pipeline(bot: Bot) -> None:
 
 _service_alerted: Dict[str, bool] = {}
 
+# ── Vigilancia de los "vigilantes" (sesión 81 cont., 4 sep 2026) ────────────
+# Desde jun 2026 (AUDITORIA_POLLERS_CONSOLIDADA.md, Fase D.1), Guardian e
+# Infra escriben su propio heartbeat en Redis cada ciclo exitoso
+# (guardian:poller:last_ok, infra:poller:last_ok) -- pero esa fase quedó a
+# medias: la señal se escribía y nadie la leía. Si un poller se cuelga (no
+# solo se cae el proceso, sino que queda vivo pero congelado -- el caso que
+# systemd Restart=on-failure NO detecta), la clave expira sola en Redis
+# (TTL = 4x su intervalo normal) y esto lo nota.
+POLLER_HEARTBEAT_CHECK_SEC = int(os.environ.get("POLLER_HEARTBEAT_CHECK_SEC", "60"))
+_poller_heartbeat_state: Dict[str, bool] = {}
+
+_POLLER_HEARTBEATS = {
+    "guardian:poller:last_ok": ("Guardian (WiFi/APs)", "shomer-guardian"),
+    "infra:poller:last_ok": ("Inframonitor (switches/cámaras/impresoras)", "shomer-guardian o shomer-inframonitor-poller"),
+}
+
+
+async def watch_poller_heartbeat(bot: Bot) -> None:
+    await asyncio.sleep(120)
+    while True:
+        try:
+            import redis as _redis
+            r = _redis.Redis(host="127.0.0.1", port=6379, decode_responses=True, socket_timeout=2)
+            for key, (label, service_hint) in _POLLER_HEARTBEATS.items():
+                try:
+                    vivo = r.exists(key) == 1
+                except Exception:
+                    continue
+                antes = _poller_heartbeat_state.get(key)
+                if antes is None:
+                    _poller_heartbeat_state[key] = vivo
+                    continue
+                if antes and not vivo:
+                    await _send(
+                        bot,
+                        f"🔴 <b>Vigilante sin señal: {label}</b>\n"
+                        f"No actualiza su estado hace más de lo normal — puede estar "
+                        f"congelado (no caído, systemd no lo detecta).\n"
+                        f"Revisar: <code>systemctl status {service_hint}</code>",
+                        monitor="poller_heartbeat", severity="critical",
+                    )
+                elif not antes and vivo:
+                    await _send(
+                        bot,
+                        f"🟢 <b>Vigilante recuperado: {label}</b> — vuelve a reportar normal.",
+                        monitor="poller_heartbeat", severity="info",
+                    )
+                _poller_heartbeat_state[key] = vivo
+            _tick("watch_poller_heartbeat")
+        except Exception as e:
+            _tick("watch_poller_heartbeat", error=str(e))
+            log.debug("watch_poller_heartbeat error: %s", e)
+        await asyncio.sleep(POLLER_HEARTBEAT_CHECK_SEC)
+
+
 async def watch_services(bot: Bot) -> None:
     """Cada 2 min verifica que guardian/tools/nginx estén activos."""
     from core import repair
@@ -4099,9 +4154,10 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_port_errors(bot))
     loop.create_task(watch_pending_guardian(bot))
     loop.create_task(watch_brain(bot))
+    loop.create_task(watch_poller_heartbeat(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (30 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (31 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),

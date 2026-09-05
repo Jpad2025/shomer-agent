@@ -4,6 +4,21 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.6.0 — 2026-09-04
+
+- **`watch_poller_heartbeat` (nuevo).** Juan Pablo pidió auditar 4 documentos de "auditoría"
+  antes de decidir si eran basura o no. Revisado contra el código real: 2 eran informes
+  cerrados (archivados en `network_monitor/docs/archivo/`), pero **2 resultaron ser un plan de
+  trabajo real, parcialmente implementado** (`AUDITORIA_POLLERS_CONSOLIDADA.md`). Uno de sus
+  puntos (Fase D.1, jun 2026) proponía que Guardian e Infra escribieran un heartbeat en Redis
+  cada ciclo y que "un monitor externo" avisara si dejaba de actualizarse — **la escritura se
+  hizo, el monitor externo nunca se construyó**. Este watcher completa esa pieza: revisa
+  `guardian:poller:last_ok` e `infra:poller:last_ok` cada 60s; si una de esas claves expira
+  (el poller lleva colgado más de 4x su intervalo normal — congelado, no caído, que es
+  precisamente el caso que systemd `Restart=on-failure` no detecta), avisa por Telegram, y
+  avisa también cuando se recupera. Probado contra Redis real antes de desplegar: ambas claves
+  vivas y con TTL correcto.
+
 ## 1.5.1 — 2026-09-04
 
 - **Corrección sobre 1.5.0: se quitaron los 2 documentos de campo del conocimiento del cerebro/chat.**
