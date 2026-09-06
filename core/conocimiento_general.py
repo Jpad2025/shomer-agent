@@ -2352,6 +2352,54 @@ def _matching_domains(entity_names: list[str]) -> set[str]:
     return dominios_match or {"metodologia"}
 
 
+def matching_domains(entity_names: list[str]) -> list[str]:
+    """Wrapper público -- para que brain.py guarde qué dominios se usaron en
+    una conclusión y pueda retroalimentar la confianza cuando se confirme."""
+    return sorted(_matching_domains(entity_names))
+
+
+def registrar_confirmacion(dominios: list[str]) -> int:
+    """Fase 4 (6 sep 2026): cerrar el ciclo de aprendizaje -- cuando un
+    ticket que el cerebro abrió se cierra (se confirmó que la causa era
+    correcta), sube veces_confirmado en las reglas de esos dominios. No es
+    atribución perfecta (no sabemos cuál regla EXACTA usó el LLM, solo qué
+    dominios se le ofrecieron), pero es una señal real y determinística,
+    no una suposición."""
+    if not dominios:
+        return 0
+    con = sqlite3.connect(KNOWLEDGE_DB)
+    try:
+        placeholders = ",".join("?" * len(dominios))
+        cur = con.execute(
+            f"UPDATE conocimiento_general SET veces_confirmado = veces_confirmado + 1, "
+            f"updated_at = datetime('now') WHERE dominio IN ({placeholders})",
+            dominios,
+        )
+        con.commit()
+        return cur.rowcount
+    finally:
+        con.close()
+
+
+def registrar_refutacion(dominios: list[str]) -> int:
+    """Contraparte de registrar_confirmacion -- para cuando se sepa que la
+    causa que se dio NO era la correcta (ej. el ticket se reabre pronto)."""
+    if not dominios:
+        return 0
+    con = sqlite3.connect(KNOWLEDGE_DB)
+    try:
+        placeholders = ",".join("?" * len(dominios))
+        cur = con.execute(
+            f"UPDATE conocimiento_general SET veces_refutado = veces_refutado + 1, "
+            f"updated_at = datetime('now') WHERE dominio IN ({placeholders})",
+            dominios,
+        )
+        con.commit()
+        return cur.rowcount
+    finally:
+        con.close()
+
+
 def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int = 4) -> tuple[list[dict], list[dict]]:
     """Reglas + teoría relevante para un grupo de entidades, por nombre.
     Determinístico (coincidencia de palabra clave), nunca decidido por el LLM."""

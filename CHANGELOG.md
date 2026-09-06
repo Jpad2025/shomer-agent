@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.12.0 — 2026-09-06
+
+- **Fase 3 (verificación en vivo) y Fase 4 (cerrar el ciclo de aprendizaje) del plan de "ingeniero
+  dentro del sistema".** Motivado por un hallazgo real de Juan Pablo: un evento de "offline" por
+  sí solo no dice si la causa es cable, energía o algo puntual del equipo (ej. sensor de papel)
+  — hasta ahora el cerebro daba una "suposición educada" disfrazada de diagnóstico.
+  - **Fase 3 — `_verificar_en_vivo()`:** antes de concluir, el cerebro ahora comprueba el estado
+    REAL del equipo en ese instante (no solo el historial): para impresoras usa el mismo chequeo
+    ESC/POS que ya usa el chat (papel/tóner/error reales), para equipos Infra usa su estado SNMP/TCP
+    actual, y como respaldo un ping en vivo. El prompt le da más peso a esta verificación que a
+    una suposición genérica. Probado con la impresora Bixolon real: la respuesta pasó de adivinar
+    "cable o alimentación" a decir explícitamente "reporta estar online en la verificación en
+    vivo" cuando así era.
+  - **Fase 4 — `registrar_confirmacion()`/`registrar_refutacion()`:** cada conclusión guarda qué
+    dominios de conocimiento usó (`dominios_conocimiento`). Cuando un técnico cierra un pendiente
+    que abrió el cerebro (confirmando que la causa era correcta), sube `veces_confirmado` en las
+    reglas de esos dominios — el sistema empieza a acumular evidencia real de qué reglas aciertan
+    más, no solo las usa a ciegas para siempre. Visible en `/conocimiento <dominio>` (contador de
+    confirmado/refutado por regla).
+  - Probado extremo a extremo antes de desplegar: ciclo completo con 2 switches → ticket abierto
+    con dominios correctos (`cableado,switching`) → cierre del ticket → confianza subió de 0→1 en
+    las 18 reglas de esos dominios, confirmado con datos reales, no simulado.
+
 ## 1.11.0 — 2026-09-06
 
 - **Fase 2: la base de conocimiento técnico (212 entradas) queda conectada al razonamiento del

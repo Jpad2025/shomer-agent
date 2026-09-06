@@ -48,6 +48,7 @@ BRAIN_INTERVAL_MIN = int(os.environ.get("BRAIN_INTERVAL_MIN", "5"))
 CLUSTER_WINDOW_MIN = int(os.environ.get("BRAIN_CLUSTER_WINDOW_MIN", "10"))
 MAX_EVENTS_IN_PROMPT = 20
 MAX_ENTITIES_IN_PROMPT = 10
+MAX_LIVE_VERIFY = 5  # llamadas de red reales por ciclo -- acota la duración del ciclo
 BRAIN_SITE_CONTEXT_MAX = 4000
 
 _SEVERITY_RANK = {"critical": 3, "warn": 2, "info": 1}
@@ -77,6 +78,8 @@ def _init_db() -> None:
             con.execute("ALTER TABLE brain_conclusions ADD COLUMN entity_ips TEXT DEFAULT ''")
         if "ticket_id" not in cols:
             con.execute("ALTER TABLE brain_conclusions ADD COLUMN ticket_id INTEGER")
+        if "dominios_conocimiento" not in cols:
+            con.execute("ALTER TABLE brain_conclusions ADD COLUMN dominios_conocimiento TEXT DEFAULT ''")
         con.execute(
             "CREATE TABLE IF NOT EXISTS brain_state (key TEXT PRIMARY KEY, value TEXT)"
         )
@@ -214,6 +217,46 @@ def _entity_learning_context(ip: str) -> dict:
     return out
 
 
+def _verificar_en_vivo(entity: dict) -> dict:
+    """Fase 3 (6 sep 2026): comprobar el estado REAL del equipo AHORA, no
+    solo confiar en el historial. Hueco real encontrado ese día: un evento
+    'offline' de una impresora no dice si es cable, energía o algo puntual
+    del equipo (ej. sensor de papel) -- sin esto, la 'causa probable' es una
+    suposición educada, no una comprobación. Solo lectura, nunca ejecuta
+    ninguna acción."""
+    ip = (entity.get("ip") or "").strip()
+    name = (entity.get("name") or "").lower()
+    if not ip:
+        return {}
+    try:
+        if any(k in name for k in ("bixolon", "imp ", "epson", "wf-", "impresora")):
+            from drivers.printer import get_printer_status
+            r = get_printer_status(ip)
+            return {"tipo": "impresora", "estado_actual": r}
+    except Exception as e:
+        log.debug("brain: verificación impresora falló para %s: %s", ip, e)
+    try:
+        from core import shomer_api
+        dev = shomer_api.get_infra_device(ip)
+        if dev:
+            return {"tipo": "infra", "estado_actual": {
+                "status": dev.get("status"),
+                "latency_ms": dev.get("latency_ms"),
+                "tcp_ok": dev.get("tcp_ok"),
+                "snmp_ok": dev.get("snmp_ok"),
+                "snmp_down_ports": dev.get("snmp_down_ports"),
+            }}
+    except Exception as e:
+        log.debug("brain: verificación infra falló para %s: %s", ip, e)
+    try:
+        from core import device_manager
+        r = device_manager.ping_device(ip)
+        return {"tipo": "ping", "estado_actual": r}
+    except Exception as e:
+        log.debug("brain: verificación ping falló para %s: %s", ip, e)
+        return {}
+
+
 def _should_escalate_to_llm(cluster: list[dict], entities: list[dict]) -> bool:
     """Filtro de costo/ruido: no todo grupo de eventos merece gastar el modelo
     pago -- solo lo que tiene chance real de ser un hallazgo util."""
@@ -239,7 +282,15 @@ _SYSTEM_PROMPT = (
     "equipo especifico, si ya es un patron cronico conocido, si ya hay un "
     "pendiente/ticket abierto para el. Todos los numeros que recibis ya fueron "
     "contados por codigo, no los inventaste vos -- no agregues cifras que no "
-    "esten en el contexto. Tu trabajo: dar UNA hipotesis de causa raiz que "
+    "esten en el contexto. Si un equipo tiene 'verificacion_en_vivo', es una "
+    "comprobacion real hecha en este mismo instante (no historial viejo) -- "
+    "dale MAS peso que a una suposicion general basada solo en el patron del "
+    "evento (ej.: un evento generico de 'offline' por si solo NO te dice si "
+    "es cable, energia o algo puntual del equipo -- pero si la verificacion "
+    "en vivo de una impresora muestra que reporta falta de papel, esa es la "
+    "causa real, no una adivinanza). Si no hay verificacion en vivo para un "
+    "equipo, decilo explicitamente como limitacion en vez de inventar certeza "
+    "que no tenes. Tu trabajo: dar UNA hipotesis de causa raiz que "
     "explique el grupo completo si comparten una causa comun (ej. un switch "
     "upstream que tira varios equipos), o aclarar que no estan relacionados si "
     "no la comparten. Da una recomendacion concreta y accionable para el "
@@ -417,6 +468,13 @@ def run_cycle() -> list[dict]:
         # de aprendizaje de cada una para que el modelo entienda la causa común.
         entities_for_context = entities[:MAX_ENTITIES_IN_PROMPT]
         contexto_entidades = {ent["name"]: _entity_learning_context(ent["ip"]) for ent in entities_for_context}
+        # Fase 3 (6 sep 2026): comprobación en vivo, no solo historial --
+        # acotada a MAX_LIVE_VERIFY para no alargar el ciclo con llamadas de
+        # red reales por cada entidad de un cluster grande.
+        for ent in entities_for_context[:MAX_LIVE_VERIFY]:
+            verif = _verificar_en_vivo(ent)
+            if verif:
+                contexto_entidades[ent["name"]]["verificacion_en_vivo"] = verif
         # Eventos acotados por CANTIDAD (no por caracteres) -- cortar el JSON a
         # ciegas con [:N] rompe la estructura y le manda al modelo datos
         # corruptos como si fueran "hechos reales" (bug real visto en producción
@@ -442,11 +500,12 @@ def run_cycle() -> list[dict]:
         # marcas reales -- ver conocimiento_general.py) relevante a ESTE grupo
         # de equipos específico, no las 212 entradas completas cada vez.
         conocimiento_txt = ""
+        dominios_usados: list[str] = []
         try:
             from core import conocimiento_general
-            conocimiento_txt = conocimiento_general.format_for_prompt(
-                [ent["name"] for ent in entities]
-            )
+            nombres = [ent["name"] for ent in entities]
+            conocimiento_txt = conocimiento_general.format_for_prompt(nombres)
+            dominios_usados = conocimiento_general.matching_domains(nombres)
         except Exception as e:
             log.debug("brain: conocimiento_general no disponible: %s", e)
         contexto_completo = "\n\n".join(p for p in (site_context, conocimiento_txt) if p)
@@ -465,13 +524,14 @@ def run_cycle() -> list[dict]:
 
         cur = con.execute(
             "INSERT INTO brain_conclusions "
-            "(entities, sources, root_cause, recommendation, urgency, evidence_count, engine, entity_ips) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(entities, sources, root_cause, recommendation, urgency, evidence_count, engine, entity_ips, dominios_conocimiento) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entities_str, sources_str,
                 str(result.get("causa_raiz") or "")[:1000],
                 str(result.get("recomendacion") or "")[:1000],
                 urgencia, len(cluster), result.get("_engine") or "", ips_str,
+                ",".join(dominios_usados),
             ),
         )
         conclusion_id = cur.lastrowid

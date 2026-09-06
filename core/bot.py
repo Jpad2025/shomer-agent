@@ -1808,10 +1808,14 @@ async def cmd_conocimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     lines = [f"📚 <b>{fmt.e(dominio)}</b> — {len(reglas)} reglas"]
     for r in reglas[:15]:
+        conf = int(r.get("veces_confirmado") or 0)
+        ref = int(r.get("veces_refutado") or 0)
+        feedback = f"  📊 confirmado {conf}x / refutado {ref}x\n" if (conf or ref) else ""
         lines.append(
             f"\n• <b>{fmt.e(r['patron'])}</b>\n"
             f"  → {fmt.e(r['causa_probable'])}\n"
             f"  ✅ {fmt.e(r['recomendacion'])}\n"
+            f"{feedback}"
             f"  <i>fuente: {fmt.e(r['fuente'])}</i>"
         )
     await update.message.reply_text("\n".join(lines), parse_mode=PM)
@@ -1872,6 +1876,26 @@ async def cb_ticket_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("❌ No encontré ese pendiente.")
         return
     if chronic_tickets.close_ticket(tid):
+        # Fase 4 (6 sep 2026): cerrar el ciclo de aprendizaje -- si este
+        # pendiente lo abrió el cerebro, cerrarlo (confirmado que se
+        # resolvió) sube la confianza de las reglas de conocimiento que
+        # usó para diagnosticarlo. Señal real, no solo guardar y olvidar.
+        if t.get("fuente") == "cerebro":
+            try:
+                import sqlite3
+                from core import brain, conocimiento_general
+                con = sqlite3.connect(brain.KNOWLEDGE_DB)
+                row = con.execute(
+                    "SELECT dominios_conocimiento FROM brain_conclusions WHERE ticket_id=?",
+                    (tid,),
+                ).fetchone()
+                con.close()
+                if row and row[0]:
+                    dominios = [d for d in row[0].split(",") if d]
+                    n = conocimiento_general.registrar_confirmacion(dominios)
+                    log.info("Fase 4: pendiente #%d cerrado -- confianza subida en %d reglas (%s)", tid, n, dominios)
+            except Exception as e:
+                log.debug("Fase 4 feedback en cierre de ticket falló: %s", e)
         await query.message.reply_text(
             f"✅ Pendiente #{tid} ({fmt.e(t['entity_name'])}) cerrado. "
             f"Si vuelve a fallar, se abre uno nuevo.",
