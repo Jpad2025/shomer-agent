@@ -438,7 +438,19 @@ def run_cycle() -> list[dict]:
             "aprendizaje_por_entidad": contexto_entidades,
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
-        result = _call_reasoning_model(user_prompt, site_context=site_context)
+        # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/
+        # marcas reales -- ver conocimiento_general.py) relevante a ESTE grupo
+        # de equipos específico, no las 212 entradas completas cada vez.
+        conocimiento_txt = ""
+        try:
+            from core import conocimiento_general
+            conocimiento_txt = conocimiento_general.format_for_prompt(
+                [ent["name"] for ent in entities]
+            )
+        except Exception as e:
+            log.debug("brain: conocimiento_general no disponible: %s", e)
+        contexto_completo = "\n\n".join(p for p in (site_context, conocimiento_txt) if p)
+        result = _call_reasoning_model(user_prompt, site_context=contexto_completo)
         if not result:
             log.warning("brain: sin respuesta del modelo para grupo de %d evento(s)", len(cluster))
             continue

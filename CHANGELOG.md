@@ -4,6 +4,21 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.11.0 — 2026-09-06
+
+- **Fase 2: la base de conocimiento técnico (212 entradas) queda conectada al razonamiento del
+  cerebro.** Hasta ahora existía pero nadie la consultaba. `conocimiento_general.py` gana
+  `find_relevant()`/`format_for_prompt()`: por cada grupo de eventos que analiza el cerebro,
+  identifica qué dominios aplican según el **nombre real del equipo** (determinístico por
+  palabra clave — "SW " → switching, "Bixolon" → impresoras térmicas POS, "MikroTik" → WAN,
+  "ZK" → control de acceso, etc. — nunca decidido por el LLM, mismo principio anti-alucinación
+  que `pattern_analysis.py`) y le agrega solo las reglas/teoría relevantes a ESE grupo, no las
+  212 completas cada vez.
+  - Probado contra los 8 tipos de equipo reales de Ópera: acertó el dominio correcto en los 8
+    casos (switches, MikroTik, Bixolon, APs, Hikvision, ZKTeco, Ingenico, Epson).
+  - Probado un ciclo completo end-to-end (evento real de impresora Bixolon) contra copia
+    aislada antes de desplegar — funcionó correctamente.
+
 ## 1.10.0 — 2026-09-06
 
 - **Dominios de marca real, basados en el inventario verificado de Ópera (de 180 a 212 entradas).**

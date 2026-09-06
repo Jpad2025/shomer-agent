@@ -2315,5 +2315,81 @@ def dominios_teoria() -> list[str]:
         con.close()
 
 
+# ── Fase 2 (sesión 81 cont., 6 sep 2026): conectar al razonamiento del cerebro ──
+# Mapa palabra clave -> dominio, basado en los nombres REALES de equipos que
+# ya existen en Ópera (ver infra_devices) -- "SW " para switches, "AP " para
+# UniFi, "Bixolon"/"Hikvision"/"ZK"/"Ingenico" para las marcas confirmadas en
+# el inventario real. Determinístico por diseño (código decide qué dominios
+# aplican, no el LLM) -- mismo principio anti-alucinación que pattern_analysis.py.
+_DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "mikrotik":                 ("mikrotik",),
+    "wan":                      ("mikrotik", "router", "gateway"),
+    "switching":                ("sw ", "sw-", "sw1", "sw2", "sw3", "switch"),
+    "cableado":                 ("sw ", "switch", "ap "),
+    "unifi":                    ("ap ", "unifi"),
+    "wifi":                     ("ap ",),
+    "impresoras_termicas_pos":  ("bixolon", "pos"),
+    "impresoras_inkjet":        ("epson", "wf-", "workforce"),
+    "impresoras":               ("imp ", "impresora"),
+    "hikvision":                ("hikvision", "nvr"),
+    "camaras_cctv":             ("camara", "cámara", "nvr"),
+    "zkteco":                   ("zk", "biometrico", "biométrico"),
+    "control_acceso":           ("biometrico", "biométrico", "control de acceso"),
+    "ingenico":                 ("ingenico", "terminal pago", "datafono", "datáfono"),
+    "hardware":                 ("srv", "servidor"),
+    "windows_ad":               ("srvad", "dominio"),
+    "bases_datos":              ("srvzeus", "pms", "base de datos"),
+    "pms_integracion":          ("pms", "zeus", "pos"),
+}
+
+
+def _matching_domains(entity_names: list[str]) -> set[str]:
+    texto = " | ".join((n or "").lower() for n in entity_names)
+    dominios_match = {
+        dominio for dominio, kws in _DOMAIN_KEYWORDS.items()
+        if any(kw in texto for kw in kws)
+    }
+    return dominios_match or {"metodologia"}
+
+
+def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int = 4) -> tuple[list[dict], list[dict]]:
+    """Reglas + teoría relevante para un grupo de entidades, por nombre.
+    Determinístico (coincidencia de palabra clave), nunca decidido por el LLM."""
+    dominios_match = _matching_domains(entity_names)
+    con = sqlite3.connect(KNOWLEDGE_DB)
+    con.row_factory = sqlite3.Row
+    try:
+        reglas: list[dict] = []
+        teoria: list[dict] = []
+        for d in dominios_match:
+            reglas.extend(dict(r) for r in con.execute(
+                "SELECT * FROM conocimiento_general WHERE dominio=? LIMIT 3", (d,)
+            ).fetchall())
+            teoria.extend(dict(r) for r in con.execute(
+                "SELECT * FROM conocimiento_teoria WHERE dominio=? LIMIT 2", (d,)
+            ).fetchall())
+        return reglas[:max_reglas], teoria[:max_teoria]
+    finally:
+        con.close()
+
+
+def format_for_prompt(entity_names: list[str]) -> str:
+    """Bloque de texto compacto para inyectar en el prompt del cerebro --
+    solo lo relevante a las entidades del cluster actual, no las 212 enteras."""
+    reglas, teoria = find_relevant(entity_names)
+    if not reglas and not teoria:
+        return ""
+    partes = ["Conocimiento técnico validado relevante (usar si aplica, no forzar si no encaja):"]
+    for r in reglas:
+        partes.append(
+            f"- [regla/{r['dominio']}] {r['patron']} → {r['causa_probable']} → {r['recomendacion']}"
+        )
+    for t in teoria:
+        partes.append(
+            f"- [teoría/{t['dominio']}] {t['concepto']}: {t['relevancia_diagnostica']}"
+        )
+    return "\n".join(partes)
+
+
 init_db()
 init_db_teoria()
