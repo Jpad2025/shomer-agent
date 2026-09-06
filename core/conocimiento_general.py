@@ -3640,6 +3640,318 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "querer) reduce el daño mucho más que ocultar el error por miedo."
          ),
          fuente="CompTIA Security+ SY0-701 — 5.6 Security Program Management and Oversight"),
+
+    # ══════ SERVER+ SK0-005 — 1.0 HARDWARE DE SERVIDOR (18%) ══════
+    dict(dominio="almacenamiento", concepto="Niveles de RAID: qué protege cada uno y de qué NO protege",
+         explicacion=(
+             "RAID 0 (striping) mejora rendimiento pero NO ofrece redundancia -- si falla un "
+             "disco, se pierde todo. RAID 1 (mirroring) duplica datos en dos discos, tolera "
+             "fallo de uno. RAID 5 distribuye paridad entre discos, tolera fallo de UNO sin "
+             "perder datos, con buen balance costo/capacidad. RAID 6 añade una segunda paridad, "
+             "tolera fallo de DOS discos simultáneos -- más seguro pero con más overhead de "
+             "escritura. RAID 10 combina mirroring + striping, alto rendimiento Y redundancia, "
+             "pero usa la mitad de la capacidad total. JBOD no es RAID real -- simplemente junta "
+             "discos sin redundancia ni distribución, cada disco es independiente. Ningún nivel "
+             "de RAID sustituye un backup real: protege contra falla de disco, no contra "
+             "borrado accidental, ransomware, o corrupción a nivel de sistema de archivos."
+         ),
+         relevancia_diagnostica=(
+             "Un cliente que dice 'no necesito backups, tengo RAID 5' tiene un malentendido "
+             "peligroso -- RAID protege contra falla física de un disco, pero un ransomware que "
+             "cifra los archivos los cifra igual en todos los discos del arreglo RAID "
+             "simultáneamente. Aclarar esta diferencia antes de que ocurra un incidente."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 1.2 Server Hardware Installation and Management"),
+    dict(dominio="almacenamiento", concepto="Almacenamiento compartido: NAS vs SAN y sus protocolos",
+         explicacion=(
+             "NAS (Network Attached Storage) opera a nivel de ARCHIVO -- se accede vía NFS "
+             "(Linux/Unix) o CIFS/SMB (Windows), aparece como una carpeta de red compartida. SAN "
+             "(Storage Area Network) opera a nivel de BLOQUE -- el servidor ve el almacenamiento "
+             "como si fuera un disco local propio, vía iSCSI (sobre red IP normal) o Fibre "
+             "Channel (red dedicada de alto rendimiento) o FCoE (Fibre Channel encapsulado en "
+             "Ethernet). SAN típicamente da mejor rendimiento y es lo que usan bases de datos "
+             "exigentes; NAS es más simple de administrar para archivos compartidos comunes."
+         ),
+         relevancia_diagnostica=(
+             "Una base de datos con problemas de rendimiento de I/O corriendo sobre "
+             "almacenamiento NAS (a nivel de archivo, con overhead de protocolo de red de "
+             "archivos) es candidata a migrar a SAN/iSCSI (a nivel de bloque) si el presupuesto "
+             "lo permite -- el tipo de almacenamiento compartido elegido tiene impacto real de "
+             "rendimiento, no es solo una decisión de capacidad."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 1.2 Server Hardware Installation and Management"),
+    dict(dominio="servidor_administracion", concepto="Gestión fuera de banda (out-of-band): administrar un servidor que no responde",
+         explicacion=(
+             "La gestión fuera de banda (ej. iDRAC de Dell, iLO de HP, IPMI genérico) da acceso "
+             "administrativo a un servidor a través de un canal INDEPENDIENTE del sistema "
+             "operativo y de la red de datos principal -- funciona incluso si el SO está "
+             "colgado, no arranca, o la red principal está caída, porque corre en un chip "
+             "dedicado con su propia conexión de red. Permite encender/apagar remotamente, ver "
+             "la consola como si se estuviera frente al servidor, y hasta montar medios de "
+             "instalación remotamente (IP KVM)."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor que no responde ni a ping ni a RDP/SSH no necesariamente requiere "
+             "presencia física inmediata -- si tiene gestión fuera de banda configurada (iDRAC/"
+             "iLO), se puede diagnosticar y hasta reiniciar remotamente sin depender de que la "
+             "red principal o el SO estén funcionando."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 1.3 Server Hardware Installation and Management"),
+
+    # ══════ SERVER+ SK0-005 — 2.0 ADMINISTRACIÓN DE SERVIDORES (30%) ══════
+    dict(dominio="servidor_administracion", concepto="Tipos de instalación de sistema operativo de servidor",
+         explicacion=(
+             "Instalación GUI (interfaz gráfica completa) vs Core (Windows Server Core, sin "
+             "GUI, menor superficie de ataque y menos recursos, administración por línea de "
+             "comandos/PowerShell remoto). Bare metal instala directamente sobre hardware físico "
+             "sin capa de virtualización. Instalación desatendida (slipstreamed/unattended) usa "
+             "un archivo de respuestas para automatizar sin intervención humana, útil para "
+             "desplegar muchos servidores idénticos. Imaging/cloning despliega una plantilla "
+             "preconfigurada en vez de instalar desde cero cada vez -- P2V (physical to virtual) "
+             "convierte un servidor físico existente en una máquina virtual."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor Windows Core que 'no tiene escritorio' no está roto -- es la "
+             "instalación por diseño, pensada para reducir superficie de ataque; la "
+             "administración correcta es remota (PowerShell, RSAT), no buscar cómo 'activar' "
+             "una interfaz gráfica que deliberadamente no está instalada."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.1 Server Administration"),
+    dict(dominio="servidor_administracion", concepto="Sistemas de archivos y particionado en entornos de servidor",
+         explicacion=(
+             "GPT (GUID Partition Table) reemplaza al MBR (Master Boot Record) más antiguo -- "
+             "soporta discos mayores a 2TB y más de 4 particiones primarias, es el estándar "
+             "actual. ext4 es el sistema de archivos Linux más común. ReFS (Resilient File "
+             "System) es la evolución de NTFS orientada a resiliencia de datos en Windows "
+             "Server. VMFS es específico de VMware para almacenar máquinas virtuales. ZFS "
+             "(usado en soluciones de almacenamiento avanzadas) integra volúmenes, snapshots y "
+             "verificación de integridad de datos en un solo sistema."
+         ),
+         relevancia_diagnostica=(
+             "Un disco de más de 2TB que no se puede inicializar completamente en Windows "
+             "Server, verificar si está particionado como MBR (limitado a 2TB) en vez de GPT -- "
+             "requiere reconvertir el esquema de partición, no es una falla del disco."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.1 Server Administration"),
+    dict(dominio="servidor_administracion", concepto="Clustering: active-active vs active-passive, failover y heartbeat",
+         explicacion=(
+             "Active-active: todos los nodos del clúster procesan carga simultáneamente -- "
+             "mejor uso de recursos, pero más complejo de sincronizar. Active-passive: un nodo "
+             "procesa mientras otro(s) permanecen en espera, listos para tomar el control "
+             "(failover) si el activo falla -- más simple, con capacidad de reserva sin uso "
+             "mientras todo funciona bien. Heartbeat es la señal periódica entre nodos que "
+             "confirma 'sigo vivo' -- cuando el heartbeat deja de recibirse, el clúster asume "
+             "que ese nodo falló y dispara el failover. Failback es el proceso de regresar la "
+             "carga al nodo original una vez que se recupera, idealmente de forma controlada y "
+             "no automática para evitar oscilar entre nodos."
+         ),
+         relevancia_diagnostica=(
+             "Un failover que se dispara sin que el nodo activo realmente haya fallado "
+             "(un 'false failover') suele apuntar a un problema de red específicamente en el "
+             "canal de heartbeat -- el nodo pasivo dejó de recibir la señal no porque el activo "
+             "murió, sino porque el enlace de heartbeat se cayó."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.4 Server Administration"),
+    dict(dominio="virtualizacion", concepto="Redes virtuales: bridged vs NAT, vNICs y virtual switches",
+         explicacion=(
+             "Modo bridged (direct access) conecta la VM directamente a la red física como si "
+             "fuera un equipo más -- obtiene su propia IP de la red real, visible por otros "
+             "equipos. Modo NAT esconde la VM detrás de la IP del host -- la VM tiene acceso "
+             "saliente pero no es directamente alcanzable desde la red externa, similar a como "
+             "un router NAT protege una LAN doméstica. Un virtual switch es la capa de software "
+             "que conecta las vNICs (tarjetas de red virtuales) de las VMs entre sí y con la red "
+             "física, replicando lo que haría un switch físico."
+         ),
+         relevancia_diagnostica=(
+             "Una VM que 'no es alcanzable desde otros equipos de la red' pero sí tiene salida a "
+             "internet, revisar primero si su adaptador de red está en modo NAT en vez de "
+             "bridged -- es la causa más común de ese síntoma exacto, no un problema de firewall "
+             "o de la red física."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.5 Server Administration"),
+    dict(dominio="gestion_documentacion", concepto="Gestión de activos y ciclo de vida en entornos de servidor",
+         explicacion=(
+             "El ciclo de vida completo de un activo va de adquisición → uso → fin de vida → "
+             "disposición/reciclaje, y cada etapa debe documentarse (marca, modelo, número de "
+             "serie, etiqueta de activo). Las métricas de negocio asociadas -- MTBF (tiempo "
+             "medio entre fallas, mide confiabilidad esperada), MTTR (tiempo medio de "
+             "reparación, mide qué tan rápido se recupera), RPO (cuánto dato se puede permitir "
+             "perder) y RTO (cuánto tiempo de inactividad se puede tolerar) -- deben estar "
+             "documentadas ANTES de un incidente, no improvisadas durante uno."
+         ),
+         relevancia_diagnostica=(
+             "Si al ocurrir una falla de servidor nadie sabe cuál es el RTO acordado con el "
+             "cliente, la respuesta de emergencia se vuelve reactiva y sin prioridad clara -- "
+             "documentar RPO/RTO por sistema crítico antes de que se necesiten es lo que permite "
+             "priorizar correctamente bajo presión."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.7 Server Administration"),
+    dict(dominio="servidor_administracion", concepto="Modelos de licenciamiento de software de servidor",
+         explicacion=(
+             "Per-core/per-socket licencia según hardware físico disponible (común en bases de "
+             "datos empresariales). Per-instance licencia cada instalación individual sin "
+             "importar el hardware. Per-concurrent-user licencia según usuarios simultáneos, no "
+             "totales. 'True up' es el proceso de reconciliar el uso real contra lo licenciado "
+             "-- crecer sin hacer true-up periódico expone a incumplimiento de licencia "
+             "descubierto en una auditoría, con penalizaciones retroactivas."
+         ),
+         relevancia_diagnostica=(
+             "Antes de agregar núcleos de CPU o instancias virtuales adicionales a un servidor "
+             "con licenciamiento per-core/per-socket, verificar el modelo de licencia actual -- "
+             "escalar hardware sin ajustar la licencia es una de las causas más comunes de "
+             "incumplimiento accidental descubierto meses después."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 2.8 Server Administration"),
+
+    # ══════ SERVER+ SK0-005 — 3.0 SEGURIDAD Y RECUPERACIÓN DE DESASTRES (24%) ══════
+    dict(dominio="control_acceso", concepto="Modelos de permisos específicos de administración de servidores",
+         explicacion=(
+             "Basado en rol (role-based): permisos ligados al puesto/función. Basado en regla "
+             "(rule-based): condiciones explícitas del sistema (ej. horario). Basado en alcance "
+             "(scope-based): limita la administración a un subconjunto específico de recursos "
+             "(ej. un administrador que solo puede gestionar servidores de un sitio, no de "
+             "todos). Segregación de funciones (segregation of duties) asegura que ninguna "
+             "persona sola tenga control de principio a fin de un proceso crítico -- ej. quien "
+             "aprueba un cambio no debería ser la misma persona que lo ejecuta sin supervisión. "
+             "Delegación permite otorgar un subconjunto específico de permisos administrativos "
+             "sin dar control total."
+         ),
+         relevancia_diagnostica=(
+             "En una operación con un solo administrador de sistemas para todos los sitios de "
+             "un cliente, la segregación de funciones es difícil de implementar por diseño -- "
+             "documentar esa limitación explícitamente como riesgo aceptado es mejor que "
+             "pretender que existe un control que en la práctica no puede sostenerse con una "
+             "sola persona."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 3.3 Security and Disaster Recovery"),
+    dict(dominio="seguridad", concepto="Integridad de dos personas y separación de roles como mitigación",
+         explicacion=(
+             "Two-person integrity requiere que dos personas actúen juntas para completar una "
+             "acción crítica -- ej. dividir una clave de cifrado en dos mitades, cada una en "
+             "poder de una persona distinta, de forma que ninguna por sí sola pueda descifrar "
+             "el dato protegido. Es una mitigación específicamente contra el insider threat: "
+             "ningún control técnico perimetral detiene a alguien que ya tiene acceso legítimo, "
+             "pero exigir una segunda persona para las acciones más sensibles sí reduce ese "
+             "riesgo."
+         ),
+         relevancia_diagnostica=(
+             "Para las acciones más sensibles de un cliente (ej. borrar backups completos, "
+             "cambiar credenciales maestras de PMS), considerar si vale la pena exigir "
+             "aprobación/ejecución de dos personas -- especialmente en clientes donde una sola "
+             "persona tiene acceso administrativo total sin ningún control cruzado."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 3.4 Security and Disaster Recovery"),
+    dict(dominio="seguridad_endpoint", concepto="Decomisionamiento correcto de un servidor: más que apagarlo",
+         explicacion=(
+             "Antes de dar de baja un servidor: verificar que realmente ya no está en uso (no "
+             "solo asumirlo), documentar el cambio en gestión de activos y de cambios, y decidir "
+             "el método de destrucción de medios según la sensibilidad de los datos que manejó "
+             "-- disk wiping (sobrescritura, reutilizable), degaussing (destruye magnéticamente, "
+             "no sirve en SSD), shredding/crushing/incineration (físico, irreversible, para "
+             "datos muy sensibles). También hay que atender el cableado (remediar cable "
+             "eléctrico y de red que quedó suelto) y decidir si el hardware se recicla "
+             "internamente, se dona, o se recicla externamente."
+         ),
+         relevancia_diagnostica=(
+             "Apagar y desconectar un servidor sin verificar primero que ningún otro sistema "
+             "dependía de él (ej. un servicio de autenticación, un recurso compartido usado por "
+             "otro sistema) puede causar una falla en cascada inesperada -- verificar "
+             "dependencias es un paso obligatorio antes del decomisionamiento, no opcional."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 3.6 Security and Disaster Recovery"),
+    dict(dominio="backup", concepto="Métodos de backup: full, incremental, differential y synthetic full",
+         explicacion=(
+             "Full respalda todo cada vez -- más lento y pesado, pero la restauración es "
+             "simple (un solo set). Incremental respalda solo lo que cambió desde el ÚLTIMO "
+             "backup (sea full o incremental) -- rápido de hacer, pero restaurar requiere el "
+             "último full MÁS todos los incrementales en orden. Differential respalda todo lo "
+             "que cambió desde el ÚLTIMO FULL (no desde el último differential) -- restaurar "
+             "requiere solo el full más el último differential, más simple que incremental pero "
+             "cada differential crece con el tiempo. Synthetic full combina un full antiguo con "
+             "los incrementales posteriores para CREAR un nuevo full sin tener que volver a leer "
+             "todos los datos de origen -- ahorra tiempo de ventana de backup en sistemas "
+             "grandes."
+         ),
+         relevancia_diagnostica=(
+             "Una restauración que tarda mucho más de lo esperado en un esquema incremental, "
+             "revisar cuántos incrementales hay que aplicar en cadena desde el último full -- "
+             "si la cadena es muy larga (muchos días sin full nuevo), considerar cambiar a "
+             "differential o hacer full con más frecuencia."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 3.7 Security and Disaster Recovery"),
+    dict(dominio="servidor_recuperacion_desastres", concepto="Replicación: síncrona vs asíncrona para recuperación de desastres",
+         explicacion=(
+             "Replicación síncrona confirma la escritura en AMBOS sitios (primario y "
+             "secundario) antes de considerar la transacción completa -- cero pérdida de datos "
+             "posible (RPO cercano a cero), pero requiere baja latencia entre sitios, limitando "
+             "la distancia geográfica práctica. Replicación asíncrona confirma la escritura "
+             "localmente y envía la copia al sitio secundario con un pequeño retraso -- permite "
+             "mayor distancia geográfica (mejor para desastres regionales) pero con RPO mayor a "
+             "cero (se puede perder los últimos segundos/minutos de transacciones no replicadas "
+             "aún)."
+         ),
+         relevancia_diagnostica=(
+             "Un sitio de recuperación geográficamente distante (para sobrevivir un desastre "
+             "regional real) generalmente NO puede usar replicación síncrona por la latencia -- "
+             "si el cliente exige RPO cero Y recuperación ante desastre regional, esas dos "
+             "exigencias están en tensión y requieren una conversación explícita de trade-offs."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 3.8 Security and Disaster Recovery"),
+
+    # ══════ SERVER+ SK0-005 — 4.0 TROUBLESHOOTING (28%) ══════
+    dict(dominio="servidor_administracion", concepto="Metodología oficial de troubleshooting de servidor en 8 pasos",
+         explicacion=(
+             "1) Identificar el problema y su alcance (preguntar a usuarios, revisar qué cambió "
+             "recientemente, recolectar logs, replicar si es posible, respaldar antes de tocar "
+             "nada). 2) Establecer una teoría de causa probable, cuestionando lo obvio primero. "
+             "3) Probar la teoría -- si no se confirma, volver al paso 2 con una teoría nueva, "
+             "no forzar la teoría original. 4) Establecer un plan de acción, notificando a "
+             "usuarios afectados. 5) Implementar la solución UN CAMBIO A LA VEZ, confirmando "
+             "cada uno antes del siguiente -- si no resuelve, revertir ese cambio específico "
+             "antes de probar otro. 6) Verificar funcionalidad completa del sistema, no solo el "
+             "síntoma original. 7) Análisis de causa raíz. 8) Documentar hallazgos, acciones y "
+             "resultado durante todo el proceso, no solo al final."
+         ),
+         relevancia_diagnostica=(
+             "Cambiar dos o más cosas a la vez para 'ahorrar tiempo' al diagnosticar un servidor "
+             "es la forma más común de terminar sin saber cuál cambio realmente resolvió el "
+             "problema (o cuál lo empeoró) -- un cambio a la vez es más lento por incidente pero "
+             "genera conocimiento reutilizable para la próxima vez."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 4.1 Troubleshooting"),
+    dict(dominio="almacenamiento", concepto="Fallas de RAID: reconstrucción de arreglo y sus riesgos",
+         explicacion=(
+             "Cuando un disco de un arreglo RAID falla y se reemplaza, el arreglo entra en "
+             "'rebuild' (reconstrucción) -- reconstruye los datos del disco nuevo a partir de "
+             "la paridad/espejo de los discos restantes. Durante ese proceso, el arreglo NO "
+             "tiene redundancia completa (en RAID 5, un segundo fallo durante el rebuild pierde "
+             "todo el arreglo). Discos de la misma edad/lote comprados juntos tienen mayor "
+             "probabilidad de fallar en ventanas de tiempo cercanas, por eso un segundo fallo "
+             "durante el rebuild no es tan raro como parece."
+         ),
+         relevancia_diagnostica=(
+             "Durante la reconstrucción de un arreglo RAID 5 tras reemplazar un disco fallado, "
+             "tratar el sistema como temporalmente SIN redundancia -- es el momento de mayor "
+             "riesgo, no de menor, aunque visualmente 'ya se está arreglando'."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 4.3 Troubleshooting"),
+    dict(dominio="servidor_administracion", concepto="Desincronización de reloj (clock skew) y sus efectos en autenticación de servidor",
+         explicacion=(
+             "Muchos protocolos de autenticación (Kerberos en particular) rechazan solicitudes "
+             "si el reloj del cliente y el servidor difieren más de un umbral configurado "
+             "(típicamente 5 minutos) -- es una protección contra ataques de repetición "
+             "(replay), no un error del protocolo. Un servidor sin sincronización NTP correcta "
+             "puede fallar autenticaciones de dominio de forma intermitente y confusa, "
+             "especialmente después de mantenimiento, cambios de zona horaria, o baterías CMOS "
+             "agotadas que reinician el reloj al arrancar."
+         ),
+         relevancia_diagnostica=(
+             "Fallas de autenticación de dominio intermitentes en un servidor, sin cambio de "
+             "credenciales ni de política, revisar primero la hora del sistema contra un "
+             "servidor NTP confiable -- clock skew es una causa mucho más común de lo que "
+             "parece y se descarta en segundos verificando el reloj."
+         ),
+         fuente="CompTIA Server+ SK0-005 — 4.4 Troubleshooting"),
 ]
 
 
@@ -4376,6 +4688,40 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Decisión de negocio válida de aceptación de riesgo, no un hallazgo ignorado",
          recomendacion="Documentar formalmente como aceptación de riesgo con exención (dueño, fecha, justificación) -- no dejarlo como un hallazgo abierto sin decisión registrada",
          fuente="CompTIA Security+ SY0-701 — 5.2 Security Program Management and Oversight"),
+
+    # ══════ SERVER+ SK0-005 — REGLAS DIAGNÓSTICAS ══════
+    dict(dominio="almacenamiento", patron="Un cliente asume que no necesita backups porque tiene RAID 5 configurado",
+         causa_probable="Malentendido sobre qué protege RAID -- solo falla física de disco, no borrado/ransomware/corrupción lógica",
+         recomendacion="Aclarar la diferencia y establecer un esquema de backup real independiente del RAID antes de que ocurra un incidente",
+         fuente="CompTIA Server+ SK0-005 — 1.2 Server Hardware Installation and Management"),
+    dict(dominio="almacenamiento", patron="Un disco de más de 2TB no se puede inicializar completamente en un servidor Windows",
+         causa_probable="El disco está particionado como MBR, que tiene un límite de 2TB",
+         recomendacion="Reconvertir el esquema de partición a GPT -- no es una falla física del disco",
+         fuente="CompTIA Server+ SK0-005 — 2.1 Server Administration"),
+    dict(dominio="virtualizacion", patron="Una máquina virtual tiene salida a internet pero no es alcanzable desde otros equipos de la red",
+         causa_probable="El adaptador de red de la VM está en modo NAT en vez de bridged",
+         recomendacion="Cambiar el adaptador de red a modo bridged si la VM necesita ser alcanzable directamente desde la red física",
+         fuente="CompTIA Server+ SK0-005 — 2.5 Server Administration"),
+    dict(dominio="servidor_administracion", patron="Un failover de clúster se dispara sin que el nodo activo realmente haya dejado de funcionar",
+         causa_probable="El canal de heartbeat entre nodos se interrumpió (problema de red), no una falla real del nodo activo",
+         recomendacion="Revisar específicamente la conectividad del enlace de heartbeat antes de asumir que el nodo activo falló",
+         fuente="CompTIA Server+ SK0-005 — 2.4 Server Administration"),
+    dict(dominio="servidor_administracion", patron="Escalar núcleos de CPU o instancias virtuales en un servidor con licenciamiento per-core/per-socket",
+         causa_probable="Riesgo de incumplimiento de licencia si no se ajusta el licenciamiento al mismo tiempo que el hardware",
+         recomendacion="Verificar y ajustar el modelo de licencia ANTES de escalar hardware, no descubrirlo en una auditoría posterior",
+         fuente="CompTIA Server+ SK0-005 — 2.8 Server Administration"),
+    dict(dominio="almacenamiento", patron="Un arreglo RAID 5 está en proceso de reconstrucción (rebuild) tras reemplazar un disco fallado",
+         causa_probable="Estado normal de recuperación, pero el arreglo queda temporalmente SIN redundancia durante el proceso",
+         recomendacion="Tratar el sistema como de alto riesgo durante el rebuild -- un segundo fallo de disco en esa ventana pierde el arreglo completo",
+         fuente="CompTIA Server+ SK0-005 — 4.3 Troubleshooting"),
+    dict(dominio="servidor_administracion", patron="Fallas de autenticación de dominio intermitentes en un servidor sin cambio de credenciales ni política",
+         causa_probable="Desincronización de reloj (clock skew) -- Kerberos rechaza autenticaciones fuera del umbral de tiempo permitido",
+         recomendacion="Verificar la hora del sistema contra un servidor NTP confiable antes de investigar causas más complejas",
+         fuente="CompTIA Server+ SK0-005 — 4.4 Troubleshooting"),
+    dict(dominio="servidor_administracion", patron="Un servidor Windows Core no tiene interfaz gráfica de escritorio disponible",
+         causa_probable="Comportamiento esperado de esa instalación -- Server Core se instala deliberadamente sin GUI",
+         recomendacion="Administrar remotamente vía PowerShell/RSAT en vez de buscar cómo habilitar una interfaz gráfica que no está instalada por diseño",
+         fuente="CompTIA Server+ SK0-005 — 2.1 Server Administration"),
 ]
 
 

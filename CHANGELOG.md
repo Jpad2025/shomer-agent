@@ -4,6 +4,30 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.18.0 — 2026-09-06
+
+- **Server+ (SK0-005) completo — quinto certificado del método exhaustivo (de 389 a 414
+  entradas).** Descargado directamente del CDN oficial de CompTIA y leído el documento de
+  objetivos (v1.0, 2019), los 4 dominios cubiertos: 1.0 Server Hardware Installation and
+  Management (18%), 2.0 Server Administration (30%), 3.0 Security and Disaster Recovery (24%),
+  4.0 Troubleshooting (28%). Ya existía contenido curado de Server+ desde v1.13.0 (8 referencias)
+  -- esta entrada agrega los fundamentos oficiales que faltaban, no reemplaza lo anterior.
+  - Nuevo dominio: `almacenamiento` (RAID 0/1/5/6/10/JBOD y qué protege cada uno, NAS vs SAN,
+    iSCSI/Fibre Channel/FCoE, fallas y reconstrucción de arreglos).
+  - Ampliado: `servidor_administracion` (gestión fuera de banda iDRAC/iLO, tipos de instalación
+    GUI vs Core, GPT vs MBR, clustering active-active/passive y heartbeat, licenciamiento
+    per-core/per-socket y true-up, metodología de troubleshooting en 8 pasos, clock skew),
+    `virtualizacion` (redes virtuales bridged vs NAT, vNICs, virtual switches),
+    `gestion_documentacion` (ciclo de vida de activos, MTBF/MTTR/RPO/RTO), `control_acceso`
+    (permisos scope-based, segregación de funciones), `seguridad` (integridad de dos personas),
+    `seguridad_endpoint` (decomisionamiento correcto de servidores), `backup` (full/incremental/
+    differential/synthetic full), `servidor_recuperacion_desastres` (replicación síncrona vs
+    asíncrona).
+  - Total: 414 entradas (166 reglas + 248 teoría). Probado (seed + idempotencia + matching de
+    dominios + format_for_prompt) contra copia aislada de la base real antes de desplegar.
+    Pendiente en el mismo método: CySA+ (CS0-003) -- último certificado, su contenido actual
+    (desde v1.13.0) es curado, no exhaustivo.
+
 ## 1.17.0 — 2026-09-06
 
 - **Security+ (SY0-701) completo — cuarto certificado del método exhaustivo (de 356 a 389
