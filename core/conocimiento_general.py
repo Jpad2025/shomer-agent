@@ -1496,6 +1496,244 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "real — vale la pena distinguir ambos."
          ),
          fuente="Metodología general de soporte técnico (ITIL)"),
+
+    # ══════════════════════ ECOSISTEMA UNIFI (marca real: APs + switches en Ópera) ══════════════════════
+    dict(dominio="unifi", concepto="Adopción de equipos: por qué un AP/switch nuevo no aparece solo",
+         explicacion=(
+             "Un equipo UniFi nuevo (o reseteado de fábrica) no se integra a la red gestionada "
+             "automáticamente — necesita ser 'adoptado' explícitamente por el Controller/gateway "
+             "que administra el sitio. Hasta que se adopta, aparece como 'pending adoption' y "
+             "NO recibe la configuración del sitio (VLANs, WiFi, políticas) aunque esté "
+             "físicamente conectado y encendido."
+         ),
+         relevancia_diagnostica=(
+             "Un AP o switch UniFi recién reemplazado que 'no aparece' en el panel, pese a "
+             "tener luz de encendido y conexión de red — verificar el estado de adopción en el "
+             "Controller antes de sospechar de un defecto de fábrica."
+         ),
+         fuente="Documentación oficial de Ubiquiti/UniFi"),
+    dict(dominio="unifi", concepto="Inform URL: la dirección que un equipo UniFi necesita para reportar al Controller",
+         explicacion=(
+             "Cada equipo UniFi está configurado para 'reportar' (inform) a una URL específica "
+             "del Controller que lo gestiona. Si el Controller cambia de IP, o el equipo se "
+             "mueve a otra red donde no puede alcanzar esa URL, el equipo sigue funcionando de "
+             "forma autónoma con su última configuración conocida, pero deja de reportar estado "
+             "y no recibe cambios nuevos — puede parecer 'perdido' en el panel aunque siga "
+             "operando la red normalmente para los clientes conectados."
+         ),
+         relevancia_diagnostica=(
+             "Un AP que sigue dando WiFi a los huéspedes perfectamente pero aparece 'offline' o "
+             "desactualizado en el Controller — revisar la conectividad hacia la inform URL "
+             "configurada, no asumir que el AP en sí falló."
+         ),
+         fuente="Documentación oficial de Ubiquiti/UniFi"),
+    dict(dominio="unifi", concepto="Mezclar switches UniFi con switches de otra marca (ej. Cisco) en la misma red",
+         explicacion=(
+             "UniFi gestiona sus propios switches con su Controller vía protocolos propios "
+             "para VLANs, PoE y topología visual — un switch de otra marca en el medio de la "
+             "topología sigue los estándares (802.1Q, LACP) pero NO aparece integrado en la "
+             "vista de topología de UniFi ni se gestiona desde el mismo panel, lo que puede dar "
+             "una falsa sensación de 'hueco' en el mapa de red aunque funcione correctamente a "
+             "nivel de tráfico."
+         ),
+         relevancia_diagnostica=(
+             "Un switch Cisco en medio de una red mayormente UniFi no debería tratarse como "
+             "'no gestionado = sospechoso' solo por no aparecer en el panel UniFi — su "
+             "configuración y salud deben revisarse por su propia interfaz de administración."
+         ),
+         fuente="Comunidad técnica -- interoperabilidad UniFi/Cisco documentada"),
+
+    # ══════════════════════ MIKROTIK ROUTEROS (marca real: gateway en Ópera) ══════════════════════
+    dict(dominio="mikrotik", concepto="RouterOS: configuración basada en reglas secuenciales, el orden importa",
+         explicacion=(
+             "En RouterOS (firewall, NAT, colas de tráfico) las reglas se evalúan en el orden "
+             "en que aparecen en la lista, de arriba hacia abajo, y la primera que coincide "
+             "generalmente decide el resultado — una regla correcta colocada en la posición "
+             "incorrecta de la lista puede nunca llegar a aplicarse porque una regla anterior "
+             "ya interceptó el tráfico."
+         ),
+         relevancia_diagnostica=(
+             "Una regla de firewall/NAT en MikroTik que 'está bien escrita pero no hace nada' "
+             "casi siempre es un problema de ORDEN en la lista, no de sintaxis — revisar qué "
+             "reglas anteriores podrían estar interceptando el tráfico antes de llegar a ella."
+         ),
+         fuente="Documentación oficial de MikroTik RouterOS"),
+    dict(dominio="mikrotik", concepto="Winbox vs acceso web vs SSH: mismas reglas, distinta vía",
+         explicacion=(
+             "RouterOS se puede administrar por Winbox (aplicación nativa, vía protocolo "
+             "propietario), interfaz web, o SSH/consola — los tres acceden a la MISMA "
+             "configuración subyacente, pero cada uno puede fallar de forma independiente "
+             "(ej. el servicio Winbox deshabilitado no afecta el acceso SSH) sin que eso "
+             "signifique que el equipo esté inaccesible por completo."
+         ),
+         relevancia_diagnostica=(
+             "'No puedo entrar por Winbox' no significa que el MikroTik esté inalcanzable — "
+             "probar SSH o la interfaz web antes de asumir que el equipo está caído o hay que "
+             "acceder físicamente."
+         ),
+         fuente="Documentación oficial de MikroTik RouterOS"),
+    dict(dominio="mikrotik", concepto="Reglas DROP en la cadena forward vs input",
+         explicacion=(
+             "La cadena 'input' filtra tráfico DIRIGIDO al router mismo (administración). La "
+             "cadena 'forward' filtra tráfico que PASA a través del router hacia otra red — "
+             "una regla de bloqueo puesta en la cadena equivocada no tiene ningún efecto sobre "
+             "el tráfico que se pretendía bloquear, aunque parezca estar 'activa'."
+         ),
+         relevancia_diagnostica=(
+             "Un bloqueo de IP que 'está configurado' en el MikroTik pero el tráfico sigue "
+             "pasando — verificar que la regla esté en la cadena forward (para tráfico que "
+             "atraviesa la red), no solo en input."
+         ),
+         fuente="Documentación oficial de MikroTik RouterOS"),
+
+    # ══════════════════════ HIKVISION / NVR (marca real: cámaras en Ópera) ══════════════════════
+    dict(dominio="hikvision", concepto="P2P/nube (Hik-Connect) vs acceso local directo",
+         explicacion=(
+             "Los NVR Hikvision suelen ofrecer acceso remoto vía su servicio de nube propio "
+             "(P2P/Hik-Connect) ADEMÁS del acceso directo por IP local — el servicio de nube "
+             "depende de que el NVR tenga salida a internet y que el servicio de Hikvision "
+             "esté disponible; puede fallar completamente mientras el acceso local (dentro de "
+             "la misma red) sigue funcionando sin problema."
+         ),
+         relevancia_diagnostica=(
+             "'No puedo ver las cámaras desde el celular fuera del hotel' mientras localmente "
+             "todo funciona bien, es un problema del servicio de nube/P2P o de la salida a "
+             "internet del NVR, no de las cámaras ni de la red interna."
+         ),
+         fuente="Documentación técnica de sistemas Hikvision"),
+    dict(dominio="hikvision", concepto="Grabación continua vs por detección de movimiento: impacto en almacenamiento",
+         explicacion=(
+             "Grabación continua llena el disco del NVR de forma predecible y constante. "
+             "Grabación por detección de movimiento varía mucho según la actividad real de "
+             "cada cámara — una cámara apuntando a una zona con mucho movimiento de "
+             "aire/sombras puede grabar casi tanto como continua, agotando espacio de "
+             "almacenamiento antes de lo esperado y sobrescribiendo grabaciones viejas más "
+             "rápido de lo previsto."
+         ),
+         relevancia_diagnostica=(
+             "Grabaciones de días anteriores que 'ya no están' antes del tiempo de retención "
+             "esperado — revisar si alguna cámara en modo detección de movimiento está "
+             "grabando mucho más de lo previsto (falsos positivos por viento, sombras, "
+             "insectos frente al lente) y consumiendo el espacio de las demás."
+         ),
+         fuente="Documentación técnica de sistemas Hikvision"),
+
+    # ══════════════════════ CONTROL DE ACCESO ZKTECO (marca real en Ópera) ══════════════════════
+    dict(dominio="zkteco", concepto="Modos de comunicación: TCP/IP vs RS485",
+         explicacion=(
+             "Los equipos ZKTeco pueden conectarse a la red por TCP/IP directo (más simple, "
+             "cada lector es un dispositivo de red independiente) o por RS485 en cadena "
+             "(varios lectores comparten un solo cable hacia un controlador central) — el modo "
+             "RS485 significa que un problema en UN punto de la cadena (un cable, un "
+             "terminador mal puesto) puede afectar a TODOS los lectores conectados después de "
+             "ese punto, no solo a uno."
+         ),
+         relevancia_diagnostica=(
+             "Varios lectores de control de acceso fallando juntos, en el mismo momento, sin "
+             "relación evidente entre ellos por red, es la firma de una cadena RS485 con un "
+             "problema físico en un punto compartido — no tratarlos como fallas individuales "
+             "no relacionadas."
+         ),
+         fuente="Documentación técnica de sistemas de control de acceso ZKTeco"),
+    dict(dominio="zkteco", concepto="Degradación del sensor de huella con el tiempo y el uso",
+         explicacion=(
+             "Los sensores ópticos de huella digital acumulan grasa, suciedad y microrayones "
+             "con el uso diario intensivo (típico en un hotel con rotación alta de personal y "
+             "huéspedes) — la tasa de falsos rechazos sube gradualmente con el desgaste físico "
+             "del sensor, no por un cambio de configuración."
+         ),
+         relevancia_diagnostica=(
+             "Aumento gradual (no súbito) de rechazos de huella a lo largo de meses, en un "
+             "equipo con mucho uso diario, sugiere limpieza o reemplazo del sensor antes que "
+             "recalibración de software."
+         ),
+         fuente="Documentación técnica de sistemas de control de acceso ZKTeco"),
+
+    # ══════════════════════ TERMINALES DE PAGO INGENICO (marca real en Ópera) ══════════════════════
+    dict(dominio="ingenico", concepto="Conexión IP vs línea telefónica/GPRS en datáfonos",
+         explicacion=(
+             "Un terminal de pago puede procesar transacciones por IP (red del comercio, más "
+             "rápido) o por línea telefónica/GPRS como respaldo — cuando la red IP falla, "
+             "algunos modelos hacen 'fallback' automático al canal de respaldo sin que el "
+             "cajero note ningún cambio visible, salvo transacciones más lentas de lo normal."
+         ),
+         relevancia_diagnostica=(
+             "Transacciones de tarjeta notablemente más lentas de lo habitual, sin que el "
+             "datáfono reporte error, puede ser un fallback silencioso a un canal de respaldo "
+             "más lento por un problema de red IP no evidente todavía."
+         ),
+         fuente="Conocimiento general de terminales de pago electrónico"),
+    dict(dominio="ingenico", concepto="Por qué un datáfono necesita su propia VLAN aislada",
+         explicacion=(
+             "Los terminales de pago manejan datos de tarjetas y están sujetos a normas de "
+             "seguridad de pagos (PCI-DSS) que exigen aislamiento de red — compartir la misma "
+             "VLAN que equipos no relacionados con pagos (WiFi de huéspedes, impresoras "
+             "generales) amplía innecesariamente la superficie de auditoría de cumplimiento y "
+             "el riesgo real de exposición de esos datos."
+         ),
+         relevancia_diagnostica=(
+             "Un datáfono funcionando técnicamente bien pero compartiendo VLAN con equipos no "
+             "relacionados con pagos es un hallazgo de cumplimiento tan importante como "
+             "cualquier falla técnica — no depende de que algo 'se rompa' para ser relevante."
+         ),
+         fuente="Normas de seguridad de datos de pago (PCI-DSS)"),
+
+    # ══════════════════════ IMPRESORAS DE INYECCIÓN DE TINTA (Epson WorkForce -- distinto de láser y térmica) ══════════════════════
+    dict(dominio="impresoras_inkjet", concepto="Por qué una inkjet de uso comercial (Epson WorkForce/PrecisionCore) falla distinto a una láser",
+         explicacion=(
+             "Una impresora de inyección de tinta comercial no tiene tóner ni fusor — tiene "
+             "cabezales de impresión que pueden obstruirse si la impresora pasa mucho tiempo "
+             "sin usarse (la tinta se seca en las boquillas), y tanques o cartuchos de tinta "
+             "independientes por color que se agotan a ritmos distintos según el contenido "
+             "impreso (más texto negro consume más negro, más fotos consumen más color)."
+         ),
+         relevancia_diagnostica=(
+             "Impresión con rayas o colores faltantes en una impresora de este tipo que estuvo "
+             "varios días sin usarse (ej. tras un fin de semana de baja ocupación) — ejecutar "
+             "una limpieza de cabezales antes de asumir una falla de hardware permanente."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 / documentación de impresoras Epson comerciales"),
+    dict(dominio="impresoras_inkjet", concepto="Almohadillas de mantenimiento (maintenance box) y su fin de vida",
+         explicacion=(
+             "Muchas inkjet comerciales recolectan el exceso de tinta de limpieza en una "
+             "almohadilla/caja de mantenimiento interna con capacidad finita — cuando se "
+             "satura, la impresora se detiene por completo con un código de error específico, "
+             "independientemente de si quedan cartuchos de tinta con contenido."
+         ),
+         relevancia_diagnostica=(
+             "Una impresora inkjet que se niega a imprimir con un código de error específico "
+             "de mantenimiento, aunque los cartuchos de tinta muestren nivel alto, casi "
+             "siempre es la almohadilla de mantenimiento saturada, no falta de tinta."
+         ),
+         fuente="Documentación de impresoras Epson comerciales"),
+
+    # ══════════════════════ IMPRESORAS TÉRMICAS BIXOLON (marca real, POS en Ópera) ══════════════════════
+    dict(dominio="impresoras_termicas_pos", concepto="Sensor de papel y detección de 'fin de rollo' temprana",
+         explicacion=(
+             "Las impresoras térmicas POS tienen un sensor óptico que detecta el rollo de "
+             "papel agotándose — algunos rollos con el reverso de color oscuro o con marcas "
+             "impresas cerca del final pueden disparar el sensor antes de que el papel "
+             "realmente se agote, generando una alerta de 'sin papel' con rollo aún utilizable."
+         ),
+         relevancia_diagnostica=(
+             "Alertas de 'sin papel' frecuentes con rollos que a simple vista aún tienen "
+             "papel — revisar el tipo/marca de rollo en uso, puede ser una incompatibilidad "
+             "de sensor con ese papel específico, no una falla del sensor en sí."
+         ),
+         fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
+    dict(dominio="impresoras_termicas_pos", concepto="Cortador automático: causa frecuente de atascos",
+         explicacion=(
+             "El mecanismo de corte automático de papel en impresoras térmicas POS es una "
+             "pieza móvil con desgaste — acumula residuos de papel y polvo con el tiempo, y es "
+             "una de las causas más comunes de 'atasco' reportado como falla general de la "
+             "impresora cuando en realidad es solo el cortador."
+         ),
+         relevancia_diagnostica=(
+             "Impresión correcta del contenido pero fallo o atasco justo al momento de cortar "
+             "el papel — limpiar/revisar el mecanismo de corte específicamente, no la "
+             "impresora completa."
+         ),
+         fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
 ]
 
 
@@ -1891,6 +2129,84 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Ventana normal de sincronización entre el PMS y el sistema de llaves electrónicas",
          recomendacion="Verificar el intervalo de sincronización configurado antes de tratarlo como falla de seguridad grave",
          fuente="Industria hotelera -- patrón de integración documentado"),
+
+    # ── UniFi (marca real en Ópera: APs + algunos switches) ──
+    dict(dominio="unifi", patron="AP o switch UniFi recién instalado no aparece en el panel de gestión",
+         causa_probable="El equipo está encendido y conectado pero no ha sido adoptado por el Controller",
+         recomendacion="Verificar el estado de adopción en el Controller antes de sospechar de un defecto de fábrica",
+         fuente="Documentación oficial de Ubiquiti/UniFi"),
+    dict(dominio="unifi", patron="AP UniFi da WiFi normal a los huéspedes pero aparece offline/desactualizado en el panel",
+         causa_probable="El equipo no puede alcanzar la inform URL del Controller, aunque sigue operando con su última configuración",
+         recomendacion="Revisar conectividad hacia el Controller, no reiniciar el AP asumiendo que falló",
+         fuente="Documentación oficial de Ubiquiti/UniFi"),
+    dict(dominio="unifi", patron="Un switch de otra marca (ej. Cisco) no aparece en la topología visual de UniFi",
+         causa_probable="Es esperado -- UniFi solo gestiona/visualiza sus propios equipos, no switches de terceros aunque funcionen correctamente",
+         recomendacion="Revisar la salud de ese switch por su propia interfaz de administración, no por el panel UniFi",
+         fuente="Comunidad técnica -- interoperabilidad UniFi/Cisco documentada"),
+
+    # ── MikroTik (marca real del gateway en Ópera) ──
+    dict(dominio="mikrotik", patron="Una regla de firewall/NAT en MikroTik parece bien escrita pero no tiene efecto",
+         causa_probable="Una regla anterior en el orden de la lista ya está interceptando ese tráfico",
+         recomendacion="Revisar el orden completo de reglas, no solo la sintaxis de la regla nueva",
+         fuente="Documentación oficial de MikroTik RouterOS"),
+    dict(dominio="mikrotik", patron="No se puede entrar al MikroTik por Winbox",
+         causa_probable="El servicio Winbox puede estar deshabilitado o bloqueado sin que el resto del equipo esté inaccesible",
+         recomendacion="Probar acceso por SSH o interfaz web antes de asumir que el equipo está caído",
+         fuente="Documentación oficial de MikroTik RouterOS"),
+    dict(dominio="mikrotik", patron="Un bloqueo de IP configurado en MikroTik no impide que esa IP siga pasando tráfico",
+         causa_probable="La regla de bloqueo está en la cadena 'input' en vez de 'forward' (o viceversa según el caso)",
+         recomendacion="Verificar en qué cadena está la regla -- forward para tráfico que atraviesa la red, input para tráfico dirigido al router mismo",
+         fuente="Documentación oficial de MikroTik RouterOS"),
+
+    # ── Hikvision (marca real de NVR/cámaras en Ópera) ──
+    dict(dominio="hikvision", patron="No se puede ver las cámaras desde fuera del hotel, pero localmente funcionan bien",
+         causa_probable="Falla del servicio de nube/P2P (Hik-Connect) o de la salida a internet del NVR, no de las cámaras",
+         recomendacion="Verificar el servicio de nube y la conectividad a internet del NVR antes de revisar cada cámara",
+         fuente="Documentación técnica de sistemas Hikvision"),
+    dict(dominio="hikvision", patron="Grabaciones de días anteriores desaparecen antes del tiempo de retención esperado",
+         causa_probable="Una o más cámaras en modo detección de movimiento están grabando de más por falsos positivos (viento, sombras, insectos)",
+         recomendacion="Revisar qué cámara consume más espacio de lo esperado antes de asumir falla del NVR o del disco",
+         fuente="Documentación técnica de sistemas Hikvision"),
+
+    # ── ZKTeco (marca real del control de acceso biométrico en Ópera) ──
+    dict(dominio="zkteco", patron="Varios lectores de control de acceso fallan juntos, sin relación evidente por red",
+         causa_probable="Problema físico en un punto compartido de una cadena RS485, afectando a todos los lectores posteriores",
+         recomendacion="Tratarlos como un solo incidente de cadena, no como fallas individuales no relacionadas",
+         fuente="Documentación técnica de sistemas de control de acceso ZKTeco"),
+    dict(dominio="zkteco", patron="Aumento gradual de rechazos de huella a lo largo de varios meses en un lector de alto uso",
+         causa_probable="Desgaste físico del sensor óptico por uso intensivo diario",
+         recomendacion="Limpiar o reemplazar el sensor antes de recalibrar el software",
+         fuente="Documentación técnica de sistemas de control de acceso ZKTeco"),
+
+    # ── Ingenico (marca real de los datáfonos en Ópera) ──
+    dict(dominio="ingenico", patron="Transacciones de tarjeta notablemente más lentas de lo habitual, sin error reportado",
+         causa_probable="Fallback silencioso a un canal de respaldo (línea telefónica/GPRS) por un problema de red IP no evidente aún",
+         recomendacion="Revisar la conectividad IP del datáfono aunque no reporte ningún error visible",
+         fuente="Conocimiento general de terminales de pago electrónico"),
+    dict(dominio="ingenico", patron="Datáfono funcionando bien técnicamente pero en la misma VLAN que equipos no relacionados con pagos",
+         causa_probable="Falta de segmentación de red para el entorno de datos de tarjetas",
+         recomendacion="Segmentar en una VLAN dedicada -- es un hallazgo de cumplimiento real, no depende de que algo falle primero",
+         fuente="Normas de seguridad de datos de pago (PCI-DSS)"),
+
+    # ── Impresoras inkjet comerciales (Epson WorkForce, real en recepción de Ópera) ──
+    dict(dominio="impresoras_inkjet", patron="Impresión con rayas o colores faltantes tras varios días sin uso",
+         causa_probable="Tinta seca en las boquillas del cabezal por inactividad prolongada",
+         recomendacion="Ejecutar limpieza de cabezales antes de asumir una falla de hardware permanente",
+         fuente="Documentación de impresoras Epson comerciales"),
+    dict(dominio="impresoras_inkjet", patron="Impresora inkjet se niega a imprimir con código de error específico pese a tinta alta",
+         causa_probable="Almohadilla/caja de mantenimiento interna saturada",
+         recomendacion="Revisar el código de error específico -- casi siempre indica mantenimiento saturado, no falta de tinta",
+         fuente="Documentación de impresoras Epson comerciales"),
+
+    # ── Impresoras térmicas POS (Bixolon, real en Ópera) ──
+    dict(dominio="impresoras_termicas_pos", patron="Alertas frecuentes de 'sin papel' con el rollo visiblemente con papel restante",
+         causa_probable="Incompatibilidad del sensor óptico con el tipo/marca específica de papel en uso",
+         recomendacion="Revisar el tipo de rollo antes de asumir falla del sensor",
+         fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
+    dict(dominio="impresoras_termicas_pos", patron="Impresión correcta pero falla o atasco justo al cortar el papel",
+         causa_probable="Desgaste o residuos acumulados en el mecanismo de corte automático",
+         recomendacion="Limpiar/revisar el cortador específicamente, no la impresora completa",
+         fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
 ]
 
 

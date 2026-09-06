@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.10.0 — 2026-09-06
+
+- **Dominios de marca real, basados en el inventario verificado de Ópera (de 180 a 212 entradas).**
+  Pedido de Juan Pablo: ampliar dominios revisando los equipos reales del hotel, no suposiciones.
+  Consultado `infra_devices` en vivo antes de escribir una sola regla — la mezcla real de marcas
+  encontrada: UniFi (30 APs + switches EdgeSwitch), MikroTik (gateway), Cisco (otros switches),
+  Bixolon (impresoras térmicas POS), **Epson WorkForce M5899 en recepción — inkjet comercial, no
+  láser, un tipo no cubierto antes**, Hikvision (2 NVR + cámaras), ZKTeco (biométrico), Ingenico
+  (2 datáfonos). 6 dominios nuevos específicos de estas marcas:
+  - `unifi` (adopción de equipos, inform URL, interoperabilidad con Cisco)
+  - `mikrotik` (orden de reglas en RouterOS, Winbox vs SSH, cadenas input/forward)
+  - `hikvision` (P2P/nube vs acceso local, grabación continua vs detección de movimiento)
+  - `zkteco` (modos RS485 vs TCP/IP, degradación de sensores de huella)
+  - `ingenico` (fallback a canal de respaldo, segmentación PCI)
+  - `impresoras_inkjet` (distinto de láser y térmica: cabezales, almohadilla de mantenimiento)
+    + ampliación de `impresoras_termicas_pos` (sensor de papel, cortador automático)
+  - Total: 212 entradas (101 reglas + 111 teoría) en 32 dominios de teoría / 28 de reglas.
+  - Probado (siembra + idempotencia) contra copia aislada; tablas de producción limpiadas y
+    resembradas en Ópera y los 3 labs para que el número real llegara, no solo el código.
+
 ## 1.9.0 — 2026-09-06
 
 - **Expansión real de escala de la base de conocimiento — corrección sobre 1.8.0.** Juan Pablo
