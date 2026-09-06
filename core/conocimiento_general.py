@@ -2238,6 +2238,590 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "métricas de uso real antes de disputar el cargo."
          ),
          fuente="CompTIA A+ Core 1 220-1201 — 4.2 Virtualization and Cloud Computing"),
+
+    # ══════════════════════ NETWORK+ N10-009 — TEMARIO OFICIAL COMPLETO ══════════════════════
+    # Trabajado con el documento oficial (objetivos v6.0, 2023) -- dominios: 1.0 Networking
+    # Concepts (23%), 2.0 Network Implementation (20%), 3.0 Network Operations (19%),
+    # 4.0 Network Security (14%), 5.0 Network Troubleshooting (24%).
+
+    # ── 1.0 Conceptos de red ──
+    dict(dominio="metodologia", concepto="El modelo OSI de 7 capas, formal y completo",
+         explicacion=(
+             "Física (cables, señales) → Enlace (MAC, switches) → Red (IP, routers) → "
+             "Transporte (TCP/UDP, puertos) → Sesión (establece/mantiene conversaciones) → "
+             "Presentación (formato/cifrado de datos) → Aplicación (lo que ve el usuario, "
+             "HTTP/DNS/etc.). Cada capa depende de que la de abajo funcione -- un problema de "
+             "capa 1 (cable) se manifiesta como fallas en TODAS las capas superiores, aunque "
+             "el síntoma reportado sea 'la aplicación no carga' (capa 7)."
+         ),
+         relevancia_diagnostica=(
+             "Cuando el síntoma es de capa alta (una app específica falla) pero TODO lo demás "
+             "en ese equipo también falla, la causa real está más abajo en el modelo -- "
+             "revisar de la capa física hacia arriba, no asumir que el problema vive donde se "
+             "percibió."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.1 Networking Concepts"),
+    dict(dominio="redes_ip", concepto="Dispositivos de red: IDS/IPS, balanceador de carga, proxy, NAS vs SAN",
+         explicacion=(
+             "Un IDS detecta y alerta; un IPS detecta y BLOQUEA automáticamente -- un IPS mal "
+             "calibrado puede cortar tráfico legítimo por un falso positivo, un riesgo que un "
+             "IDS no tiene. Un balanceador de carga reparte tráfico entre varios servidores "
+             "para el mismo servicio. Un proxy intermedia conexiones (saliente: oculta "
+             "clientes internos; entrante/reverso: oculta servidores reales). NAS comparte "
+             "ARCHIVOS por red normal; SAN es una red dedicada solo para bloques de "
+             "almacenamiento, separada del tráfico de datos común."
+         ),
+         relevancia_diagnostica=(
+             "Tráfico legítimo bloqueado de forma inesperada en una red con IPS activo -- "
+             "revisar reglas del IPS como sospechoso antes que firewall o el equipo destino, "
+             "un IPS actúa automáticamente sin intervención humana en el momento."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.2 Networking Concepts"),
+    dict(dominio="cloud", concepto="Conceptos de red en la nube: VPC, NAT gateway, y modelos de conectividad",
+         explicacion=(
+             "Una VPC (nube privada virtual) es una red aislada lógicamente dentro de la "
+             "infraestructura de un proveedor de nube. Un NAT gateway en la nube cumple la "
+             "misma función que un NAT tradicional pero como servicio administrado. 'Direct "
+             "Connect' es una conexión dedicada y privada hacia el proveedor de nube, evitando "
+             "internet público -- más cara pero más predecible en latencia/seguridad que una "
+             "VPN sobre internet normal."
+         ),
+         relevancia_diagnostica=(
+             "Latencia inconsistente hacia un servicio en la nube conectado por VPN sobre "
+             "internet público (no Direct Connect) es esperable en cierto grado -- no siempre "
+             "es un problema a resolver, puede ser la naturaleza del tipo de conexión elegida."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.3 Networking Concepts"),
+    dict(dominio="redes_ip", concepto="Tipos de tráfico IP: unicast, multicast, anycast, broadcast",
+         explicacion=(
+             "Unicast va de un origen a un destino específico (la mayoría del tráfico normal). "
+             "Broadcast va a TODOS los equipos de la red local. Multicast va a un GRUPO "
+             "específico de receptores suscritos (ej. streaming de video interno). Anycast "
+             "envía a 'el más cercano' de varios destinos posibles con la misma dirección "
+             "(usado por DNS raíz y algunos CDN)."
+         ),
+         relevancia_diagnostica=(
+             "Tráfico multicast que no llega a algunos receptores mientras unicast funciona "
+             "perfecto entre los mismos equipos -- el problema suele ser configuración de "
+             "IGMP/multicast en el switch, no la red en general."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.4 Networking Concepts"),
+    dict(dominio="cableado", concepto="Transceptores SFP/QSFP y cable de cobre de conexión directa (DAC)",
+         explicacion=(
+             "SFP/QSFP son módulos intercambiables que permiten cambiar el tipo de conexión "
+             "(cobre o fibra, y a qué distancia) sin cambiar el switch completo -- el switch "
+             "define la velocidad máxima, el transceptor define el medio físico. DAC es un "
+             "cable de cobre con transceptores SFP integrados en ambas puntas, más barato que "
+             "fibra para distancias cortas dentro del mismo rack."
+         ),
+         relevancia_diagnostica=(
+             "Un puerto que no sube tras cambiar de fibra a DAC (o viceversa) puede ser "
+             "incompatibilidad del transceptor con la velocidad configurada en el puerto del "
+             "switch, no un cable defectuoso."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.5 Networking Concepts"),
+    dict(dominio="switching", concepto="Topologías de red: malla, estrella, spine-leaf, y modelo jerárquico de 3 capas",
+         explicacion=(
+             "Estrella/hub-and-spoke: todo pasa por un punto central (simple, pero ese punto "
+             "es un solo punto de falla). Malla: cada nodo conectado a varios otros "
+             "(redundante, complejo de gestionar). Spine-leaf: arquitectura moderna de centro "
+             "de datos donde cada switch 'leaf' se conecta a TODOS los 'spine', nunca "
+             "leaf-a-leaf directo -- predecible y escalable. El modelo jerárquico clásico de 3 "
+             "capas (núcleo/distribución/acceso) organiza el tráfico en capas de "
+             "responsabilidad distinta; 'core colapsado' combina núcleo y distribución en "
+             "redes más pequeñas."
+         ),
+         relevancia_diagnostica=(
+             "En una arquitectura spine-leaf, tráfico 'este-oeste' (entre servidores del mismo "
+             "centro de datos) NO debería pasar por el mismo camino que tráfico 'norte-sur' "
+             "(hacia/desde fuera) -- si un problema de rendimiento afecta solo un tipo de "
+             "tráfico, ayuda a ubicar en qué parte de la topología está la causa."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.6 Networking Concepts"),
+    dict(dominio="redes_ip", concepto="CIDR y VLSM: por qué las máscaras de subred no siempre son iguales",
+         explicacion=(
+             "CIDR permite notación flexible (ej. /24, /27) en vez de solo las clases A/B/C "
+             "tradicionales. VLSM permite que DISTINTAS subredes dentro de la misma red usen "
+             "máscaras de tamaño DISTINTO según cuántos hosts necesita cada una -- una subred "
+             "de 4 servidores no necesita el mismo tamaño que una de 200 estaciones, y "
+             "desperdiciar direcciones IP asignando el mismo tamaño a todas es un error de "
+             "diseño común."
+         ),
+         relevancia_diagnostica=(
+             "Antes de asumir que 'se acabaron las IPs disponibles' en una subred, verificar "
+             "si el diseño usa VLSM correctamente -- a veces el problema es una subred "
+             "sobredimensionada en otro lugar, no falta real de espacio de direcciones."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.7 Networking Concepts"),
+    dict(dominio="seguridad_arquitectura", concepto="SASE/SSE: seguridad de red entregada desde la nube",
+         explicacion=(
+             "SASE combina funciones de red (SD-WAN) y seguridad (firewall, filtrado web, "
+             "Zero Trust) en un solo servicio entregado desde la nube, en vez de equipos "
+             "físicos en cada sitio -- diseñado para organizaciones con muchos sitios "
+             "pequeños o trabajadores remotos, donde no es práctico tener un firewall físico "
+             "completo en cada ubicación."
+         ),
+         relevancia_diagnostica=(
+             "Para un negocio con múltiples sitios pequeños (ej. una cadena hotelera con "
+             "varios hoteles), evaluar SASE/SSE como alternativa a replicar hardware de "
+             "seguridad completo en cada sitio individual -- puede simplificar gestión "
+             "centralizada real."
+         ),
+         fuente="CompTIA Network+ N10-009 — 1.8 Networking Concepts"),
+
+    # ── 2.0 Implementación de red ──
+    dict(dominio="wan", concepto="Selección de ruta: distancia administrativa, prefijo y métrica",
+         explicacion=(
+             "Cuando un router aprende la misma ruta por más de un protocolo, la distancia "
+             "administrativa decide cuál protocolo 'confiar' más (una ruta estática "
+             "manualmente configurada suele ganar sobre una aprendida dinámicamente). Entre "
+             "rutas del MISMO protocolo, gana la de prefijo más específico (más largo), y "
+             "luego la de menor métrica (costo)."
+         ),
+         relevancia_diagnostica=(
+             "Tráfico tomando una ruta 'inesperada' pese a que la ruta 'correcta' esté "
+             "configurada -- revisar si hay una ruta estática con menor distancia "
+             "administrativa compitiendo silenciosamente contra la dinámica."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.1 Network Implementation"),
+    dict(dominio="wan", concepto="FHRP y IP virtual: redundancia de gateway sin que el cliente lo note",
+         explicacion=(
+             "Un First Hop Redundancy Protocol (ej. HSRP, VRRP) permite que dos routers "
+             "compartan una IP virtual como gateway -- si el router activo falla, el otro "
+             "toma la IP virtual automáticamente, sin que los equipos clientes necesiten "
+             "cambiar su configuración de gateway."
+         ),
+         relevancia_diagnostica=(
+             "Una breve interrupción de red (segundos) coincidiendo con la caída de un router "
+             "de gateway, seguida de recuperación automática sin intervención, es el "
+             "comportamiento esperado de FHRP funcionando correctamente -- no es una falla sin "
+             "resolver."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.1 Network Implementation"),
+    dict(dominio="switching", concepto="VLAN de voz y SVI: por qué el teléfono IP y la PC del mismo escritorio están en redes distintas",
+         explicacion=(
+             "Es común que un teléfono IP y la PC conectada a través de él compartan el mismo "
+             "cable físico pero vivan en VLANs distintas (voz vs datos) -- el teléfono actúa "
+             "como mini-switch, etiquetando su propio tráfico de voz por separado. Una SVI "
+             "(interfaz virtual de switch) le da a una VLAN una dirección IP propia para "
+             "enrutamiento entre VLANs sin necesitar un router físico aparte."
+         ),
+         relevancia_diagnostica=(
+             "Un teléfono IP sin tono/registro mientras la PC del mismo puerto tiene red "
+             "normal -- revisar la configuración de VLAN de voz en ese puerto específicamente, "
+             "no asumir que el cable o el switch completo están mal."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.2 Network Implementation"),
+    dict(dominio="wifi", concepto="SSID, BSSID y ESSID: nombres visibles vs identificadores reales de hardware",
+         explicacion=(
+             "El SSID es el nombre de red visible para los usuarios. El BSSID es la dirección "
+             "MAC real del radio de UN access point específico. El ESSID identifica una red "
+             "WiFi compuesta por VARIOS APs con el mismo SSID (roaming) -- dos APs pueden "
+             "compartir el mismo SSID/ESSID pero cada uno tiene su propio BSSID único, útil "
+             "para diagnosticar a cuál AP específico está conectado un cliente con problemas."
+         ),
+         relevancia_diagnostica=(
+             "Un problema de WiFi reportado 'en la red X' con múltiples APs bajo el mismo "
+             "nombre -- identificar el BSSID específico al que estaba conectado el cliente "
+             "afectado, no tratar todos los APs de esa red como un solo equipo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.3 Network Implementation"),
+    dict(dominio="wifi", concepto="AP autónomo vs AP ligero (controlado)",
+         explicacion=(
+             "Un AP autónomo se configura y gestiona individualmente, cada uno por separado. "
+             "Un AP ligero depende de un controlador central que le entrega su configuración "
+             "-- si el controlador falla, un AP ligero puede seguir sirviendo clientes ya "
+             "conectados con su última configuración, pero no acepta cambios ni, en algunos "
+             "modelos, nuevas conexiones hasta que el controlador vuelva."
+         ),
+         relevancia_diagnostica=(
+             "Varios APs ligeros dejando de aceptar nuevas conexiones a la vez, mientras los "
+             "clientes ya conectados siguen bien, apunta al controlador central, no a cada AP "
+             "individual."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.3 Network Implementation"),
+    dict(dominio="hardware", concepto="IDF y MDF: la jerarquía física del cableado de un edificio",
+         explicacion=(
+             "El MDF (repartidor principal) es el punto central donde entra el servicio "
+             "externo y se distribuye hacia los IDF (repartidores intermedios) de cada piso/"
+             "ala del edificio -- cada IDF sirve una zona limitada, reduciendo la longitud "
+             "máxima de cable de cobre necesaria (el límite de 100m aplica desde el IDF, no "
+             "desde el MDF central)."
+         ),
+         relevancia_diagnostica=(
+             "Múltiples fallas de red concentradas en una sola zona/piso del edificio, sin "
+             "relación con el resto, apunta al IDF de esa zona específica, no al MDF central "
+             "-- diagnosticar por jerarquía física, no por el edificio completo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 2.4 Network Implementation"),
+
+    # ── 3.0 Operaciones de red ──
+    dict(dominio="gestion_documentacion", concepto="Gestión del ciclo de vida: fin de vida (EOL) vs fin de soporte (EOS)",
+         explicacion=(
+             "Fin de vida (EOL) significa que el fabricante ya no VENDE el producto. Fin de "
+             "soporte (EOS) significa que el fabricante ya no da soporte NI actualizaciones de "
+             "seguridad -- un equipo puede estar en EOL pero aún en soporte (todavía recibe "
+             "parches), o ya en EOS (ya no recibe nada), que es el punto donde el riesgo real "
+             "de seguridad se dispara."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo 'descontinuado' (EOL) no es automáticamente un riesgo de seguridad -- "
+             "verificar específicamente si ya alcanzó EOS (sin soporte ni parches) antes de "
+             "priorizar su reemplazo por ese motivo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.1 Network Operations"),
+    dict(dominio="gestion_documentacion", concepto="Gestión de cambios y configuración: por qué existen procesos formales",
+         explicacion=(
+             "Gestión de cambios rastrea QUÉ se va a cambiar, por qué, y su plan de reversión "
+             "antes de aplicarlo -- reduce cambios no autorizados o mal coordinados. Gestión "
+             "de configuración mantiene una configuración 'base/dorada' de referencia y "
+             "respaldos de configuración -- permite restaurar rápido si un cambio sale mal, "
+             "sin tener que reconstruir la configuración de memoria."
+         ),
+         relevancia_diagnostica=(
+             "Ante una falla tras un cambio reciente sin plan de reversión documentado, el "
+             "tiempo de resolución se alarga significativamente -- tener un respaldo de "
+             "configuración previo al cambio es lo que permite revertir en minutos, no horas."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.1 Network Operations"),
+    dict(dominio="monitoreo", concepto="SNMP traps vs consultas (polling), y qué es un MIB",
+         explicacion=(
+             "El monitoreo por consulta (polling) pregunta activamente el estado a intervalos "
+             "regulares -- puede perderse un evento breve entre consultas. Un 'trap' es el "
+             "equipo AVISANDO proactivamente ante un evento, sin esperar a que le pregunten -- "
+             "más inmediato pero depende de que el equipo esté configurado para enviarlo. El "
+             "MIB es la base de datos estructurada que define qué información específica se "
+             "puede consultar/recibir de un equipo por SNMP."
+         ),
+         relevancia_diagnostica=(
+             "Un evento breve de caída que el sistema de monitoreo por polling 'no vio' pero "
+             "sí quedó registrado en el log del propio equipo -- evaluar si conviene "
+             "complementar con traps SNMP para eventos que duran menos que el intervalo de "
+             "consulta."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.2 Network Operations"),
+    dict(dominio="dns_dhcp", concepto="Zonas DNS: primaria, secundaria, y directa vs inversa",
+         explicacion=(
+             "Una zona primaria es la copia editable/autoritativa de los registros de un "
+             "dominio. Una secundaria es una copia de solo lectura sincronizada desde la "
+             "primaria, para redundancia. Una zona 'directa' resuelve nombre→IP; una 'inversa' "
+             "resuelve IP→nombre (registro PTR) -- muchos sistemas de correo rechazan mensajes "
+             "de servidores sin PTR configurado correctamente, aunque el DNS directo esté "
+             "perfecto."
+         ),
+         relevancia_diagnostica=(
+             "Correo saliente rechazado o marcado como spam por destinatarios externos, con el "
+             "DNS directo funcionando bien -- verificar que exista un registro PTR (DNS "
+             "inverso) correcto para la IP del servidor de correo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.4 Network Operations"),
+    dict(dominio="dns_dhcp", concepto="DoH y DoT: cifrar las consultas DNS mismas",
+         explicacion=(
+             "DNS tradicional viaja sin cifrar -- cualquiera en la red puede ver qué dominios "
+             "consulta un equipo. DNS over HTTPS (DoH) y DNS over TLS (DoT) cifran esas "
+             "consultas, pero como consecuencia, un firewall/filtro de contenido tradicional "
+             "que dependía de VER las consultas DNS para bloquear sitios deja de funcionar "
+             "para el tráfico que use DoH/DoT."
+         ),
+         relevancia_diagnostica=(
+             "Un filtro de contenido/parental que 'dejó de funcionar' para ciertos "
+             "dispositivos o navegadores, sin ningún cambio en la configuración del filtro, "
+             "puede deberse a que ese dispositivo empezó a usar DoH/DoT, evadiendo la "
+             "visibilidad del filtro tradicional."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.4 Network Operations"),
+    dict(dominio="acceso_remoto", concepto="VPN sitio a sitio vs cliente a sitio, y túnel dividido vs completo",
+         explicacion=(
+             "Sitio a sitio conecta dos redes completas entre sí de forma permanente (ej. dos "
+             "oficinas). Cliente a sitio conecta un dispositivo individual remoto a la red "
+             "central bajo demanda. Túnel completo (full tunnel) envía TODO el tráfico del "
+             "cliente por la VPN, incluyendo su navegación normal de internet. Túnel dividido "
+             "(split tunnel) solo envía por la VPN el tráfico dirigido a la red corporativa, "
+             "el resto sale directo a internet -- más rápido pero con menos visibilidad/"
+             "control corporativo sobre ese tráfico."
+         ),
+         relevancia_diagnostica=(
+             "Navegación general de internet lenta mientras se está conectado a una VPN de "
+             "túnel completo es un síntoma esperado (todo el tráfico da una vuelta extra por "
+             "la red corporativa) -- no es necesariamente una falla de la VPN en sí."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.5 Network Operations"),
+    dict(dominio="acceso_remoto", concepto="Jump box y gestión dentro de banda vs fuera de banda",
+         explicacion=(
+             "Un jump box/host es un punto de acceso intermedio obligatorio para llegar a "
+             "sistemas críticos -- reduce la superficie de ataque a un solo punto vigilado, en "
+             "vez de exponer cada sistema directamente. Gestión 'dentro de banda' usa la misma "
+             "red de producción para administrar equipos; 'fuera de banda' usa una red o canal "
+             "completamente separado (ej. un puerto de consola dedicado), permitiendo "
+             "administrar un equipo incluso si su red de producción está caída."
+         ),
+         relevancia_diagnostica=(
+             "Sin gestión fuera de banda, un problema de red grave puede dejar los equipos "
+             "administrativamente inalcanzables justo cuando más se necesita entrar a "
+             "diagnosticarlos -- es una inversión que se nota específicamente en el peor "
+             "momento."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.5 Network Operations"),
+    dict(dominio="servidor_recuperacion_desastres", concepto="MTTR y MTBF: qué tan rápido se repara vs qué tan seguido falla",
+         explicacion=(
+             "MTTR (tiempo medio de reparación) mide cuánto se tarda en recuperar el servicio "
+             "tras una falla. MTBF (tiempo medio entre fallas) mide qué tan seguido ocurren "
+             "fallas nuevas. Un sistema con MTBF alto (falla poco) pero MTTR alto (tarda mucho "
+             "en repararse cuando sí falla) puede tener MÁS impacto acumulado de downtime que "
+             "uno que falla más seguido pero se repara casi al instante."
+         ),
+         relevancia_diagnostica=(
+             "Al evaluar la confiabilidad real de un sistema, considerar ambas métricas juntas "
+             "-- un MTBF excelente no compensa un MTTR terrible si cuando falla, tarda días en "
+             "repararse."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.3 Network Operations"),
+    dict(dominio="servidor_recuperacion_desastres", concepto="Alta disponibilidad activo-activo vs activo-pasivo",
+         explicacion=(
+             "Activo-activo: ambos/todos los nodos procesan tráfico real simultáneamente, "
+             "repartiendo la carga -- mejor uso de recursos, pero más complejo de sincronizar. "
+             "Activo-pasivo: un nodo procesa todo mientras el otro espera sin hacer nada hasta "
+             "que el activo falla -- más simple, pero el nodo pasivo es 'capacidad "
+             "desperdiciada' la mayor parte del tiempo."
+         ),
+         relevancia_diagnostica=(
+             "En un esquema activo-pasivo, verificar periódicamente que el nodo pasivo "
+             "REALMENTE tomaría el control si se necesitara -- un nodo pasivo que nunca se "
+             "prueba puede fallar en el momento exacto que se necesita, sin ninguna alerta "
+             "previa."
+         ),
+         fuente="CompTIA Network+ N10-009 — 3.3 Network Operations"),
+
+    # ── 4.0 Seguridad de red ──
+    dict(dominio="seguridad_arquitectura", concepto="IAM y métodos de autenticación centralizada: RADIUS, LDAP, SAML, TACACS+",
+         explicacion=(
+             "RADIUS centraliza autenticación para acceso de red (WiFi empresarial, VPN). "
+             "LDAP consulta un directorio de usuarios (ej. Active Directory). SAML permite "
+             "inicio de sesión único entre organizaciones/servicios distintos (federación). "
+             "TACACS+ es similar a RADIUS pero separa autenticación, autorización y auditoría "
+             "en pasos independientes -- común para administrar equipos de red (routers/"
+             "switches), no para acceso de usuarios finales."
+         ),
+         relevancia_diagnostica=(
+             "Fallas de autenticación en el WiFi empresarial mientras el login al dominio "
+             "Windows funciona bien -- son sistemas distintos (RADIUS vs LDAP/Kerberos) que "
+             "pueden compartir la misma base de usuarios pero fallar independientemente."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.1 Network Security"),
+    dict(dominio="seguridad_arquitectura", concepto="Honeypot/honeynet: tecnología de engaño como detección temprana",
+         explicacion=(
+             "Un honeypot es un sistema señuelo, deliberadamente vulnerable o atractivo, "
+             "diseñado para atraer atacantes -- cualquier actividad ahí es, por definición, "
+             "sospechosa (ningún usuario legítimo debería tocarlo nunca). Un honeynet es una "
+             "red completa de señuelos. Sirven como alerta temprana de que hay un atacante "
+             "activo en la red, antes de que llegue a sistemas reales."
+         ),
+         relevancia_diagnostica=(
+             "Cualquier tráfico dirigido a un honeypot/honeynet debe tratarse como señal de "
+             "compromiso real dentro de la red -- no hay 'falso positivo' posible en un "
+             "sistema que nadie legítimo debería usar."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.1 Network Security"),
+    dict(dominio="ataques_red", concepto="MAC flooding vs ARP spoofing: dos ataques de capa 2 distintos",
+         explicacion=(
+             "MAC flooding satura la tabla de direcciones MAC de un switch con miles de "
+             "direcciones falsas -- cuando se llena, el switch puede empezar a inundar "
+             "tráfico por todos los puertos (comportándose como un hub), permitiendo que un "
+             "atacante vea tráfico que no debería. ARP spoofing/poisoning hace que otros "
+             "equipos crean que el atacante ES la IP de otro dispositivo (ej. el gateway), "
+             "redirigiendo tráfico sin necesidad de saturar nada."
+         ),
+         relevancia_diagnostica=(
+             "Tráfico visible que no debería estar disponible en un puerto específico, sin "
+             "señales de ARP spoofing (tablas ARP se ven normales), sugiere MAC flooding -- "
+             "revisar el conteo de direcciones MAC aprendidas en ese switch."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.2 Network Security"),
+    dict(dominio="ataques_red", concepto="Evil twin y AP/DHCP no autorizados (rogue)",
+         explicacion=(
+             "Un 'evil twin' es un access point falso que copia el nombre (SSID) de una red "
+             "legítima para engañar a los dispositivos a conectarse a él en vez del real -- "
+             "una vez conectado, el atacante puede interceptar todo el tráfico. Un DHCP/AP "
+             "'rogue' no necesariamente es malicioso a propósito -- a veces es un router "
+             "doméstico conectado por error, pero el efecto en la red es similarmente "
+             "disruptivo."
+         ),
+         relevancia_diagnostica=(
+             "Dispositivos conectándose intermitentemente a una red WiFi con el nombre "
+             "correcto pero comportamiento distinto (señal en un lugar inesperado, sin "
+             "internet real) -- sospechar de un evil twin o AP no autorizado, no de un "
+             "problema de configuración del AP legítimo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.2 Network Security"),
+    dict(dominio="ataques_red", concepto="Ingeniería social: phishing, dumpster diving, shoulder surfing, tailgating",
+         explicacion=(
+             "Phishing engaña por mensaje/correo para obtener credenciales o acceso. Dumpster "
+             "diving busca información sensible en la basura física (documentos impresos no "
+             "destruidos). Shoulder surfing observa directamente por encima del hombro "
+             "mientras alguien escribe una contraseña. Tailgating sigue físicamente a alguien "
+             "autorizado a través de una puerta con control de acceso, sin usar credenciales "
+             "propias -- todos son ataques que NINGÚN control técnico de red detiene, "
+             "requieren procedimientos humanos."
+         ),
+         relevancia_diagnostica=(
+             "Un incidente de acceso no autorizado sin ningún rastro técnico de intrusión de "
+             "red (nada en logs de firewall/IDS) es candidato fuerte a ingeniería social o "
+             "tailgating físico -- el control de acceso técnico no es la capa a revisar en ese "
+             "caso."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.2 Network Security"),
+    dict(dominio="seguridad_arquitectura", concepto="Endurecimiento de dispositivos: puertos/servicios innecesarios y contraseñas por defecto",
+         explicacion=(
+             "El endurecimiento básico de cualquier equipo de red empieza por desactivar "
+             "servicios y puertos que no se usan activamente, y cambiar TODAS las contraseñas "
+             "de fábrica -- estas dos acciones simples cierran la mayoría de los vectores de "
+             "ataque más comunes y documentados, antes de considerar controles más avanzados."
+         ),
+         relevancia_diagnostica=(
+             "Un hallazgo de auditoría de 'contraseña por defecto sin cambiar' en cualquier "
+             "equipo de red (switch, cámara, router) debe tratarse como crítico inmediato, "
+             "no como un detalle menor de higiene -- es la causa más común y más simple de "
+             "explotar en incidentes reales documentados."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.3 Network Security"),
+    dict(dominio="seguridad_arquitectura", concepto="802.1X y control de acceso a la red (NAC)",
+         explicacion=(
+             "802.1X exige autenticación ANTES de que un dispositivo pueda usar un puerto de "
+             "red o WiFi, incluso antes de recibir una IP -- a diferencia del filtrado por MAC "
+             "(fácil de falsificar), 802.1X verifica identidad real contra un servidor de "
+             "autenticación (típicamente RADIUS) en cada conexión."
+         ),
+         relevancia_diagnostica=(
+             "Un dispositivo nuevo que no logra conectarse a una red con 802.1X activo, pese a "
+             "tener las credenciales de WiFi correctas, puede necesitar un certificado o "
+             "configuración de autenticación específica que el filtrado simple por contraseña "
+             "no requeriría -- es una capa adicional, no la misma autenticación de siempre."
+         ),
+         fuente="CompTIA Network+ N10-009 — 4.3 Network Security"),
+
+    # ── 5.0 Troubleshooting de red — metodología formal completa ──
+    dict(dominio="metodologia", concepto="Los 7 pasos formales de troubleshooting de red (versión completa oficial)",
+         explicacion=(
+             "1) Identificar el problema: recopilar información, preguntar a los usuarios, "
+             "identificar síntomas, determinar qué cambió, intentar reproducir el problema. "
+             "2) Teoría de causa probable: cuestionar lo obvio primero, elegir un enfoque "
+             "(de arriba hacia abajo del modelo OSI, de abajo hacia arriba, o dividir y "
+             "vencer). 3) Probar la teoría. 4) Plan de acción considerando efectos "
+             "secundarios. 5) Implementar o escalar. 6) Verificar funcionalidad completa "
+             "(no solo que 'parece resuelto'). 7) Documentar todo el proceso, no solo el "
+             "resultado final."
+         ),
+         relevancia_diagnostica=(
+             "El paso 'determinar qué cambió' antes de teorizar es el más saltado en la "
+             "práctica y el más valioso -- la mayoría de fallas nuevas están relacionadas con "
+             "un cambio reciente (configuración, actualización, equipo nuevo), preguntar esto "
+             "primero ahorra mucho tiempo de diagnóstico especulativo."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.1 Network Troubleshooting"),
+    dict(dominio="switching", concepto="Contadores de interfaz que indican problemas específicos: runts, giants, drops",
+         explicacion=(
+             "'Runts' son tramas más pequeñas de lo permitido (usualmente por colisión a "
+             "medio enviar). 'Giants' son tramas más grandes de lo esperado (posible "
+             "configuración de MTU/jumbo frame inconsistente). 'Drops' son paquetes "
+             "descartados por saturación del buffer del puerto -- cada contador apunta a una "
+             "causa distinta, no son intercambiables como 'errores genéricos de puerto'."
+         ),
+         relevancia_diagnostica=(
+             "Contador de 'giants' creciendo en un puerto específico, mientras el resto de la "
+             "red no reporta problemas, sugiere revisar configuración de MTU/jumbo frames de "
+             "ESE segmento específicamente, no un problema general de la red."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"),
+    dict(dominio="switching", concepto="Estados de puerto: error-disabled, administrativamente apagado, suspendido",
+         explicacion=(
+             "'Administrativamente apagado' significa que un humano lo desactivó a propósito "
+             "(no es una falla). 'Error-disabled' es el switch apagándolo automáticamente por "
+             "una condición de seguridad/error detectada (BPDU guard, port security, etc.). "
+             "'Suspendido' suele referirse a un puerto en un grupo de agregación (LACP) que "
+             "está arriba físicamente pero no participa activamente del grupo por alguna "
+             "discordancia de configuración."
+         ),
+         relevancia_diagnostica=(
+             "Antes de reactivar un puerto 'caído', diferenciar estos tres estados en el "
+             "propio switch -- reactivar un puerto administrativamente apagado a propósito "
+             "por otra persona puede reabrir algo que se cerró deliberadamente por una razón "
+             "válida."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"),
+    dict(dominio="switching", concepto="Problemas de STP: selección de root bridge y roles de puerto",
+         explicacion=(
+             "Si el switch equivocado gana la elección de root bridge (ej. un switch viejo y "
+             "lento en el borde de la red, en vez del switch central rápido), TODO el tráfico "
+             "puede terminar tomando rutas subóptimas más largas de lo necesario -- un "
+             "problema de rendimiento generalizado que no es una falla de ningún equipo "
+             "individual, es una elección de topología STP incorrecta."
+         ),
+         relevancia_diagnostica=(
+             "Lentitud de red generalizada sin ningún equipo individual reportando fallas, en "
+             "una red con múltiples switches -- verificar cuál switch es el root bridge de STP "
+             "actualmente, puede no ser el que debería."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"),
+    dict(dominio="dns_dhcp", concepto="Agotamiento del pool DHCP y su síntoma característico",
+         explicacion=(
+             "Cuando un ámbito DHCP se queda sin direcciones disponibles para asignar, los "
+             "nuevos dispositivos que se conectan reciben una IP APIPA (169.254.x.x) "
+             "autogenerada en vez de una IP real de la red -- el dispositivo 'tiene IP' pero "
+             "no puede comunicarse con nada real de la red."
+         ),
+         relevancia_diagnostica=(
+             "Un dispositivo nuevo con IP en el rango 169.254.x.x, sin acceso a nada de la "
+             "red, es la firma clásica de agotamiento del pool DHCP (o de que el servidor "
+             "DHCP no respondió a tiempo) -- no es un problema del dispositivo en sí."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"),
+    dict(dominio="redes_ip", concepto="Direcciones IP duplicadas: síntoma intermitente y confuso",
+         explicacion=(
+             "Cuando dos equipos tienen la misma IP asignada manualmente por error, el "
+             "comportamiento es intermitente y confuso -- a veces uno responde, a veces el "
+             "otro, dependiendo de cuál actualizó su entrada ARP más recientemente en cada "
+             "equipo de la red. Los sistemas operativos suelen alertar sobre esto, pero la "
+             "alerta puede pasar desapercibida si nadie está mirando esa pantalla en ese "
+             "momento."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo con conectividad 'aleatoria' (a veces funciona, a veces no, sin patrón "
+             "claro) en una red con IPs estáticas configuradas manualmente, sospechar de "
+             "conflicto de IP duplicada antes que de una falla de hardware."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"),
+    dict(dominio="wifi", concepto="Desasociación de clientes y mala configuración de roaming",
+         explicacion=(
+             "Desasociación de clientes ocurre cuando un dispositivo pierde su conexión WiFi "
+             "abruptamente (no por decisión del usuario) -- puede ser interferencia, señal "
+             "débil, o el AP forzando la desconexión por umbrales mal configurados de RSSI "
+             "(fuerza de señal mínima). Un roaming mal configurado hace que el dispositivo "
+             "tarde demasiado en reconectarse al AP más cercano tras moverse, o nunca lo haga "
+             "hasta perder la señal por completo del AP anterior."
+         ),
+         relevancia_diagnostica=(
+             "Desconexiones frecuentes de WiFi mientras el usuario camina por el edificio, con "
+             "buena señal general disponible en todas las zonas, apunta a mala configuración "
+             "de roaming/umbral de desasociación, no a falta de cobertura real."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.4 Network Troubleshooting"),
+    dict(dominio="metodologia", concepto="Herramientas de línea de comandos esenciales y para qué sirve cada una",
+         explicacion=(
+             "ping prueba conectividad básica. traceroute/tracert muestra la ruta salto por "
+             "salto (ayuda a ubicar EN QUÉ PUNTO del camino falla algo). nslookup/dig "
+             "consultan DNS directamente. tcpdump captura tráfico real para análisis "
+             "profundo. netstat muestra conexiones activas del equipo local. arp muestra la "
+             "tabla de direcciones MAC conocidas localmente. Cada herramienta responde una "
+             "pregunta distinta -- usar ping cuando la pregunta real es 'dónde en la ruta se "
+             "pierde' es perder tiempo, ahí corresponde traceroute."
+         ),
+         relevancia_diagnostica=(
+             "Antes de escalar un problema de conectividad como 'la red está mal', correr "
+             "traceroute para identificar el salto exacto donde empieza a fallar -- reduce "
+             "drásticamente el tiempo de diagnóstico comparado con solo probar ping repetidas "
+             "veces."
+         ),
+         fuente="CompTIA Network+ N10-009 — 5.5 Network Troubleshooting"),
 ]
 
 
@@ -2844,6 +3428,28 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Sensor de la bandeja sucio/dañado o la bandeja no está completamente asentada",
          recomendacion="Reasentar físicamente la bandeja y limpiar el sensor antes de sospechar de una falla electrónica mayor",
          fuente="CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"),
+
+    # ══════════════════════ NETWORK+ N10-009 — 5.0 NETWORK TROUBLESHOOTING (24%) ══════════════════════
+    dict(dominio="cableado", patron="Contadores de error CRC crecientes en una interfaz específica",
+         causa_probable="Cable dañado, conector mal terminado, o transmisor/receptor invertido (TX/RX transpuestos)",
+         recomendacion="Revisar terminación del cable y orientación TX/RX antes de sospechar del equipo",
+         fuente="CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"),
+    dict(dominio="cableado", patron="Un equipo PoE no enciende y el switch reporta presupuesto de energía excedido",
+         causa_probable="El switch ya alcanzó su límite total de potencia PoE con los equipos ya conectados",
+         recomendacion="Redistribuir equipos entre switches o verificar si el estándar PoE configurado coincide con lo que requiere el equipo nuevo",
+         fuente="CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"),
+    dict(dominio="switching", patron="Toda la red se vuelve lenta después de conectar un cable redundante entre dos switches",
+         causa_probable="Loop de red -- spanning tree recalculando, o STP deshabilitado en ese segmento",
+         recomendacion="Verificar que spanning tree esté activo y funcionando en ambos switches antes de dejar el enlace redundante conectado",
+         fuente="CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"),
+    dict(dominio="redes_ip", patron="Dispositivo nuevo conectado a la red recibe una IP en el rango 169.254.x.x",
+         causa_probable="No pudo contactar a un servidor DHCP (pool agotado, servidor caído, o problema de VLAN)",
+         recomendacion="Verificar disponibilidad del servidor DHCP y espacio libre en su ámbito antes de revisar el dispositivo mismo",
+         fuente="CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"),
+    dict(dominio="wan", patron="Aplicación crítica (voz, video) con cortes mientras la velocidad medida de internet es buena",
+         causa_probable="Jitter o pérdida de paquetes puntual, no falta de ancho de banda total",
+         recomendacion="Medir jitter y pérdida de paquetes específicamente, no solo velocidad de descarga/subida",
+         fuente="CompTIA Network+ N10-009 — 5.4 Network Troubleshooting"),
 ]
 
 

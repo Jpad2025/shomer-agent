@@ -4,6 +4,25 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.15.0 — 2026-09-06
+
+- **Network+ (N10-009) completo — segundo certificado del método exhaustivo (de 272 a 315
+  entradas).** Descargado y leído el documento oficial de objetivos (v6.0, 2023), los 5 dominios
+  cubiertos punto por punto: 1.0 Networking Concepts (23%), 2.0 Network Implementation (20%),
+  3.0 Network Operations (19%), 4.0 Network Security (14%), 5.0 Network Troubleshooting (24%).
+  - Nuevos dominios: `enrutamiento` (FHRP/VIP/distancia administrativa), `ataques_red` (MAC
+    flooding, ARP/DNS spoofing, evil twin, ingeniería social), `gestion_documentacion`
+    (EOL/EOS, gestión de cambios/configuración), `acceso_remoto` (VPN sitio-a-sitio/túnel
+    dividido, jump box, banda/fuera de banda).
+  - Ampliado significativamente: `redes_ip` (tabla completa de puertos, CIDR/VLSM, tipos de
+    tráfico), `switching` (topologías spine-leaf/3 capas, VLAN de voz, contadores de interfaz,
+    estados de puerto, elección de root bridge STP), `wifi` (SSID/BSSID/ESSID, AP autónomo vs
+    ligero), `dns_dhcp` (zonas primaria/secundaria, DoH/DoT), `seguridad_arquitectura` (IAM/
+    RADIUS/LDAP/SAML/TACACS+, honeypot, 802.1X), `servidor_recuperacion_desastres` (MTTR/MTBF,
+    activo-activo vs pasivo), `metodologia` (los 7 pasos oficiales completos, herramientas CLI).
+  - Total: 315 entradas (133 reglas + 182 teoría). Probado antes de desplegar. Pendiente en el
+    mismo método: A+ Core 2, Security+, Server+, CySA+.
+
 ## 1.14.0 — 2026-09-06
 
 - **A+ Core 1 (220-1201) completo — primer paso de un trabajo multi-sesión pedido explícitamente
