@@ -3952,6 +3952,300 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "parece y se descarta en segundos verificando el reloj."
          ),
          fuente="CompTIA Server+ SK0-005 — 4.4 Troubleshooting"),
+
+    # ══════ CySA+ CS0-003 — 1.0 OPERACIONES DE SEGURIDAD (33%) ══════
+    dict(dominio="siem_analisis", concepto="Indicadores de actividad maliciosa relacionados con red, host y aplicación",
+         explicacion=(
+             "Relacionados con red: beaconing (un equipo comprometido 'llama a casa' a "
+             "intervalos regulares hacia un servidor de C2, patrón muy detectable en tráfico "
+             "agregado por su regularidad), comunicación peer-to-peer irregular (equipos que no "
+             "deberían hablar entre sí directamente lo hacen), dispositivos no autorizados "
+             "(rogue devices), escaneos/barridos de red. Relacionados con host: consumo anómalo "
+             "de CPU/memoria/disco, cambios no autorizados en registro/sistema de archivos, "
+             "tareas programadas no autorizadas, escalamiento de privilegios no autorizado. "
+             "Relacionados con aplicación: creación inesperada de cuentas nuevas, salida "
+             "inesperada, comunicación saliente inesperada, interrupción de servicio."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo que envía tráfico saliente pequeño pero MUY regular (ej. exactamente "
+             "cada 60 segundos) hacia la misma IP externa es la firma clásica de beaconing de "
+             "malware con C2 -- la regularidad exacta del intervalo es más sospechosa que el "
+             "volumen de datos transferido."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 1.2 Security Operations"),
+    dict(dominio="siem_analisis", concepto="Herramientas y técnicas para determinar actividad maliciosa",
+         explicacion=(
+             "Captura de paquetes (Wireshark para análisis visual, tcpdump para captura desde "
+             "línea de comandos en servidores sin GUI). Reputación de DNS/IP (WHOIS para "
+             "identificar dueño de un dominio/IP, AbuseIPDB para consultar si una IP ya fue "
+             "reportada como maliciosa). Análisis de archivos (hashing para identificar un "
+             "archivo de forma única y compararlo contra bases de malware conocido, VirusTotal "
+             "para escanear contra decenas de motores antivirus a la vez). Sandboxing (Joe "
+             "Sandbox, Cuckoo Sandbox) ejecuta un archivo sospechoso en un entorno aislado para "
+             "observar su comportamiento real sin arriesgar el sistema productivo. Análisis de "
+             "correo: encabezados, DKIM/DMARC/SPF (verifican que el remitente sea legítimo), "
+             "enlaces embebidos."
+         ),
+         relevancia_diagnostica=(
+             "Antes de abrir o ejecutar un archivo adjunto sospechoso para 'ver qué hace', "
+             "calcular su hash y consultarlo en VirusTotal, o ejecutarlo en un sandbox aislado -- "
+             "nunca en el equipo real de producción, sin importar qué tan urgente parezca "
+             "confirmar si es malicioso."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 1.3 Security Operations"),
+    dict(dominio="inteligencia_amenazas", concepto="Inteligencia de amenazas: niveles de confianza y fuentes de recolección",
+         explicacion=(
+             "Los niveles de confianza de un dato de inteligencia se evalúan en tres ejes: "
+             "oportunidad/vigencia (timeliness -- una IP maliciosa de hace 2 años puede ya no "
+             "serlo), relevancia (¿aplica a mi industria/geografía/stack tecnológico?) y "
+             "precisión (accuracy -- ¿la fuente tiene historial de falsos positivos?). Fuentes "
+             "abiertas (OSINT): redes sociales, blogs/foros, boletines gubernamentales, "
+             "CERT/CSIRT, deep/dark web. Fuentes cerradas: feeds pagos, organizaciones de "
+             "intercambio de información (ISACs por industria), fuentes internas propias (el "
+             "historial de incidentes reales de la organización es, a menudo, la fuente más "
+             "relevante y menos aprovechada)."
+         ),
+         relevancia_diagnostica=(
+             "Un feed de inteligencia de amenazas genérico (no específico de la industria "
+             "hotelera/hospitalidad) puede generar muchas alertas irrelevantes para Shomer -- "
+             "priorizar fuentes con relevancia real (ataques a PMS, POS, sistemas de hotelería) "
+             "sobre volumen bruto de indicadores genéricos."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 1.4 Security Operations"),
+    dict(dominio="inteligencia_amenazas", concepto="Threat hunting: búsqueda proactiva, no reactiva",
+         explicacion=(
+             "A diferencia de la respuesta a incidentes (reactiva, algo ya disparó una alerta), "
+             "el threat hunting es proactivo: un analista busca activamente evidencia de "
+             "compromiso que las herramientas automatizadas NO detectaron todavía, partiendo de "
+             "una hipótesis (ej. '¿hay indicadores de esta técnica de ataque específica en "
+             "nuestros logs?'). Se enfoca en configuraciones/desconfiguraciones sospechosas, "
+             "redes aisladas (que en teoría no deberían tener tráfico inusual, por lo que "
+             "cualquier anomalía ahí es más significativa), y activos/procesos críticos del "
+             "negocio. La defensa activa incluye técnicas como honeypots para atraer y estudiar "
+             "atacantes deliberadamente."
+         ),
+         relevancia_diagnostica=(
+             "Los sistemas ICS/SCADA o de control de acceso biométrico, que en teoría no "
+             "deberían generar tráfico de red inusual bajo ningún escenario normal, son "
+             "candidatos ideales de threat hunting -- CUALQUIER anomalía ahí es mucho más "
+             "significativa que la misma anomalía en una red de usuarios general."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 1.4 Security Operations"),
+    dict(dominio="siem_analisis", concepto="SOAR y la importancia de la automatización en operaciones de seguridad",
+         explicacion=(
+             "SOAR (Security Orchestration, Automation, and Response) automatiza tareas "
+             "repetibles que no requieren juicio humano (ej. enriquecer una alerta con datos de "
+             "un feed de reputación de IP automáticamente, en vez de que un analista lo busque "
+             "manualmente cada vez). El objetivo NO es eliminar analistas humanos -- es liberar "
+             "su tiempo de tareas mecánicas para que se enfoquen en decisiones que sí requieren "
+             "criterio. 'Single pane of glass' significa integrar múltiples herramientas de "
+             "seguridad en una sola vista consolidada, en vez de que el analista tenga que "
+             "revisar 5 consolas distintas para entender un solo incidente."
+         ),
+         relevancia_diagnostica=(
+             "Antes de automatizar una tarea de seguridad, confirmar que sea genuinamente "
+             "repetible y no requiera juicio humano caso por caso -- automatizar prematuramente "
+             "una decisión que en realidad necesita contexto humano (ej. '¿esta cuenta "
+             "comprometida se bloquea automáticamente?') puede causar más daño que el problema "
+             "que intenta resolver."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 1.5 Security Operations"),
+
+    # ══════ CySA+ CS0-003 — 2.0 GESTIÓN DE VULNERABILIDADES (30%) ══════
+    dict(dominio="gestion_vulnerabilidades", concepto="Tipos de escaneo de vulnerabilidades y cuándo usar cada uno",
+         explicacion=(
+             "Credenciado vs no credenciado: un escaneo credenciado inicia sesión en el sistema "
+             "objetivo, viendo mucho más detalle (parches faltantes reales, configuración "
+             "interna) que uno no credenciado, que solo ve lo expuesto externamente -- un "
+             "escaneo no credenciado subestima sistemáticamente el riesgo real. Pasivo vs "
+             "activo: pasivo solo observa tráfico sin interactuar (más seguro para sistemas "
+             "frágiles), activo envía tráfico de prueba directamente (más completo pero puede "
+             "afectar sistemas sensibles, especialmente OT/ICS/SCADA que a veces no toleran "
+             "tráfico de escaneo agresivo sin caerse). Estático vs dinámico: estático analiza "
+             "código sin ejecutarlo, dinámico prueba la aplicación corriendo (incluye fuzzing -- "
+             "enviar entradas malformadas deliberadamente para ver qué rompe)."
+         ),
+         relevancia_diagnostica=(
+             "Antes de correr un escaneo ACTIVO contra un sistema ICS/SCADA o un controlador "
+             "biométrico antiguo, verificar primero si el fabricante garantiza que tolera "
+             "tráfico de escaneo agresivo -- muchos de estos sistemas de infraestructura "
+             "crítica se han caído por escaneos de vulnerabilidad mal planificados, un daño "
+             "peor que la vulnerabilidad que se buscaba encontrar."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 2.1 Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", concepto="CVSS en profundidad: qué compone el puntaje más allá del número final",
+         explicacion=(
+             "El puntaje CVSS se compone de: vector de ataque (¿se explota por red, local, "
+             "acceso físico?), complejidad del ataque (¿requiere condiciones especiales o es "
+             "trivial?), privilegios requeridos (¿el atacante ya necesita acceso previo?), "
+             "interacción del usuario (¿la víctima debe hacer algo, como abrir un archivo?), "
+             "alcance (¿el impacto se queda contenido o afecta otros componentes?), e impacto en "
+             "confidencialidad/integridad/disponibilidad por separado. Dos vulnerabilidades con "
+             "el MISMO puntaje final pueden tener perfiles de riesgo completamente distintos -- "
+             "una explotable remotamente sin autenticación es mucho más urgente que una que "
+             "requiere acceso físico previo, aunque el número final sea idéntico."
+         ),
+         relevancia_diagnostica=(
+             "Al priorizar dos hallazgos con el mismo puntaje CVSS numérico, desglosar el "
+             "vector de ataque y los privilegios requeridos de cada uno -- el que se explota "
+             "remotamente sin credenciales previas siempre debe priorizarse primero, "
+             "independientemente de que el número final coincida."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 2.3 Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Categorías de vulnerabilidad de aplicación web más allá de SQLi/XSS",
+         explicacion=(
+             "SSRF (Server-Side Request Forgery): el atacante engaña al SERVIDOR para que haga "
+             "solicitudes a recursos internos que el atacante no podría alcanzar directamente. "
+             "LFI/RFI (Local/Remote File Inclusion): la aplicación incluye un archivo local o "
+             "remoto controlado por el atacante en su ejecución. Broken access control: la "
+             "aplicación no verifica correctamente que un usuario tenga permiso para el recurso "
+             "que solicita (ej. cambiar un ID en la URL y acceder a datos de otro usuario). "
+             "Insecure design: la vulnerabilidad no es un bug de implementación sino una falla "
+             "conceptual en cómo se diseñó la funcionalidad desde el inicio -- no se arregla con "
+             "un parche simple, requiere rediseño."
+         ),
+         relevancia_diagnostica=(
+             "Un sistema de reservas o PMS donde cambiar un número de ID en la URL permite ver "
+             "la reserva de otro huésped es un caso clásico de broken access control -- un "
+             "hallazgo grave que a menudo pasa desapercibido en escaneos automáticos porque "
+             "requiere entender la LÓGICA de negocio, no solo patrones de ataque genéricos."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 2.4 Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Prácticas de codificación segura como mitigación en la fuente",
+         explicacion=(
+             "Validación de entrada (nunca confiar en datos que vienen del usuario/cliente sin "
+             "verificar). Codificación de salida (output encoding, previene que datos se "
+             "interpreten como código en el contexto donde se muestran -- la causa raíz de "
+             "XSS). Gestión de sesión segura (tokens que expiran, no predecibles). Consultas "
+             "parametrizadas (previenen inyección SQL separando el código de consulta de los "
+             "datos del usuario, en vez de concatenar strings directamente). El modelado de "
+             "amenazas (threat modeling) se hace ANTES de escribir código, identificando qué "
+             "podría salir mal en el diseño mismo, no después de encontrarlo en producción."
+         ),
+         relevancia_diagnostica=(
+             "Al evaluar una integración de software personalizada para un cliente (ej. un "
+             "conector propio entre PMS y un sistema de terceros), preguntar explícitamente si "
+             "usa consultas parametrizadas -- concatenar strings para construir consultas SQL "
+             "sigue siendo, años después, una de las causas más comunes de brechas serias."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 2.5 Vulnerability Management"),
+
+    # ══════ CySA+ CS0-003 — 3.0 GESTIÓN DE RESPUESTA A INCIDENTES (20%) ══════
+    dict(dominio="respuesta_incidentes", concepto="Cyber kill chain: las 7 fases de un ataque desde la perspectiva del atacante",
+         explicacion=(
+             "1) Reconocimiento (el atacante investiga el objetivo). 2) Weaponization "
+             "(prepara el arma, ej. un documento con malware embebido). 3) Entrega (delivery -- "
+             "envía el arma, ej. vía phishing). 4) Explotación (el arma se ejecuta, explota una "
+             "vulnerabilidad). 5) Instalación (establece persistencia en el sistema "
+             "comprometido). 6) Comando y Control -- C2 (establece un canal de comunicación con "
+             "el atacante). 7) Acciones sobre objetivos (el atacante finalmente hace lo que "
+             "buscaba -- exfiltrar datos, cifrar para ransomware, etc.). La utilidad práctica: "
+             "interrumpir CUALQUIER fase detiene el ataque completo -- no hay que esperar a "
+             "detectarlo en la fase final."
+         ),
+         relevancia_diagnostica=(
+             "Detectar tráfico de C2 (fase 6) es más valioso que detectar solo en la fase final "
+             "(exfiltración, fase 7) -- interrumpir en la fase de C2 evita que el atacante "
+             "siquiera llegue a ejecutar sus acciones finales, mientras que detectar en fase 7 "
+             "significa que el daño ya ocurrió."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 3.1 Incident Response and Management"),
+    dict(dominio="respuesta_incidentes", concepto="MITRE ATT&CK y Diamond Model: dos formas complementarias de analizar un ataque",
+         explicacion=(
+             "MITRE ATT&CK es una matriz pública y muy detallada de tácticas y técnicas de "
+             "atacantes reales observadas -- funciona como un vocabulario común para describir "
+             "exactamente QUÉ técnica se usó (ej. 'T1055 Process Injection'), permitiendo "
+             "comparar contra grupos de amenaza conocidos que usan esas técnicas. El Diamond "
+             "Model analiza un incidente desde 4 vértices conectados: adversario, víctima, "
+             "infraestructura (qué usó el atacante -- servidores C2, dominios) y capacidad (qué "
+             "herramientas/malware usó) -- ayuda a entender las RELACIONES entre esos elementos, "
+             "no solo listarlos por separado."
+         ),
+         relevancia_diagnostica=(
+             "Al documentar un incidente real de Shomer, mapear la técnica observada a un "
+             "identificador de MITRE ATT&CK (cuando aplique) permite comparar patrones entre "
+             "distintos hoteles del futuro roadmap multi-cliente -- un vocabulario común hace "
+             "posible detectar si el mismo grupo de amenaza está atacando a varios clientes."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 3.1 Incident Response and Management"),
+    dict(dominio="respuesta_incidentes", concepto="Contención, erradicación y recuperación: por qué el orden importa",
+         explicacion=(
+             "Contención limita el DAÑO sin necesariamente eliminar la causa aún -- aislar de "
+             "la red, no necesariamente apagar (apagar puede destruir evidencia volátil en "
+             "memoria). Erradicación elimina la causa raíz real (el malware, la cuenta "
+             "comprometida, la vulnerabilidad explotada) -- hacerlo antes de contener "
+             "adecuadamente arriesga que el atacante note la respuesta y acelere su ataque o "
+             "borre evidencia. Recuperación restaura la operación normal, generalmente vía "
+             "re-imaging (reinstalar desde cero, no solo 'limpiar' el sistema comprometido, "
+             "porque no se puede confiar completamente en un sistema que estuvo bajo control de "
+             "un atacante) con monitoreo reforzado posterior."
+         ),
+         relevancia_diagnostica=(
+             "Un sistema comprometido que se 'limpia' de malware sin re-imaging completo, "
+             "confiando en que el antivirus eliminó todo, es un riesgo -- si el atacante "
+             "estableció persistencia con técnicas que el antivirus no detectó (ej. una cuenta "
+             "de puerta trasera creada, no solo un archivo malicioso), reconectarlo sin "
+             "reinstalar desde cero puede permitir que el atacante regrese."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 3.2 Incident Response and Management"),
+
+    # ══════ CySA+ CS0-003 — 4.0 REPORTES Y COMUNICACIÓN (17%) ══════
+    dict(dominio="reportes_comunicacion", concepto="Inhibidores comunes a la remediación de vulnerabilidades",
+         explicacion=(
+             "No toda vulnerabilidad se puede remediar de inmediato, y reconocerlo explícitamente "
+             "es parte de una gestión honesta: sistemas legacy que no soportan el parche "
+             "disponible, sistemas propietarios donde solo el fabricante puede modificar el "
+             "código, riesgo de interrumpir un proceso de negocio crítico, degradación de "
+             "funcionalidad si se aplica el parche, o restricciones contractuales (SLA/MOU con "
+             "un proveedor que limita cuándo se puede intervenir un sistema). Documentar estos "
+             "inhibidores explícitamente -- con dueño y fecha de revisión -- es mejor que dejar "
+             "la vulnerabilidad como un hallazgo abierto sin explicación."
+         ),
+         relevancia_diagnostica=(
+             "Un sistema de control de acceso biométrico antiguo cuyo fabricante ya no existe "
+             "(no hay a quién pedir un parche) es un inhibidor legítimo de remediación directa "
+             "-- la respuesta correcta es documentarlo como excepción con control compensatorio "
+             "(aislamiento de red), no dejarlo como una tarea pendiente indefinida sin "
+             "explicación ni plan alterno."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 4.1 Reporting and Communication"),
+    dict(dominio="reportes_comunicacion", concepto="Métricas clave de respuesta a incidentes: MTTD, MTTR, MTTRemediate",
+         explicacion=(
+             "Mean Time to Detect (MTTD): cuánto tiempo pasa entre que ocurre un incidente y se "
+             "detecta -- mide qué tan buena es la visibilidad/monitoreo. Mean Time to Respond: "
+             "desde que se detecta hasta que se empieza a actuar -- mide la eficiencia del "
+             "proceso de escalamiento. Mean Time to Remediate: desde que se actúa hasta que el "
+             "problema está realmente resuelto -- mide la capacidad de ejecución real. Un "
+             "sistema con excelente MTTD pero mal MTTR tiene un problema de PROCESO "
+             "(detecta rápido pero reacciona lento), no de tecnología de detección."
+         ),
+         relevancia_diagnostica=(
+             "Si Shomer detecta un problema (MTTD bajo, gracias al monitoreo y al cerebro) pero "
+             "tarda mucho en escalar o actuar sobre él (MTTR alto), el cuello de botella está en "
+             "el proceso de respuesta humana o en la falta de automatización de la acción, no en "
+             "la capacidad de detección -- son dos métricas distintas que requieren mejoras "
+             "distintas."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 4.2 Reporting and Communication"),
+    dict(dominio="reportes_comunicacion", concepto="Estructura de un reporte de respuesta a incidentes para distintas audiencias",
+         explicacion=(
+             "Un reporte de incidente completo incluye: resumen ejecutivo (para quien no tiene "
+             "tiempo ni contexto técnico -- qué pasó, impacto, en 3-4 líneas), el qué/quién/"
+             "cuándo/dónde/por qué detallado, línea de tiempo, alcance real, evidencia "
+             "recolectada, y recomendaciones concretas. Las comunicaciones se ramifican por "
+             "audiencia: legal (si hay implicaciones de cumplimiento/contractuales), relaciones "
+             "públicas (si hay impacto a clientes/medios), reguladores (si la ley exige "
+             "notificación, ej. brecha de datos de huéspedes), y autoridades si aplica. Cada "
+             "audiencia necesita un nivel de detalle y lenguaje distinto del mismo incidente."
+         ),
+         relevancia_diagnostica=(
+             "Un mismo incidente de seguridad en un hotel (ej. exposición de datos de tarjetas) "
+             "requiere un reporte técnico detallado para el equipo de TI Y un resumen ejecutivo "
+             "sin jerga para la gerencia del hotel Y posiblemente una notificación regulatoria "
+             "formal -- preparar solo una versión técnica y esperar que sirva para las tres "
+             "audiencias es un error común que retrasa la respuesta correcta a cada una."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — 4.2 Reporting and Communication"),
 ]
 
 
@@ -4722,6 +5016,36 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Comportamiento esperado de esa instalación -- Server Core se instala deliberadamente sin GUI",
          recomendacion="Administrar remotamente vía PowerShell/RSAT en vez de buscar cómo habilitar una interfaz gráfica que no está instalada por diseño",
          fuente="CompTIA Server+ SK0-005 — 2.1 Server Administration"),
+
+    # ══════ CySA+ CS0-003 — REGLAS DIAGNÓSTICAS ══════
+    dict(dominio="siem_analisis", patron="Un equipo envía tráfico saliente pequeño pero a intervalos muy regulares hacia la misma IP externa",
+         causa_probable="Beaconing -- malware con C2 'llamando a casa' periódicamente",
+         recomendacion="Aislar el equipo y analizar la IP destino en herramientas de reputación (WHOIS/AbuseIPDB) antes de descartarlo como tráfico normal",
+         fuente="CompTIA CySA+ CS0-003 — 1.2 Security Operations"),
+    dict(dominio="gestion_vulnerabilidades", patron="Un escaneo de vulnerabilidades no credenciado reporta un sistema como de bajo riesgo",
+         causa_probable="El escaneo no credenciado solo ve lo expuesto externamente, subestimando el riesgo real interno",
+         recomendacion="Repetir el escaneo en modo credenciado antes de confiar en una evaluación de bajo riesgo basada solo en vista externa",
+         fuente="CompTIA CySA+ CS0-003 — 2.1 Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", patron="Un sistema ICS/SCADA se cae o se comporta erráticamente durante un escaneo de vulnerabilidades",
+         causa_probable="Escaneo activo agresivo no tolerado por el equipo de infraestructura crítica",
+         recomendacion="Usar escaneo pasivo en sistemas OT/ICS/SCADA, o confirmar con el fabricante que el equipo tolera escaneo activo antes de repetirlo",
+         fuente="CompTIA CySA+ CS0-003 — 2.1 Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", patron="Cambiar un número de ID en la URL de un sistema de reservas permite ver datos de otro huésped",
+         causa_probable="Broken access control -- la aplicación no verifica permiso del usuario sobre el recurso solicitado",
+         recomendacion="Reportar como hallazgo crítico al desarrollador del sistema -- requiere corrección en la lógica de autorización, no configuración de red",
+         fuente="CompTIA CySA+ CS0-003 — 2.4 Vulnerability Management"),
+    dict(dominio="respuesta_incidentes", patron="Un sistema comprometido se 'limpia' de malware pero se reconecta sin reinstalación completa",
+         causa_probable="Confianza indebida en que el antivirus eliminó toda persistencia del atacante (ej. cuentas de puerta trasera no detectadas)",
+         recomendacion="Re-imaging completo (reinstalar desde cero) en vez de solo limpiar -- no se puede confiar en un sistema que estuvo bajo control de un atacante",
+         fuente="CompTIA CySA+ CS0-003 — 3.2 Incident Response and Management"),
+    dict(dominio="reportes_comunicacion", patron="Una vulnerabilidad lleva mucho tiempo abierta sin remediar y sin explicación documentada",
+         causa_probable="Inhibidor de remediación real (sistema legacy/propietario) nunca se documentó formalmente como excepción",
+         recomendacion="Documentar el inhibidor específico con dueño y control compensatorio aplicado, en vez de dejarlo como una tarea pendiente sin contexto",
+         fuente="CompTIA CySA+ CS0-003 — 4.1 Reporting and Communication"),
+    dict(dominio="reportes_comunicacion", patron="Un incidente se detecta rápido pero la respuesta/resolución tarda mucho más de lo esperado",
+         causa_probable="Buen MTTD (detección) pero mal MTTR (respuesta) -- el cuello de botella está en el proceso, no en el monitoreo",
+         recomendacion="Enfocar la mejora en el proceso de escalamiento y ejecución de respuesta, no en agregar más monitoreo que ya funciona bien",
+         fuente="CompTIA CySA+ CS0-003 — 4.2 Reporting and Communication"),
 ]
 
 

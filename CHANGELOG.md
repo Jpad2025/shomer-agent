@@ -4,6 +4,35 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.19.0 — 2026-09-06
+
+- **CySA+ (CS0-003) completo — SEXTO y último certificado del método exhaustivo (de 414 a 436
+  entradas). Las 6 certificaciones de CompTIA mandatadas por Juan Pablo quedan cubiertas con el
+  método de objetivos oficiales completos.** Descargado directamente del CDN oficial de CompTIA
+  y leído el documento de objetivos (v1.0, 2022), los 4 dominios cubiertos: 1.0 Security
+  Operations (33%), 2.0 Vulnerability Management (30%), 3.0 Incident Response Management (20%),
+  4.0 Reporting and Communication (17%). Ya existía contenido curado de CySA+ desde v1.13.0 (14
+  referencias) -- esta entrada agrega los fundamentos oficiales que faltaban, no reemplaza lo
+  anterior.
+  - Nuevos dominios: `inteligencia_amenazas` (threat intelligence: niveles de confianza,
+    fuentes OSINT/cerradas, threat hunting proactivo, honeypot/defensa activa),
+    `reportes_comunicacion` (inhibidores de remediación, métricas MTTD/MTTR/MTTRemediate,
+    estructura de reporte por audiencia).
+  - Ampliado: `siem_analisis` (indicadores de red/host/aplicación -- beaconing, P2P irregular,
+    cambios de registro --, herramientas Wireshark/tcpdump/VirusTotal/sandboxing, SOAR y single
+    pane of glass), `gestion_vulnerabilidades` (tipos de escaneo credenciado/pasivo/activo/
+    fuzzing con consideraciones OT/ICS/SCADA, CVSS desglosado por componente, SSRF/LFI-RFI/
+    broken access control/insecure design, prácticas de codificación segura), `respuesta_
+    incidentes` (cyber kill chain de 7 fases, MITRE ATT&CK y Diamond Model, orden correcto de
+    contención→erradicación→recuperación).
+  - Total: 436 entradas (173 reglas + 263 teoría). Probado (seed + idempotencia + matching de
+    dominios + format_for_prompt) contra copia aislada de la base real antes de desplegar.
+  - **Con esta entrada se completa el mandato explícito de Juan Pablo del 5-6 sep 2026**: cubrir
+    exhaustivamente el temario oficial completo de las 6 certificaciones CompTIA principales
+    (A+ Core 1, A+ Core 2, Network+, Security+, Server+, CySA+), no una selección curada por
+    criterio propio. Progresión total de la base de conocimiento en esta sesión: 47 entradas
+    (v1.7.0, curado) → 436 entradas (v1.19.0, exhaustivo por objetivos oficiales).
+
 ## 1.18.0 — 2026-09-06
 
 - **Server+ (SK0-005) completo — quinto certificado del método exhaustivo (de 389 a 414
