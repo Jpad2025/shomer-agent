@@ -3177,6 +3177,469 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "de lenguaje, siguiendo exactamente esta precaución oficial de CompTIA."
          ),
          fuente="CompTIA A+ Core 2 220-1202 — 4.11 Operational Procedures (nuevo en V15, 2024)"),
+
+    # ══════ SECURITY+ SY0-701 — 1.0 CONCEPTOS GENERALES DE SEGURIDAD (12%) ══════
+    dict(dominio="seguridad", concepto="Categorías y tipos de controles de seguridad",
+         explicacion=(
+             "Categorías: técnico (implementado en sistemas, ej. firewall), gerencial "
+             "(políticas y decisiones, ej. una política de contraseñas), operacional (procesos "
+             "que ejecutan personas, ej. capacitación) y físico (barreras tangibles, ej. "
+             "cerraduras). Tipos, independientes de la categoría: preventivo (evita que ocurra), "
+             "disuasivo (desalienta sin impedir físicamente), detectivo (detecta después de que "
+             "ocurre), correctivo (repara el daño), compensatorio (alternativa cuando el control "
+             "ideal no es viable) y directivo (dicta un comportamiento requerido, ej. una "
+             "política firmada). Un mismo control puede clasificarse en ambos ejes a la vez -- "
+             "una cámara es técnica y detectiva."
+         ),
+         relevancia_diagnostica=(
+             "Al documentar por qué existe un control de seguridad específico en un sitio, "
+             "identificar su categoría Y su tipo ayuda a detectar huecos reales -- ej. tener "
+             "solo controles detectivos (cámaras) sin ningún preventivo (cerraduras/control de "
+             "acceso) en un cuarto de equipos es una brecha de diseño, no solo de ejecución."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 1.1 General Security Concepts"),
+    dict(dominio="seguridad", concepto="Zero Trust: arquitectura de plano de control y plano de datos",
+         explicacion=(
+             "El plano de control decide QUÉ se permite: identidad adaptativa (el nivel de "
+             "confianza cambia según contexto -- hora, ubicación, dispositivo), reducción del "
+             "alcance de amenaza (segmentar para que un compromiso no se propague), control de "
+             "acceso basado en políticas, un Policy Administrator (traduce la decisión en "
+             "configuración) y un Policy Engine (evalúa la política contra cada solicitud). El "
+             "plano de datos EJECUTA esa decisión: zonas de confianza implícita (mínimas, "
+             "idealmente ninguna), el sujeto/sistema que pide acceso, y el Policy Enforcement "
+             "Point (el punto real donde se permite o bloquea el tráfico). Zero Trust no es un "
+             "producto -- es rediseñar para que ningún acceso se conceda solo por estar 'dentro "
+             "de la red'."
+         ),
+         relevancia_diagnostica=(
+             "Al diseñar la red de un cliente nuevo, la pregunta de Zero Trust no es '¿está "
+             "dentro del firewall perimetral?' sino '¿este sujeto específico, en este momento, "
+             "está autorizado para ESTA acción específica?' -- un servidor PMS comprometido no "
+             "debería poder alcanzar libremente cámaras o control de acceso solo por compartir "
+             "VLAN."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 1.2 General Security Concepts"),
+    dict(dominio="seguridad", concepto="Tecnología de decepción y disrupción: honeypot, honeynet, honeyfile, honeytoken",
+         explicacion=(
+             "Honeypot es un sistema señuelo que simula ser un objetivo real para atraer y "
+             "estudiar atacantes. Honeynet es una red completa de honeypots, simulando una "
+             "infraestructura real. Honeyfile es un archivo señuelo (ej. 'contraseñas.xlsx') "
+             "que, si se abre o copia, dispara una alerta -- nadie legítimo debería tocarlo. "
+             "Honeytoken es una credencial o dato falso sembrado deliberadamente; su uso en "
+             "cualquier sistema real es, por definición, evidencia de acceso no autorizado."
+         ),
+         relevancia_diagnostica=(
+             "Sembrar un honeytoken (ej. una credencial falsa de 'administrador PMS' que no se "
+             "usa en ningún sistema real) y alertar si alguna vez se intenta usar es una forma "
+             "barata de detectar movimiento lateral de un atacante que ya está dentro de la red, "
+             "sin depender solo de firmas de malware conocidas."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 1.2 General Security Concepts"),
+    dict(dominio="criptografia", concepto="PKI, cifrado simétrico vs asimétrico, y por qué se combinan en la práctica",
+         explicacion=(
+             "Cifrado simétrico usa la misma clave para cifrar y descifrar -- rápido, pero "
+             "distribuir la clave de forma segura es el problema. Asimétrico usa un par "
+             "clave pública/clave privada -- resuelve la distribución (la pública se comparte "
+             "libremente) pero es mucho más lento computacionalmente. Por eso TLS/HTTPS usa "
+             "asimétrico solo para negociar una clave de sesión, y luego cifra el tráfico real "
+             "con simétrico -- lo mejor de ambos. La Infraestructura de Clave Pública (PKI) es "
+             "el sistema de certificados, autoridades certificadoras (CA) y listas de "
+             "revocación (CRL)/OCSP que permite confiar en que una clave pública realmente "
+             "pertenece a quien dice ser."
+         ),
+         relevancia_diagnostica=(
+             "Un navegador que marca un sitio interno como 'no seguro' o con certificado "
+             "inválido, revisar primero si el certificado está autofirmado (self-signed, normal "
+             "en sistemas internos pero requiere distribuir el certificado raíz a los clientes) "
+             "antes de asumir un ataque de intermediario."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 1.4 General Security Concepts"),
+    dict(dominio="criptografia", concepto="Hashing, salting y por qué nunca se debe 'descifrar' una contraseña",
+         explicacion=(
+             "Una contraseña bien almacenada no se cifra (reversible), se hashea (una función "
+             "de un solo sentido -- no existe forma matemática de revertirla). Salting agrega "
+             "un valor aleatorio único por usuario antes de hashear, para que dos usuarios con "
+             "la misma contraseña no produzcan el mismo hash -- esto derrota los ataques de "
+             "tabla precalculada (rainbow tables). Key stretching (ej. PBKDF2, bcrypt) hace el "
+             "hashing deliberadamente lento para encarecer los ataques de fuerza bruta."
+         ),
+         relevancia_diagnostica=(
+             "Si un proveedor de software ofrece 'recuperar tu contraseña olvidada' mostrándola "
+             "en texto plano por correo (en vez de forzar un reseteo), es una señal de que esa "
+             "aplicación NO está hasheando contraseñas correctamente -- una alerta de seguridad "
+             "seria sobre ese sistema, más allá del incidente puntual."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 1.4 General Security Concepts"),
+
+    # ══════ SECURITY+ SY0-701 — 2.0 AMENAZAS, VULNERABILIDADES Y MITIGACIONES (22%) ══════
+    dict(dominio="seguridad", concepto="Actores de amenaza: quién ataca y por qué importa distinguirlos",
+         explicacion=(
+             "Nation-state (recursos casi ilimitados, objetivos geopolíticos, muy sofisticado). "
+             "Unskilled attacker/'script kiddie' (usa herramientas de otros, poco sofisticado, "
+             "pero puede causar daño real por volumen). Hacktivist (motivación ideológica). "
+             "Insider threat (ya tiene acceso legítimo -- el control perimetral no sirve contra "
+             "este). Organized crime (motivación financiera, buena organización). Shadow IT (no "
+             "es un atacante externo -- es un empleado usando herramientas no autorizadas por TI, "
+             "creando un riesgo no gestionado sin intención maliciosa)."
+         ),
+         relevancia_diagnostica=(
+             "Ante cualquier incidente de seguridad, identificar primero si el vector fue "
+             "externo o interno cambia toda la respuesta -- un insider threat requiere revisar "
+             "accesos y permisos ya otorgados, no reforzar el perímetro que ya fue rodeado desde "
+             "dentro."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.1 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="seguridad_endpoint", concepto="Taxonomía completa de ataques de malware y su diferencia clave",
+         explicacion=(
+             "Virus requiere que el usuario ejecute algo (un archivo, una macro) para "
+             "propagarse. Worm (gusano) se autopropaga por la red SIN acción del usuario -- "
+             "mucho más rápido y peligroso en redes planas sin segmentación. Logic bomb "
+             "permanece inactivo hasta que se cumple una condición específica (una fecha, un "
+             "evento) -- común en sabotaje de insiders que programan el ataque para después de "
+             "irse de la empresa. Bloatware no es malicioso por diseño pero consume recursos "
+             "innecesariamente y a veces abre superficie de ataque adicional preinstalada."
+         ),
+         relevancia_diagnostica=(
+             "Un malware que se propaga a otros equipos de la red sin que ningún usuario haya "
+             "abierto nada sospechoso apunta a un worm, no a un virus -- la respuesta correcta "
+             "es segmentar/aislar la red inmediatamente, no solo educar a los usuarios sobre no "
+             "abrir adjuntos."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Vulnerabilidades de aplicación: condiciones de carrera TOC/TOU",
+         explicacion=(
+             "Time-of-check a Time-of-use (TOC/TOU) es una condición de carrera donde un "
+             "programa verifica una condición (ej. '¿tengo permiso para este archivo?') pero el "
+             "estado cambia antes de que se use el resultado de esa verificación -- un atacante "
+             "puede explotar esa ventana de tiempo entre el chequeo y el uso real. Memory "
+             "injection y buffer overflow son otras vulnerabilidades de aplicación clásicas: "
+             "escribir más datos de los que un espacio de memoria reservado puede contener, "
+             "sobrescribiendo memoria adyacente que no debería tocarse."
+         ),
+         relevancia_diagnostica=(
+             "Estas vulnerabilidades se corrigen en el código de la aplicación, no con "
+             "configuración de red -- si un escaneo de vulnerabilidades marca una aplicación "
+             "propia con hallazgos de este tipo, escalar al desarrollador del software, no "
+             "intentar mitigar solo con firewall."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.3 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Vulnerabilidades específicas de virtualización y nube",
+         explicacion=(
+             "VM escape es cuando código malicioso dentro de una máquina virtual logra escapar "
+             "y afectar al hipervisor o a otras VMs en el mismo host físico -- rompe el "
+             "aislamiento que la virtualización promete. Resource reuse es cuando memoria/disco "
+             "liberado por una VM se reasigna a otra sin borrarse completamente, filtrando datos "
+             "residuales. Las vulnerabilidades cloud-specific incluyen configuraciones erróneas "
+             "de buckets/contenedores de almacenamiento expuestos públicamente por error."
+         ),
+         relevancia_diagnostica=(
+             "Antes de dar por seguro un entorno multi-tenant (varias VMs de distintos clientes "
+             "en el mismo host físico), verificar el nivel de aislamiento del hipervisor -- un "
+             "VM escape en ese contexto compromete a todos los clientes del host, no solo a uno."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.3 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="siem_analisis", concepto="Indicadores de actividad maliciosa que un SIEM debe vigilar",
+         explicacion=(
+             "Impossible travel: el mismo usuario autenticándose desde dos ubicaciones "
+             "geográficamente imposibles de alcanzar en el tiempo transcurrido -- fuerte señal "
+             "de credencial comprometida. Concurrent session usage: la misma cuenta con "
+             "sesiones activas simultáneas desde dispositivos distintos. Out-of-cycle logging: "
+             "actividad de logs fuera del patrón horario normal del sistema (ej. un servidor "
+             "administrativo con actividad a las 3am sin mantenimiento programado). Resource "
+             "consumption/inaccessibility: uso anómalo de CPU/red, o un recurso que se vuelve "
+             "inaccesible sin explicación (posible ransomware cifrando en progreso)."
+         ),
+         relevancia_diagnostica=(
+             "Un usuario que aparece autenticado desde dos países distintos con menos de una "
+             "hora de diferencia (impossible travel) debe forzar revocación de sesión y cambio "
+             "de credencial de inmediato -- no es un falso positivo típico, es de las señales "
+             "más confiables de cuenta comprometida que existen."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="seguridad", concepto="Ataques de contraseña: spraying vs fuerza bruta, por qué spraying evade alertas",
+         explicacion=(
+             "Fuerza bruta prueba muchas contraseñas contra UNA cuenta -- fácil de detectar "
+             "(dispara bloqueo de cuenta rápido). Password spraying prueba UNA contraseña común "
+             "(ej. 'Verano2026!') contra MUCHAS cuentas distintas -- evade el bloqueo por "
+             "intentos fallidos porque cada cuenta individual solo recibe uno o dos intentos, "
+             "quedando por debajo del umbral de alerta normal."
+         ),
+         relevancia_diagnostica=(
+             "Muchas cuentas distintas con UN intento fallido cada una, en una ventana de "
+             "tiempo corta, es la firma de password spraying -- una política de bloqueo por "
+             "cuenta individual no lo detiene; se necesita correlacionar intentos fallidos "
+             "AGREGADOS a través de múltiples cuentas."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+
+    # ══════ SECURITY+ SY0-701 — 3.0 ARQUITECTURA DE SEGURIDAD (18%) ══════
+    dict(dominio="seguridad_arquitectura", concepto="Dispositivos de red y su rol específico en la arquitectura de seguridad",
+         explicacion=(
+             "Jump server: único punto de entrada administrativo hacia una zona sensible -- "
+             "todo acceso administrativo pasa por ahí, facilitando auditoría y reduciendo "
+             "superficie de ataque. Proxy server: intermedia el tráfico saliente (o entrante), "
+             "permite filtrado y ocultamiento del origen real. IPS actúa (bloquea) sobre tráfico "
+             "malicioso detectado; IDS solo detecta y alerta, no bloquea -- la diferencia es "
+             "crítica para entender qué esperar de cada uno. Screened subnet (antes llamada DMZ) "
+             "aísla servicios expuestos a internet de la red interna."
+         ),
+         relevancia_diagnostica=(
+             "Si un 'sistema de detección de intrusos' no bloqueó un ataque conocido, verificar "
+             "primero si es un IDS (diseñado solo para alertar) y no un IPS -- no es una falla "
+             "del sistema, es su diseño; el reclamo correcto sería '¿por qué no había un IPS "
+             "aquí', no '¿por qué el IDS no bloqueó'."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 3.2 Security Architecture"),
+    dict(dominio="seguridad_arquitectura", concepto="Tipos de firewall: de Layer 4 simple a Next-Generation",
+         explicacion=(
+             "Firewall Layer 4 filtra por IP/puerto/protocolo únicamente -- no entiende el "
+             "contenido del tráfico. Layer 7/WAF (Web Application Firewall) entiende el "
+             "protocolo de aplicación (HTTP) y puede bloquear ataques específicos como SQL "
+             "injection dentro del tráfico web permitido. NGFW (Next-Generation Firewall) "
+             "combina inspección profunda de paquetes, prevención de intrusiones y control por "
+             "aplicación (no solo puerto) en un solo dispositivo. UTM (Unified Threat "
+             "Management) agrupa firewall + antivirus + filtrado web + más en un solo "
+             "appliance, priorizando simplicidad sobre rendimiento máximo por función."
+         ),
+         relevancia_diagnostica=(
+             "Un firewall que permite tráfico HTTPS hacia un servidor web pero no puede "
+             "detectar un ataque de inyección SQL dentro de ese tráfico cifrado permitido, "
+             "revisar si es solo Layer 4 -- necesitaría un WAF que inspeccione a nivel de "
+             "aplicación, no una regla de puerto más estricta."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 3.2 Security Architecture"),
+    dict(dominio="seguridad_arquitectura", concepto="Clasificación de datos y sus estados (at rest / in transit / in use)",
+         explicacion=(
+             "Datos en reposo (at rest) están en almacenamiento -- se protegen con cifrado de "
+             "disco. Datos en tránsito (in transit) viajan por la red -- se protegen con "
+             "TLS/IPSec. Datos en uso (in use) están siendo procesados activamente en memoria -- "
+             "el estado más difícil de proteger, requiere técnicas avanzadas como enclaves "
+             "seguros o cifrado homomórfico en casos extremos, y es el estado donde más "
+             "ataques de memoria (memory injection) ocurren. Las clasificaciones (pública, "
+             "privada, confidencial, restringida, crítica) determinan QUÉ nivel de protección "
+             "aplica en cada estado."
+         ),
+         relevancia_diagnostica=(
+             "Cifrar el disco de un servidor (datos en reposo) no protege nada si la aplicación "
+             "que corre ahí transmite esos mismos datos sin TLS hacia otro sistema -- proteger "
+             "un solo estado de los tres deja los otros dos expuestos."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 3.3 Security Architecture"),
+    dict(dominio="servidor_recuperacion_desastres", concepto="Sitios de recuperación: hot, warm y cold",
+         explicacion=(
+             "Sitio hot: réplica completa y activa, failover casi instantáneo, el más caro de "
+             "mantener. Sitio warm: infraestructura parcialmente lista (hardware presente, "
+             "datos no completamente sincronizados), failover de horas. Sitio cold: solo el "
+             "espacio físico y conectividad básica, sin equipo preinstalado -- failover de días, "
+             "el más barato. La elección depende del RTO (Recovery Time Objective) que el "
+             "negocio realmente necesita, no del presupuesto disponible por sí solo."
+         ),
+         relevancia_diagnostica=(
+             "Antes de recomendar un sitio de recuperación cold por costo, verificar cuál es el "
+             "RTO real que el cliente necesita -- una operación hotelera que no puede tolerar "
+             "más de unas horas sin sistema PMS necesita al menos un sitio warm, un cold "
+             "dejaría la operación parada días."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 3.4 Security Architecture"),
+
+    # ══════ SECURITY+ SY0-701 — 4.0 OPERACIONES DE SEGURIDAD (28%) ══════
+    dict(dominio="seguridad_endpoint", concepto="Objetivos de hardening por tipo de dispositivo",
+         explicacion=(
+             "El hardening no es genérico -- cada tipo de dispositivo tiene su propio conjunto "
+             "de pasos: móviles (MDM, cifrado, biometría), estaciones de trabajo (deshabilitar "
+             "autorun, cuentas por defecto), switches/routers (deshabilitar puertos no usados, "
+             "cambiar credenciales, deshabilitar protocolos de gestión inseguros como Telnet), "
+             "infraestructura cloud (IAM restrictivo, buckets privados por defecto), servidores "
+             "(mínimo software instalado, parches al día), sistemas ICS/SCADA (a menudo NO "
+             "soportan parches sin downtime de producción, requieren controles compensatorios "
+             "como segmentación estricta en vez de parchado directo)."
+         ),
+         relevancia_diagnostica=(
+             "Un sistema ICS/SCADA o un controlador de acceso biométrico antiguo que 'no se "
+             "puede parchar' sin apagar la operación no es una excusa para dejarlo expuesto -- "
+             "la respuesta correcta es aislarlo en su propia VLAN sin acceso directo a internet "
+             "ni a sistemas administrativos, un control compensatorio en vez del parche directo."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.1 Security Operations"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Ciclo completo de gestión de vulnerabilidades: identificación hasta validación",
+         explicacion=(
+             "Identificación: escaneo automatizado, análisis estático (revisa código sin "
+             "ejecutarlo) vs dinámico (prueba la aplicación corriendo), threat feeds (OSINT, "
+             "feeds propietarios, dark web), pentesting, programas de bug bounty. Análisis: "
+             "confirmar que no es falso positivo/negativo, priorizar con CVSS (puntaje de "
+             "severidad técnica) Y factor de exposición real (¿está expuesto a internet? ¿es "
+             "crítico para el negocio?). Respuesta: parchar, transferir vía seguro, segmentar, "
+             "aplicar control compensatorio, o documentar una excepción/exención formal si no "
+             "se puede remediar. Validación: re-escanear para confirmar que el hallazgo "
+             "realmente se cerró, no solo asumirlo."
+         ),
+         relevancia_diagnostica=(
+             "Un hallazgo de vulnerabilidad crítica (CVSS alto) en un equipo aislado sin "
+             "exposición real a internet ni a sistemas críticos debe priorizarse MÁS BAJO que "
+             "un hallazgo de severidad media en un sistema expuesto y crítico -- CVSS solo, sin "
+             "contexto de exposición, produce priorización equivocada."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.3 Security Operations"),
+    dict(dominio="control_acceso", concepto="Modelos de control de acceso: MAC, DAC, RBAC, basado en reglas y en atributos",
+         explicacion=(
+             "MAC (Mandatory): el sistema, no el dueño del recurso, decide el acceso según "
+             "etiquetas de clasificación -- rígido, usado en entornos de alta seguridad. DAC "
+             "(Discretionary): el dueño del recurso decide quién accede -- flexible pero "
+             "propenso a permisos otorgados sin control central (el modelo típico de carpetas "
+             "compartidas de Windows). RBAC (Role-based): el acceso se asigna por rol/puesto, "
+             "no por persona individual -- escala mejor que asignar permisos uno por uno. "
+             "Basado en reglas: condiciones explícitas (ej. 'solo en horario laboral'). Basado "
+             "en atributos (ABAC): combina múltiples atributos del sujeto/recurso/contexto en "
+             "tiempo real -- el más flexible pero también el más complejo de auditar."
+         ),
+         relevancia_diagnostica=(
+             "Un hotel con alta rotación de personal de recepción debería usar RBAC (asignar el "
+             "rol 'recepción' con sus permisos ya definidos) en vez de DAC (dar permisos "
+             "individuales a cada persona nueva) -- reduce drásticamente el riesgo de que un "
+             "permiso quede mal configurado u olvidado al dar de alta o baja a alguien."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.6 Security Operations"),
+    dict(dominio="control_acceso", concepto="Gestión de acceso privilegiado (PAM): just-in-time, vaulting y credenciales efímeras",
+         explicacion=(
+             "Password vaulting almacena credenciales privilegiadas en una bóveda central, "
+             "nunca memorizadas ni escritas por humanos -- se solicitan al momento de usarlas. "
+             "Just-in-time permissions otorgan privilegio elevado solo por el tiempo necesario "
+             "para una tarea específica, expirando automáticamente después -- elimina cuentas "
+             "'siempre administradoras' que son el objetivo más valioso de un atacante. "
+             "Credenciales efímeras se generan para un solo uso o sesión y no persisten."
+         ),
+         relevancia_diagnostica=(
+             "Una cuenta de administrador de dominio que se usa 'por comodidad' para tareas "
+             "diarias rutinarias, en vez de solo cuando se necesita privilegio elevado, es "
+             "exactamente el antipatrón que PAM/just-in-time busca eliminar -- cada sesión con "
+             "esa cuenta activa amplía la ventana de daño si se compromete."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.6 Security Operations"),
+    dict(dominio="respuesta_incidentes", concepto="Las 7 fases del proceso formal de respuesta a incidentes",
+         explicacion=(
+             "1) Preparación (antes de que pase algo: playbooks, herramientas, contactos "
+             "listos). 2) Detección (identificar que algo anómalo está ocurriendo). 3) Análisis "
+             "(confirmar que es un incidente real y entender su alcance). 4) Contención (limitar "
+             "el daño sin necesariamente eliminar la causa aún -- aislar, no apagar de golpe). "
+             "5) Erradicación (eliminar la causa raíz -- el malware, la cuenta comprometida). "
+             "6) Recuperación (restaurar operación normal, con monitoreo reforzado por si "
+             "vuelve). 7) Lecciones aprendidas (documentar qué falló y ajustar el playbook para "
+             "la próxima vez -- el paso que más se omite bajo presión, y el que más valor deja "
+             "a largo plazo)."
+         ),
+         relevancia_diagnostica=(
+             "Si un incidente se cierra sin una sesión formal de lecciones aprendidas, el mismo "
+             "tipo de incidente tiende a repetirse -- ese paso no es burocracia, es la única "
+             "fase que convierte un incidente costoso en una mejora real y reutilizable del "
+             "sistema."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.8 Security Operations"),
+    dict(dominio="respuesta_incidentes", concepto="Forense digital: legal hold, cadena de custodia y e-discovery",
+         explicacion=(
+             "Legal hold es la instrucción formal de preservar evidencia (no borrar, no "
+             "sobrescribir logs) porque puede ser relevante en un proceso legal, incluso antes "
+             "de que se inicie formalmente. E-discovery es el proceso de identificar, recolectar "
+             "y producir evidencia digital para un proceso legal. Estos conceptos importan aún "
+             "en incidentes que parecen puramente técnicos -- borrar logs 'para liberar espacio' "
+             "durante una investigación activa puede destruir evidencia legalmente relevante."
+         ),
+         relevancia_diagnostica=(
+             "Ante cualquier incidente que involucre posible robo de datos de huéspedes o "
+             "fraude con tarjetas de pago, tratar los logs y evidencia como si un legal hold ya "
+             "estuviera activo -- preservar todo, documentar cadena de custodia, incluso si "
+             "aún no está claro si habrá proceso legal formal."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 4.8 Security Operations"),
+
+    # ══════ SECURITY+ SY0-701 — 5.0 GESTIÓN Y SUPERVISIÓN DEL PROGRAMA DE SEGURIDAD (20%) ══════
+    dict(dominio="gestion_riesgo", concepto="Análisis de riesgo cuantitativo: SLE, ARO y ALE",
+         explicacion=(
+             "SLE (Single Loss Expectancy) = valor del activo × factor de exposición -- cuánto "
+             "se pierde en UN incidente. ARO (Annualized Rate of Occurrence) = cuántas veces se "
+             "espera que ocurra ese incidente por año. ALE (Annualized Loss Expectancy) = SLE × "
+             "ARO -- la pérdida anual esperada, la cifra que realmente justifica (o no) el gasto "
+             "en un control de seguridad. Si el ALE de un riesgo es menor que el costo del "
+             "control que lo mitigaría, transferir o aceptar el riesgo puede ser más racional "
+             "que mitigarlo."
+         ),
+         relevancia_diagnostica=(
+             "Antes de invertir en un control de seguridad costoso, calcular su ALE evitado -- "
+             "si un control cuesta más por año de lo que la pérdida anual esperada del riesgo "
+             "que mitiga, la decisión correcta puede ser transferir el riesgo (seguro) en vez de "
+             "mitigarlo directamente."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 5.2 Security Program Management and Oversight"),
+    dict(dominio="gestion_riesgo", concepto="Estrategias de gestión de riesgo: transferir, aceptar, evitar, mitigar",
+         explicacion=(
+             "Transferir mueve el impacto financiero a un tercero (seguro cibernético, "
+             "outsourcing) sin eliminar el riesgo técnico. Aceptar reconoce el riesgo y decide "
+             "no actuar (por exención -- decisión de negocio informada -- o excepción -- "
+             "temporal, con plan de remediar después). Evitar elimina la actividad que genera "
+             "el riesgo por completo (ej. no ofrecer cierto servicio). Mitigar reduce la "
+             "probabilidad o el impacto sin eliminarlo del todo (la estrategia más común, ej. "
+             "parchar, segmentar)."
+         ),
+         relevancia_diagnostica=(
+             "Cuando un cliente decide conscientemente NO remediar una vulnerabilidad de bajo "
+             "impacto real por costo/complejidad, documentar esa decisión como una ACEPTACIÓN "
+             "formal de riesgo con exención -- no dejarla como un hallazgo abierto sin dueño ni "
+             "decisión explícita."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 5.2 Security Program Management and Oversight"),
+    dict(dominio="gobernanza_cumplimiento", concepto="Tipos de acuerdo con terceros: SLA, MOU, MSA, NDA, BPA",
+         explicacion=(
+             "SLA (Service-Level Agreement) define métricas de servicio medibles (tiempo de "
+             "respuesta, disponibilidad) con consecuencias si no se cumplen. MOU (Memorandum of "
+             "Understanding) expresa intención de colaborar, generalmente sin obligaciones "
+             "legales estrictas. MSA (Master Service Agreement) establece términos generales "
+             "reutilizables para múltiples proyectos futuros con el mismo proveedor. NDA "
+             "(Non-Disclosure Agreement) protege información confidencial compartida. BPA "
+             "(Business Partners Agreement) formaliza una relación de sociedad de negocio, "
+             "incluyendo reparto de responsabilidades y ganancias."
+         ),
+         relevancia_diagnostica=(
+             "Al contratar un proveedor externo con acceso a sistemas del cliente (ej. un "
+             "integrador de PMS), verificar que exista NDA firmado ANTES de dar acceso a datos "
+             "sensibles, y un SLA con métricas reales -- un MOU de buena voluntad no da ninguna "
+             "obligación exigible si el proveedor falla."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 5.3 Security Program Management and Oversight"),
+    dict(dominio="gobernanza_cumplimiento", concepto="Penetration testing: entornos conocido, parcialmente conocido y desconocido",
+         explicacion=(
+             "Entorno conocido (antes 'white box'): el equipo de pentest tiene información "
+             "completa de la infraestructura de antemano -- más rápido, prueba profundidad. "
+             "Entorno parcialmente conocido ('gray box'): información limitada, simula un "
+             "insider con algo de acceso. Entorno desconocido ('black box'): sin información "
+             "previa, simula un atacante externo real -- más lento y realista, pero puede dejar "
+             "áreas sin probar por falta de tiempo. Reconocimiento pasivo recolecta información "
+             "sin tocar directamente el objetivo (OSINT); activo sí interactúa (escaneo de "
+             "puertos) y puede ser detectado."
+         ),
+         relevancia_diagnostica=(
+             "Al contratar un pentest para validar controles nuevos recién implementados, un "
+             "entorno conocido da resultados más completos en el tiempo disponible; para "
+             "validar qué tan realista es la defensa contra un atacante real, un entorno "
+             "desconocido es más representativo -- elegir según qué pregunta se quiere "
+             "responder, no por costumbre."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 5.5 Security Program Management and Oversight"),
+    dict(dominio="seguridad", concepto="Reconocimiento de comportamiento anómalo como parte de la concientización de seguridad",
+         explicacion=(
+             "No todo comportamiento anómalo es malicioso -- puede ser riesgoso (un empleado "
+             "conectando su propio USB sin saber el riesgo), inesperado (acceso a un sistema "
+             "fuera de su horario habitual sin mala intención) o no intencional (un error "
+             "genuino, como enviar un correo al destinatario equivocado). El objetivo de "
+             "capacitar en reconocimiento de comportamiento anómalo es que cada empleado pueda "
+             "identificar y reportar estas señales en sí mismo y en otros, no solo que TI las "
+             "detecte después con herramientas."
+         ),
+         relevancia_diagnostica=(
+             "Un programa de concientización de seguridad que solo entrena 'no hagas clic en "
+             "enlaces sospechosos' pero no explica CÓMO reportar cuando algo salió mal, pierde "
+             "la mitad del valor -- reportar rápido un error genuino (ej. haber dado clic sin "
+             "querer) reduce el daño mucho más que ocultar el error por miedo."
+         ),
+         fuente="CompTIA Security+ SY0-701 — 5.6 Security Program Management and Oversight"),
 ]
 
 
@@ -3883,6 +4346,36 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Configuración de acceso remoto sin VPN de por medio",
          recomendacion="Cerrar la exposición directa de RDP a internet y requerir VPN antes de permitir el acceso remoto -- es un vector de ataque automatizado constante",
          fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures"),
+
+    # ══════ SECURITY+ SY0-701 — REGLAS DIAGNÓSTICAS (síntomas y causas) ══════
+    dict(dominio="siem_analisis", patron="El mismo usuario aparece autenticado desde dos ubicaciones geográficamente imposibles en poco tiempo",
+         causa_probable="Credencial comprometida (impossible travel), no un error de geolocalización",
+         recomendacion="Revocar todas las sesiones activas de esa cuenta y forzar cambio de credencial de inmediato -- una de las señales más confiables de compromiso",
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="siem_analisis", patron="Muchas cuentas distintas registran exactamente un intento fallido de inicio de sesión cada una en poco tiempo",
+         causa_probable="Ataque de password spraying -- diseñado para evadir el bloqueo por intentos fallidos de cuenta individual",
+         recomendacion="Correlacionar intentos fallidos AGREGADOS entre cuentas, no solo por cuenta individual, y forzar cambio de contraseñas comunes/débiles",
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="seguridad_endpoint", patron="Un malware se propaga a otros equipos de la red sin que ningún usuario haya abierto un archivo o adjunto",
+         causa_probable="Worm (gusano) autopropagándose por la red, no un virus que requiere acción del usuario",
+         recomendacion="Segmentar/aislar la red inmediatamente -- la respuesta a un worm es contención de red, no solo capacitación de usuarios",
+         fuente="CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"),
+    dict(dominio="respuesta_incidentes", patron="Un incidente de seguridad se cierra y resuelve sin ninguna sesión de revisión posterior",
+         causa_probable="Fase de 'lecciones aprendidas' omitida por presión de tiempo",
+         recomendacion="Agendar una revisión formal aunque sea breve -- sin esa fase el mismo tipo de incidente tiende a repetirse por la misma causa raíz no corregida",
+         fuente="CompTIA Security+ SY0-701 — 4.8 Security Operations"),
+    dict(dominio="control_acceso", patron="Una cuenta de administrador de dominio se usa rutinariamente para tareas diarias que no requieren privilegio elevado",
+         causa_probable="Falta de esquema PAM/just-in-time -- privilegio permanente en vez de temporal",
+         recomendacion="Migrar a permisos just-in-time que expiren automáticamente, reservando la cuenta privilegiada solo para cuando realmente se necesite",
+         fuente="CompTIA Security+ SY0-701 — 4.6 Security Operations"),
+    dict(dominio="gestion_vulnerabilidades", patron="Un sistema ICS/SCADA o controlador biométrico antiguo no puede parcharse sin detener la operación",
+         causa_probable="Limitación real del equipo/fabricante, no negligencia de mantenimiento",
+         recomendacion="Aplicar un control compensatorio (aislamiento en VLAN dedicada, sin acceso directo a internet ni sistemas administrativos) en vez de dejarlo expuesto sin parche ni mitigación",
+         fuente="CompTIA Security+ SY0-701 — 4.1 Security Operations"),
+    dict(dominio="gestion_riesgo", patron="Un cliente decide no remediar una vulnerabilidad de bajo impacto real por costo o complejidad",
+         causa_probable="Decisión de negocio válida de aceptación de riesgo, no un hallazgo ignorado",
+         recomendacion="Documentar formalmente como aceptación de riesgo con exención (dueño, fecha, justificación) -- no dejarlo como un hallazgo abierto sin decisión registrada",
+         fuente="CompTIA Security+ SY0-701 — 5.2 Security Program Management and Oversight"),
 ]
 
 

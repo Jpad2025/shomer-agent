@@ -4,6 +4,33 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.17.0 — 2026-09-06
+
+- **Security+ (SY0-701) completo — cuarto certificado del método exhaustivo (de 356 a 389
+  entradas).** Descargado y leído el documento oficial de objetivos (v5.0, 2023), los 5 dominios
+  cubiertos: 1.0 General Security Concepts (12%), 2.0 Threats/Vulnerabilities/Mitigations (22%),
+  3.0 Security Architecture (18%), 4.0 Security Operations (28%), 5.0 Security Program
+  Management and Oversight (20%). Ya existía contenido curado de Security+ desde v1.13.0 (8
+  referencias, solo en `seguridad_arquitectura`) -- esta entrada agrega los fundamentos oficiales
+  que faltaban, no reemplaza lo anterior.
+  - Nuevos dominios: `criptografia` (PKI, simétrico/asimétrico, hashing/salting/key stretching),
+    `gestion_riesgo` (SLE/ARO/ALE, estrategias transferir/aceptar/evitar/mitigar),
+    `gobernanza_cumplimiento` (acuerdos SLA/MOU/MSA/NDA/BPA, tipos de pentest por entorno).
+  - Ampliado: `seguridad` (categorías/tipos de controles, Zero Trust plano de control/datos,
+    honeypot/honeynet/honeyfile/honeytoken, actores de amenaza y motivaciones, spraying vs
+    fuerza bruta), `seguridad_endpoint` (taxonomía completa de malware -- worm vs virus, logic
+    bomb, bloatware -- objetivos de hardening por tipo de dispositivo), `gestion_vulnerabilidades`
+    (condiciones de carrera TOC/TOU, VM escape, ciclo completo identificación→validación),
+    `siem_analisis` (impossible travel, concurrent session, out-of-cycle logging),
+    `seguridad_arquitectura` (jump server/proxy/IDS vs IPS, tipos de firewall Layer4/WAF/NGFW/UTM,
+    clasificación y estados de datos), `servidor_recuperacion_desastres` (sitios hot/warm/cold),
+    `control_acceso` (MAC/DAC/RBAC/ABAC, PAM just-in-time/vaulting), `respuesta_incidentes` (las
+    7 fases formales del proceso, forense digital/legal hold/e-discovery).
+  - Total: 389 entradas (158 reglas + 231 teoría). Probado (seed + idempotencia + matching de
+    dominios + format_for_prompt) contra copia aislada de la base real antes de desplegar.
+    Pendiente en el mismo método: Server+, CySA+ -- su contenido actual (desde v1.13.0) es
+    curado, no exhaustivo, y necesita su propio documento oficial de objetivos.
+
 ## 1.16.0 — 2026-09-06
 
 - **A+ Core 2 (220-1202) completo — tercer certificado del método exhaustivo (de 315 a 356
