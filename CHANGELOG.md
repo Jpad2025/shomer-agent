@@ -4,6 +4,28 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.9.0 — 2026-09-06
+
+- **Expansión real de escala de la base de conocimiento — corrección sobre 1.8.0.** Juan Pablo
+  (ingeniero de sistemas, 8 meses invertidos en el proyecto) marcó que 90 entradas seguía sin
+  servir — confirmó explícitamente que el problema era de **escala**, no de forma: "necesito una
+  cantidad de conocimiento real de nivel profesional, sin límite artificial de cuántas reglas
+  escribo a mano". Se dedicó una sesión de trabajo extensa, sin acortar el alcance, a expandir:
+  - **De 90 a 180 entradas** (85 reglas de diagnóstico + 95 conceptos de teoría).
+  - **De 13 a 25 dominios distintos**, agregando los que faltaban por completo: seguridad de
+    endpoints (EDR vs antivirus, ransomware/backups offline), direccionamiento IP/subnetting
+    (incl. IPv6 básico), energía eléctrica en profundidad (tipos de UPS, transferencia a planta,
+    factor de potencia), backup/recuperación (3-2-1, incremental vs diferencial, prueba de
+    restauración), voz IP (SIP/RTP, códecs), cámaras/CCTV (ONVIF, ancho de banda), control de
+    acceso (modo standalone, FRR/FAR), bases de datos (bloqueos, índices), Linux (systemd,
+    permisos), cloud (SaaS/IaaS/PaaS, latencia), monitoreo/observabilidad (SNMP, falsos
+    positivos/negativos), y ampliación real de PMS/hospitalidad (channel manager, llaves
+    electrónicas, revenue management) y metodología (documentación, escalamiento, comunicación).
+  - Sigue siendo, honestamente, una fracción de lo que sería una base "profesional completa"
+    (que en la industria real son miles de artículos) — esto es un paso real y grande, no el
+    final del camino. Seguirá creciendo en próximas sesiones de trabajo.
+  - Probado (siembra + idempotencia) contra copia aislada antes de desplegar.
+
 ## 1.8.0 — 2026-09-05
 
 - **`conocimiento_teoria` (nueva tabla) — corrección de escala sobre 1.7.0.** Juan Pablo señaló,

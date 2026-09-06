@@ -727,6 +727,775 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "separado — mezclar varias soluciones a la vez contamina el aprendizaje futuro."
          ),
          fuente="Metodología CompTIA de 7 pasos"),
+
+    # ══════════════════════ CABLEADO — AMPLIACIÓN ══════════════════════
+    dict(dominio="cableado", concepto="T568A vs T568B y por qué casi nunca importa hoy",
+         explicacion=(
+             "Son dos esquemas de asignación de colores de pares al conector RJ45 — "
+             "eléctricamente equivalentes, solo cambia el orden de 2 pares. Lo único que "
+             "importa es usar el MISMO esquema en ambos extremos de un cable derecho "
+             "(straight-through). Los cables cruzados (crossover) ya casi no se necesitan "
+             "porque Auto-MDIX detecta y corrige automáticamente en casi todo equipo moderno."
+         ),
+         relevancia_diagnostica=(
+             "Un enlace que no sube nunca por 'cable cruzado vs derecho' en equipo moderno es "
+             "poco probable — casi siempre el problema real es otro (categoría, terminación, "
+             "daño físico), no el esquema de colores."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="cableado", concepto="Modos PoE A y B (spare pairs vs data pairs)",
+         explicacion=(
+             "El PoE puede viajar sobre los mismos pares que llevan datos (modo B, común en "
+             "Gigabit donde los 4 pares llevan datos) o sobre los pares 'libres' en cableado "
+             "10/100 (modo A). Si un inyector PoE y un switch/AP usan modos distintos de forma "
+             "incompatible, el equipo simplemente no recibe energía aunque el cable esté "
+             "perfecto."
+         ),
+         relevancia_diagnostica=(
+             "Mezclar un inyector PoE de una marca con un AP de otra marca a veces no entrega "
+             "energía por incompatibilidad de modo — antes de sospechar del cable, confirmar "
+             "que ambos extremos usan el mismo estándar/modo PoE."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="cableado", concepto="Certificación vs verificación de cable",
+         explicacion=(
+             "'Verificar' un cable (con un tester barato) solo confirma continuidad — que cada "
+             "pin llega al otro extremo. 'Certificar' (con equipo especializado tipo Fluke) "
+             "mide parámetros reales de transmisión: atenuación, NEXT, return loss, retardo de "
+             "propagación — y compara contra el estándar de la categoría declarada."
+         ),
+         relevancia_diagnostica=(
+             "Un cable que 'pasa' con un tester barato puede seguir teniendo errores bajo carga "
+             "real — un tester de continuidad NO prueba si el cable de verdad cumple su "
+             "categoría, solo si los 8 pines conducen electricidad."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="cableado", concepto="Puesta a tierra en equipos exteriores",
+         explicacion=(
+             "APs, cámaras y switches en exteriores (o cableado que corre por techo/exterior de "
+             "un edificio) son vulnerables a inducción de descargas eléctricas cercanas, incluso "
+             "sin impacto directo — un protector de sobretensión (surge protector) puesto a "
+             "tierra correctamente en la línea de datos/PoE reduce ese riesgo real."
+         ),
+         relevancia_diagnostica=(
+             "Equipos exteriores que fallan repetidamente después de tormentas eléctricas, sin "
+             "otra explicación, señalan falta de protección contra sobretensión — no es una "
+             "casualidad ni una falla de fábrica repetida."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ SWITCHING — AMPLIACIÓN ══════════════════════
+    dict(dominio="switching", concepto="EtherChannel/LACP: modo activo vs pasivo",
+         explicacion=(
+             "En modo activo, el puerto envía paquetes LACP para negociar la agregación "
+             "proactivamente. En modo pasivo, espera a que el otro extremo inicie la "
+             "negociación. Si AMBOS extremos quedan en pasivo, nunca se negocia nada y el "
+             "enlace agregado simplemente no se forma, aunque los cables y puertos individuales "
+             "estén perfectamente arriba."
+         ),
+         relevancia_diagnostica=(
+             "Un EtherChannel/LACP que 'no sube' con todos los cables físicamente bien "
+             "conectados — revisar que al menos un extremo esté en modo activo."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", concepto="Tablas MAC y su límite (CAM table overflow)",
+         explicacion=(
+             "Un switch aprende qué MAC está en qué puerto y guarda esa tabla en memoria "
+             "limitada (CAM table). Si se satura (por un ataque, o por miles de dispositivos "
+             "virtuales/contenedores mal configurados generando MACs), el switch puede empezar "
+             "a comportarse como un hub, inundando tráfico por todos los puertos en vez de "
+             "dirigirlo — un problema de seguridad y de rendimiento a la vez."
+         ),
+         relevancia_diagnostica=(
+             "Tráfico visible en puertos donde no debería estar, junto con lentitud general, "
+             "puede ser saturación de la tabla MAC — no asumir automáticamente que es un "
+             "problema de cableado o de VLAN."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", concepto="Jumbo frames y cuándo tienen sentido",
+         explicacion=(
+             "Ethernet estándar usa tramas de hasta 1500 bytes; 'jumbo frames' permiten hasta "
+             "9000 bytes, reduciendo la sobrecarga de procesamiento por byte transmitido — útil "
+             "en tráfico de almacenamiento (iSCSI, backups) de alto volumen, pero TODO el "
+             "camino (switches, NICs) debe soportarlo consistentemente o aparecen "
+             "fragmentaciones y caídas de rendimiento peores que sin jumbo frames."
+         ),
+         relevancia_diagnostica=(
+             "Activar jumbo frames en un solo tramo de la red, sin verificar que todo el "
+             "camino lo soporte, puede EMPEORAR el rendimiento en vez de mejorarlo — es una "
+             "optimización que requiere consistencia total, no parcial."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", concepto="Puertos err-disabled y sus causas típicas",
+         explicacion=(
+             "Un puerto puede auto-apagarse (err-disabled) por varias razones distintas: BPDU "
+             "guard (spanning tree), port security (MAC no autorizada), storm control "
+             "(tráfico anómalo), o un error físico repetido — cada causa requiere una solución "
+             "distinta y el log del switch dice exactamente cuál fue, no hay que adivinar."
+         ),
+         relevancia_diagnostica=(
+             "Antes de simplemente 'reactivar' un puerto err-disabled, revisar el log del "
+             "switch para saber POR QUÉ se apagó — reactivarlo sin resolver la causa real hace "
+             "que se vuelva a apagar."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", concepto="Private VLANs para aislar equipos en la misma subred",
+         explicacion=(
+             "Una VLAN privada permite que varios equipos compartan la misma subred IP pero NO "
+             "puedan verse entre sí directamente en capa 2 (solo hablan con un puerto "
+             "'promiscuo', típicamente el gateway) — útil para redes de huéspedes donde cada "
+             "habitación no debería ver el tráfico de la habitación vecina aunque compartan "
+             "rango de IP."
+         ),
+         relevancia_diagnostica=(
+             "Si dispositivos de huéspedes distintos NO deberían verse entre sí mismos por "
+             "seguridad, una VLAN normal no lo garantiza — hace falta private VLAN o "
+             "aislamiento de cliente (client isolation) específico en el AP/switch."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ WAN — AMPLIACIÓN ══════════════════════
+    dict(dominio="wan", concepto="BGP y por qué casi ningún sitio pequeño lo necesita",
+         explicacion=(
+             "BGP es el protocolo que decide rutas ENTRE proveedores de internet distintos a "
+             "escala global — solo tiene sentido si una organización tiene su propio bloque de "
+             "IPs públicas y múltiples conexiones a distintos ISPs anunciando esas rutas ella "
+             "misma. Un sitio con 1-2 conexiones a internet normales usa simplemente rutas "
+             "estáticas o failover simple, BGP sería sobre-ingeniería."
+         ),
+         relevancia_diagnostica=(
+             "Si alguien propone BGP para un sitio con un router doméstico/empresarial normal "
+             "y 1-2 ISPs, es una solución desproporcionada al problema real — el failover "
+             "simple por rutas estáticas con detección de caída (BFD o similar) resuelve lo "
+             "mismo con mucha menos complejidad."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wan", concepto="BFD: detección rápida de caída de enlace",
+         explicacion=(
+             "Sin BFD, un router puede tardar decenas de segundos en darse cuenta de que un "
+             "enlace cayó (esperando varios 'hellos' perdidos del protocolo de enrutamiento). "
+             "BFD envía verificaciones mucho más frecuentes (cada pocos milisegundos) "
+             "dedicadas solo a detectar caídas, permitiendo failover en menos de un segundo."
+         ),
+         relevancia_diagnostica=(
+             "Un failover WAN que tarda 20-30 segundos en activarse, con cortes de servicio "
+             "notorios cada vez, es candidato a mejorar con BFD si el hardware lo soporta — no "
+             "es 'así de lento por diseño', se puede acelerar mucho."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wan", concepto="CGNAT y por qué algunos servicios no funcionan bien detrás de él",
+         explicacion=(
+             "Muchos proveedores de internet, ante la escasez de IPv4, ponen a sus clientes "
+             "detrás de Carrier-Grade NAT — varios clientes finales comparten una sola IP "
+             "pública del proveedor. Esto rompe el 'port forwarding' tradicional (no hay una "
+             "IP pública propia que exponer) y puede causar problemas con VPNs entrantes, "
+             "cámaras accedidas remotamente, o servidores que necesitan ser alcanzables desde "
+             "afuera."
+         ),
+         relevancia_diagnostica=(
+             "'No puedo abrir un puerto en mi router para acceder remotamente' cuando la "
+             "configuración parece correcta — verificar primero si el ISP está entregando una "
+             "IP pública real o una IP privada de CGNAT (rango 100.64.0.0/10 es la señal "
+             "clásica)."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wan", concepto="Latencia vs jitter vs pérdida de paquetes: tres problemas distintos",
+         explicacion=(
+             "Latencia es el tiempo que tarda un paquete en llegar (afecta la sensación de "
+             "'lag'). Jitter es la VARIACIÓN de esa latencia entre paquetes (el enemigo real de "
+             "voz/video, que necesita ritmo constante, no solo velocidad). Pérdida de paquetes "
+             "es cuando simplemente no llegan. Un enlace puede tener latencia baja pero jitter "
+             "alto y sonar entrecortado en llamadas, sin que 'la velocidad' explique el "
+             "problema."
+         ),
+         relevancia_diagnostica=(
+             "Llamadas de voz que suenan entrecortadas en un enlace con buena velocidad "
+             "medida — medir jitter específicamente, no solo velocidad de descarga/subida, "
+             "que no lo captura."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ DNS / DHCP EN PROFUNDIDAD ══════════════════════
+    dict(dominio="dns_dhcp", concepto="Cómo funciona una resolución DNS completa",
+         explicacion=(
+             "Un cliente pregunta primero a su caché local, luego al DNS configurado "
+             "(recursivo) — ese servidor recursivo, si no tiene la respuesta cacheada, pregunta "
+             "a los servidores raíz, luego a los del dominio (TLD), y finalmente al servidor "
+             "autoritativo del dominio específico. Cada salto puede fallar o estar cacheado con "
+             "datos viejos (TTL) de forma independiente."
+         ),
+         relevancia_diagnostica=(
+             "'El sitio cambió de servidor pero algunos usuarios siguen viendo el viejo' es "
+             "casi siempre caché DNS en algún punto de esa cadena con TTL alto que aún no "
+             "expiró — no es un problema del servidor nuevo, es tiempo de propagación."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="dns_dhcp", concepto="DHCP: el proceso DORA y por qué importa el orden",
+         explicacion=(
+             "Discover (el cliente pregunta si hay servidor DHCP) → Offer (el servidor ofrece "
+             "una IP) → Request (el cliente la pide formalmente, incluso a veces confirmando "
+             "con broadcast para que otros servidores DHCP compitiendo sepan que perdieron) → "
+             "Acknowledge (confirmación final). Si hay DOS servidores DHCP respondiendo "
+             "Discover, el cliente toma la PRIMERA oferta que le llegue, no necesariamente la "
+             "del servidor 'correcto'."
+         ),
+         relevancia_diagnostica=(
+             "En una red con un DHCP no autorizado (rogue), no es que 'a veces' un dispositivo "
+             "se conecte al malo — es prácticamente aleatorio cuál oferta gana, por eso el "
+             "síntoma es inconsistente entre dispositivos, lo que confunde el diagnóstico."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="dns_dhcp", concepto="Reservas DHCP vs IP estática configurada en el equipo",
+         explicacion=(
+             "Una reserva DHCP asigna siempre la misma IP a una MAC específica pero SIGUE "
+             "dependiendo de que el servidor DHCP esté vivo. Una IP estática configurada "
+             "directamente en el equipo no depende de nada externo, pero es fácil de duplicar "
+             "por error humano (dos equipos con la misma IP estática) generando conflictos "
+             "intermitentes y confusos."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo que 'a veces' pierde conectividad de forma extraña, sin patrón, en una "
+             "red con IPs estáticas mezcladas con DHCP, revisar conflicto de IP duplicada — es "
+             "más común de lo que parece cuando hay configuración manual dispersa."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ WIFI — AMPLIACIÓN ══════════════════════
+    dict(dominio="wifi", concepto="EIRP, potencia de transmisión y ganancia de antena",
+         explicacion=(
+             "La potencia efectiva radiada (EIRP) combina la potencia de salida del "
+             "transmisor MÁS la ganancia de la antena — subir la potencia de transmisión no "
+             "sirve de nada si la antena tiene poca ganancia, y hay límites regulatorios "
+             "máximos de EIRP que no se pueden exceder legalmente, distintos por banda y país."
+         ),
+         relevancia_diagnostica=(
+             "'Subir la potencia' del AP al máximo no siempre mejora la cobertura real — puede "
+             "generar más interferencia hacia zonas vecinas sin mejorar la señal donde se "
+             "necesita, especialmente si el problema real es obstáculos físicos, no potencia."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", concepto="Zona de Fresnel en enlaces punto a punto exteriores",
+         explicacion=(
+             "Un enlace inalámbrico direccional entre dos puntos (ej. dos edificios) no solo "
+             "necesita línea de vista directa — necesita una zona elíptica libre de obstáculos "
+             "alrededor de esa línea (zona de Fresnel). Un obstáculo que no bloquea la vista "
+             "directa pero invade esa zona (un árbol creciendo, una construcción nueva) puede "
+             "degradar el enlace gradualmente."
+         ),
+         relevancia_diagnostica=(
+             "Un enlace punto a punto que se degrada progresivamente durante meses sin ningún "
+             "cambio de configuración — sospechar de crecimiento vegetal o construcción nueva "
+             "invadiendo la zona de Fresnel, no de una falla de hardware."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", concepto="WPA2 vs WPA3: qué cambia realmente",
+         explicacion=(
+             "WPA2 usa un apretón de manos (4-way handshake) vulnerable a ataques de "
+             "diccionario offline si se captura ese handshake. WPA3 usa SAE (Simultaneous "
+             "Authentication of Equals), que resiste ataques de diccionario offline incluso "
+             "con contraseñas débiles, y ofrece cifrado individualizado por sesión incluso en "
+             "redes abiertas (Enhanced Open)."
+         ),
+         relevancia_diagnostica=(
+             "Dispositivos viejos que no logran conectarse a una red configurada solo en "
+             "WPA3 — es un problema real de compatibilidad, no una falla; el modo mixto "
+             "WPA2/WPA3 existe justamente para esa transición."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", concepto="Portal cautivo: cómo funciona y por qué a veces no aparece",
+         explicacion=(
+             "Un portal cautivo intercepta las primeras peticiones HTTP del dispositivo y lo "
+             "redirige a una página de login/aceptación — depende de que el sistema operativo "
+             "del cliente dispare su propia detección de 'red con portal' (CNA — Captive "
+             "Network Assistant) haciendo una petición de prueba a una URL conocida. Si esa "
+             "detección falla o el dispositivo usa DNS-over-HTTPS que evita la intercepción, el "
+             "portal simplemente no aparece."
+         ),
+         relevancia_diagnostica=(
+             "'El portal de WiFi no me aparece' en un dispositivo específico, mientras a otros "
+             "sí, casi siempre es una particularidad de detección de ESE sistema operativo o "
+             "una configuración de DNS-over-HTTPS que evade el mecanismo — no un fallo general "
+             "del portal."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", concepto="Antenas omnidireccionales vs direccionales/sectoriales",
+         explicacion=(
+             "Una antena omnidireccional distribuye la señal por igual en 360° pero con menos "
+             "alcance por dirección — ideal para cobertura general en una habitación/pasillo. "
+             "Una antena direccional o sectorial concentra la energía en un ángulo específico, "
+             "logrando mucho más alcance en esa dirección — ideal para cubrir un salón alargado "
+             "o un patio específico desde un punto fijo."
+         ),
+         relevancia_diagnostica=(
+             "Cobertura pobre en un espacio alargado (pasillo largo, salón rectangular) con un "
+             "AP omnidireccional en el centro puede resolverse mejor con antenas sectoriales "
+             "orientadas, no necesariamente con más APs omnidireccionales."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ ALMACENAMIENTO Y BACKUP ══════════════════════
+    dict(dominio="backup", concepto="Backup completo, incremental y diferencial",
+         explicacion=(
+             "Completo copia TODO cada vez (lento, mucho espacio, restauración simple — un solo "
+             "archivo). Incremental copia solo lo que cambió desde el ÚLTIMO backup (rápido, "
+             "poco espacio, pero restaurar requiere el completo MÁS todos los incrementales en "
+             "orden). Diferencial copia lo que cambió desde el ÚLTIMO COMPLETO (tamaño "
+             "intermedio, restaurar requiere solo el completo más el último diferencial)."
+         ),
+         relevancia_diagnostica=(
+             "Una cadena de backups incrementales larga sin un completo reciente es frágil — "
+             "si UN incremental de la cadena se corrompe, todos los posteriores a él quedan "
+             "inutilizables para restaurar. Revisar la frecuencia de backups completos, no "
+             "solo si 'los backups corren'."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="backup", concepto="La regla 3-2-1 de respaldo",
+         explicacion=(
+             "3 copias de los datos, en 2 tipos de medio distintos, con 1 copia fuera del "
+             "sitio físico (offsite) — el objetivo es que ningún evento único (robo, incendio, "
+             "falla de un solo disco) pueda destruir todas las copias a la vez."
+         ),
+         relevancia_diagnostica=(
+             "Backups que solo existen en el mismo servidor o el mismo rack que los datos "
+             "originales no cumplen ninguna función real ante un incendio, robo o falla mayor "
+             "del sitio — 'tener backup' no es suficiente si está en el mismo lugar físico."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="backup", concepto="Probar la restauración, no solo confirmar que el backup corrió",
+         explicacion=(
+             "Un backup que 'terminó sin error' no garantiza que sea restaurable — puede haber "
+             "corrupción silenciosa, archivos bloqueados que se saltaron sin marcar error "
+             "claro, o un formato incompatible con la versión de recuperación disponible. La "
+             "única prueba real es restaurar de verdad, al menos periódicamente."
+         ),
+         relevancia_diagnostica=(
+             "Confiar en 'el backup dice que corrió bien' sin nunca haber restaurado un archivo "
+             "de prueba es un riesgo invisible hasta el día que se necesita de verdad — "
+             "recomendar pruebas de restauración periódicas, no solo monitoreo de ejecución."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ══════════════════════ VOZ IP Y TELEFONÍA (relevante en hoteles) ══════════════════════
+    dict(dominio="voz_ip", concepto="SIP: cómo se establece una llamada VoIP",
+         explicacion=(
+             "SIP (Session Initiation Protocol) negocia el INICIO de la llamada (quién llama, "
+             "a quién, qué códec usar) pero el audio en sí generalmente viaja por RTP, un "
+             "protocolo separado — esto significa que la señalización puede funcionar "
+             "perfecto (el teléfono 'timbra') mientras el audio falla por completo si RTP está "
+             "bloqueado en el firewall, dando la falsa impresión de que 'la llamada conecta "
+             "pero no se escucha nada'."
+         ),
+         relevancia_diagnostica=(
+             "'La llamada timbra y conecta pero no hay audio en ningún sentido' es la firma "
+             "clásica de RTP bloqueado (firewall, NAT mal configurado) mientras SIP sí pasa — "
+             "dos protocolos distintos, dos posibles puntos de falla independientes."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="voz_ip", concepto="Códecs de voz y su impacto en ancho de banda vs calidad",
+         explicacion=(
+             "G.711 no comprime (mejor calidad, ~64-87kbps por llamada) — ideal con ancho de "
+             "banda de sobra. G.729 comprime mucho más (~8kbps) a costa de algo de calidad y "
+             "más uso de CPU para codificar/decodificar — preferible en enlaces WAN limitados. "
+             "Elegir el códec incorrecto para el enlace disponible es una causa común de mala "
+             "calidad de llamada que no tiene que ver con 'la red estar mal'."
+         ),
+         relevancia_diagnostica=(
+             "Llamadas de mala calidad en un enlace WAN limitado usando G.711 (sin comprimir) "
+             "para muchas llamadas simultáneas — el enlace se satura antes de lo esperado; "
+             "cambiar de códec puede resolver sin necesitar más ancho de banda contratado."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ CÁMARAS IP / CCTV ══════════════════════
+    dict(dominio="camaras_cctv", concepto="Ancho de banda real de un sistema de cámaras IP",
+         explicacion=(
+             "El consumo de ancho de banda de una cámara IP depende de resolución, tasa de "
+             "cuadros, codec (H.264 vs H.265 — este último reduce el tamaño a la mitad "
+             "aproximadamente para la misma calidad) y si usa tasa de bits constante (CBR, "
+             "predecible) o variable (VBR, más eficiente pero con picos). Un sistema con "
+             "muchas cámaras 4K en CBR puede saturar un enlace sin que ningún equipo esté "
+             "'fallando'."
+         ),
+         relevancia_diagnostica=(
+             "Grabación con cuadros perdidos o video entrecortado en el NVR, con las cámaras "
+             "individualmente respondiendo bien, sugiere saturación de ancho de banda agregado "
+             "hacia el NVR — revisar el consumo total, no cámara por cámara."
+         ),
+         fuente="Conocimiento técnico de sistemas CCTV/vigilancia IP"),
+    dict(dominio="camaras_cctv", concepto="ONVIF: el estándar que permite mezclar marcas de cámaras",
+         explicacion=(
+             "ONVIF es un estándar abierto que define cómo un NVR/VMS descubre y controla "
+             "cámaras de marcas distintas — pero el cumplimiento del estándar varía entre "
+             "fabricantes ('perfiles' ONVIF distintos: S para video básico, T para funciones "
+             "avanzadas), por lo que dos equipos 'compatibles con ONVIF' no siempre funcionan "
+             "igual de bien juntos."
+         ),
+         relevancia_diagnostica=(
+             "Una cámara nueva de otra marca que se conecta al NVR pero le faltan funciones "
+             "(zoom, PTZ, analíticas) que sí tenían las cámaras originales — revisar qué "
+             "perfil ONVIF soporta cada una, no asumir compatibilidad total solo por decir "
+             "'ONVIF' en la caja."
+         ),
+         fuente="Conocimiento técnico de sistemas CCTV/vigilancia IP"),
+
+    # ══════════════════════ CONTROL DE ACCESO / BIOMÉTRICOS ══════════════════════
+    dict(dominio="control_acceso", concepto="Modo standalone vs conectado a servidor central",
+         explicacion=(
+             "Un control de acceso biométrico/de tarjetas puede operar en modo 'standalone' "
+             "(decide localmente si abrir, con su propia lista de usuarios) o conectado "
+             "permanentemente a un servidor central que autoriza cada evento — el modo "
+             "standalone sigue funcionando aunque la red caiga, pero los cambios de permisos "
+             "(dar de baja a un empleado) no se reflejan hasta que sincroniza de nuevo."
+         ),
+         relevancia_diagnostica=(
+             "Un usuario dado de baja en el sistema central que TODAVÍA puede entrar por un "
+             "lector específico — revisar si ese lector está en modo standalone sin haber "
+             "sincronizado el cambio, es un riesgo de seguridad real, no solo un capricho del "
+             "sistema."
+         ),
+         fuente="Conocimiento técnico de sistemas de control de acceso"),
+    dict(dominio="control_acceso", concepto="Falsos rechazos (FRR) vs falsos aceptos (FAR) en biometría",
+         explicacion=(
+             "Todo sistema biométrico (huella, facial) tiene un balance configurable entre "
+             "tasa de falso rechazo (rechazar a alguien autorizado — molesto pero seguro) y "
+             "tasa de falso acepto (aceptar a alguien no autorizado — inseguro). Ajustar la "
+             "sensibilidad para reducir rechazos molestos aumenta, inevitablemente, el riesgo "
+             "de aceptar a quien no debería."
+         ),
+         relevancia_diagnostica=(
+             "'El biométrico rechaza mucho a la gente autorizada' — bajar la sensibilidad "
+             "resuelve la molestia pero es una decisión de seguridad, no solo un ajuste técnico "
+             "neutro; debe comunicarse como tal, no aplicarse en silencio."
+         ),
+         fuente="Conocimiento técnico de sistemas de control de acceso"),
+
+    # ══════════════════════ BASES DE DATOS (soporte a cualquier PMS/POS/ERP) ══════════════════════
+    dict(dominio="bases_datos", concepto="Bloqueos (locks) y por qué 'todo se pone lento a la vez'",
+         explicacion=(
+             "Cuando muchas estaciones escriben a la misma tabla de una base de datos al mismo "
+             "tiempo (ej. check-ins simultáneos en recepción), el motor de base de datos puede "
+             "bloquear filas o tablas completas para mantener consistencia — si un bloqueo se "
+             "mantiene más de lo esperado (una transacción lenta o mal cerrada), TODAS las "
+             "demás estaciones que necesitan esa misma fila/tabla se congelan esperando, "
+             "aunque la red y los servidores individuales estén perfectamente sanos."
+         ),
+         relevancia_diagnostica=(
+             "Varias estaciones de trabajo distintas congeladas al mismo tiempo, todas usando "
+             "la misma aplicación de base de datos, con la red funcionando bien — sospechar de "
+             "un bloqueo de base de datos antes que de un problema de red o de cada estación "
+             "individual."
+         ),
+         fuente="Buenas prácticas de administración de bases de datos, genérico"),
+    dict(dominio="bases_datos", concepto="Índices y por qué una base de datos se pone lenta con el tiempo",
+         explicacion=(
+             "A medida que una tabla crece (años de transacciones de huéspedes, por ejemplo), "
+             "consultas que antes eran instantáneas se vuelven lentas si no hay índices "
+             "adecuados en las columnas que se consultan frecuentemente — el motor tiene que "
+             "revisar cada vez más filas una por una en vez de saltar directo a la que "
+             "necesita."
+         ),
+         relevancia_diagnostica=(
+             "Un sistema que 'antes era rápido y con el tiempo se puso lento', sin ningún "
+             "cambio de hardware ni de red, es un patrón clásico de crecimiento de datos sin "
+             "mantenimiento de índices — no siempre requiere hardware nuevo, a veces requiere "
+             "mantenimiento de la base de datos."
+         ),
+         fuente="Buenas prácticas de administración de bases de datos, genérico"),
+
+    # ══════════════════════ LINUX (muchos servidores/appliances corren sobre esto) ══════════════════════
+    dict(dominio="linux", concepto="systemd: por qué un servicio 'no arranca solo' tras reiniciar",
+         explicacion=(
+             "En sistemas Linux modernos, systemd gestiona qué servicios arrancan "
+             "automáticamente al iniciar el sistema — un servicio puede estar instalado y "
+             "funcionando perfecto, pero si nunca se hizo 'enable' (solo se inició "
+             "manualmente una vez), sobrevive hasta el próximo reinicio y luego simplemente no "
+             "vuelve a arrancar solo, sin ningún mensaje de error visible."
+         ),
+         relevancia_diagnostica=(
+             "Un servicio que funcionaba bien y 'desapareció' después de un reinicio o corte "
+             "de energía (no de una falla activa) — verificar si el servicio está habilitado "
+             "para arranque automático, no solo si el ejecutable/configuración está bien."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"),
+    dict(dominio="linux", concepto="Permisos y por qué 'funciona con sudo pero no sin él'",
+         explicacion=(
+             "Un proceso que corre como un usuario específico (no root) solo puede acceder a "
+             "archivos/recursos que ese usuario tiene permitido — un servicio que se probó "
+             "manualmente con privilegios elevados (sudo/root) puede parecer que funciona, pero "
+             "fallar silenciosamente cuando corre automáticamente con permisos normales, por no "
+             "tener acceso a un archivo o puerto específico."
+         ),
+         relevancia_diagnostica=(
+             "'Funciona cuando yo lo prueba a mano pero falla en automático' es casi siempre "
+             "una diferencia de permisos/usuario entre la prueba manual y la ejecución "
+             "automática real — no un problema del código o la configuración en sí."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"),
+
+    # ══════════════════════ NUBE / CLOUD EN PROFUNDIDAD ══════════════════════
+    dict(dominio="cloud", concepto="SaaS vs IaaS vs PaaS: quién es responsable de qué",
+         explicacion=(
+             "En SaaS (ej. correo en la nube) el proveedor gestiona todo, el cliente solo usa "
+             "la aplicación. En IaaS (servidores virtuales en la nube) el proveedor da la "
+             "infraestructura, el cliente administra sistema operativo y aplicaciones. En PaaS "
+             "el proveedor da una plataforma de ejecución, el cliente solo pone su aplicación. "
+             "Cada modelo cambia radicalmente QUIÉN debe resolver un problema dado."
+         ),
+         relevancia_diagnostica=(
+             "Antes de intentar 'arreglar' algo en un servicio en la nube, identificar el "
+             "modelo (SaaS/IaaS/PaaS) — muchos problemas simplemente no son resolubles del "
+             "lado del cliente y requieren abrir un ticket con el proveedor en vez de seguir "
+             "invirtiendo tiempo local."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="cloud", concepto="Latencia hacia servicios en la nube y su impacto real",
+         explicacion=(
+             "Un servicio en la nube alojado lejos geográficamente introduce latencia base "
+             "que ninguna optimización local puede eliminar — aplicaciones diseñadas asumiendo "
+             "baja latencia (algunas integraciones síncronas) pueden sentirse 'lentas' aunque "
+             "el ancho de banda disponible sea de sobra, porque el problema es el tiempo de "
+             "viaje, no la capacidad."
+         ),
+         relevancia_diagnostica=(
+             "Una aplicación en la nube que se siente lenta pese a tener buen ancho de banda "
+             "medido — medir latencia (RTT) hacia el servicio específico, no solo velocidad "
+             "de descarga genérica."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ══════════════════════ MONITOREO Y OBSERVABILIDAD ══════════════════════
+    dict(dominio="monitoreo", concepto="SNMP: qué es realmente y sus versiones",
+         explicacion=(
+             "SNMP permite a un sistema de monitoreo CONSULTAR (polling) el estado de un "
+             "equipo de red, o que el equipo AVISE proactivamente (traps) ante un evento. "
+             "SNMPv1/v2c usan una 'comunidad' como contraseña compartida en texto plano (poco "
+             "seguro); SNMPv3 agrega autenticación y cifrado reales — usar v2c en una red "
+             "insegura expone esa 'contraseña' a cualquiera que capture tráfico."
+         ),
+         relevancia_diagnostica=(
+             "Usar la comunidad SNMP 'public' (el valor por defecto de fábrica) en producción "
+             "es un hallazgo de seguridad real, no solo un detalle técnico — cualquiera en la "
+             "red podría consultar (y en algunos casos hasta modificar) la configuración del "
+             "equipo."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="monitoreo", concepto="Falso positivo vs falso negativo en alertas de monitoreo",
+         explicacion=(
+             "Un falso positivo avisa de un problema que no existe (ruido, erosiona la "
+             "confianza en el sistema con el tiempo). Un falso negativo NO avisa de un "
+             "problema real (silencioso, mucho más peligroso porque nadie actúa). Ajustar "
+             "umbrales para eliminar falsos positivos casi siempre aumenta el riesgo de crear "
+             "falsos negativos — es un trade-off, no una mejora gratuita."
+         ),
+         relevancia_diagnostica=(
+             "Antes de 'silenciar' una alerta que molesta, evaluar qué tan grave sería un "
+             "falso negativo en ese caso específico — subir un umbral para dejar de recibir "
+             "avisos menores puede esconder también el aviso real cuando de verdad importe."
+         ),
+         fuente="Metodología general de observabilidad de sistemas"),
+
+    # ══════════════════════ SEGURIDAD DE ENDPOINTS ══════════════════════
+    dict(dominio="seguridad_endpoint", concepto="Antivirus tradicional vs EDR (Endpoint Detection and Response)",
+         explicacion=(
+             "Un antivirus tradicional compara archivos contra firmas conocidas de malware — "
+             "no detecta amenazas nuevas (día cero) hasta que existe una firma. Un EDR "
+             "monitorea COMPORTAMIENTO (qué procesos hace qué cosas, qué conexiones abre) y "
+             "puede detectar actividad sospechosa aunque el archivo específico nunca se haya "
+             "visto antes — a cambio, requiere más recursos y puede generar más falsos "
+             "positivos que hay que triar."
+         ),
+         relevancia_diagnostica=(
+             "Un EDR bloqueando una aplicación de negocio legítima (falso positivo) es un "
+             "problema real y frecuente al desplegar EDR nuevo — antes de deshabilitarlo por "
+             "completo, crear una excepción específica para esa aplicación."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202"),
+    dict(dominio="seguridad_endpoint", concepto="Ransomware: por qué los backups offline importan más que el antivirus",
+         explicacion=(
+             "El ransomware moderno a menudo busca activamente y cifra o borra backups "
+             "conectados a la red antes de cifrar los datos principales, precisamente para "
+             "eliminar la opción de restaurar sin pagar — un backup que está permanentemente "
+             "conectado y accesible desde la misma red es vulnerable al mismo ataque que "
+             "afecta los datos originales."
+         ),
+         relevancia_diagnostica=(
+             "Backups accesibles desde cualquier equipo de la red en todo momento (sin "
+             "aislamiento, sin copia offline/inmutable) representan el mismo riesgo que no "
+             "tener backup en un escenario de ransomware real — evaluar aislamiento real, no "
+             "solo existencia del backup."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202"),
+
+    # ══════════════════════ DIRECCIONAMIENTO IP / SUBREDES ══════════════════════
+    dict(dominio="redes_ip", concepto="Máscaras de subred y por qué importan más allá de 'la IP'",
+         explicacion=(
+             "Una máscara de subred define qué parte de la IP identifica la RED y qué parte "
+             "identifica el HOST específico — dos equipos con IPs parecidas pero en subredes "
+             "distintas (según la máscara) no pueden comunicarse directamente sin pasar por un "
+             "router, aunque 'se vean cerca' numéricamente."
+         ),
+         relevancia_diagnostica=(
+             "Dos equipos que no se comunican pese a tener IPs 'parecidas' — verificar que "
+             "estén realmente en la misma subred según la máscara configurada, no asumirlo "
+             "por el parecido visual de las IPs."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="redes_ip", concepto="IPv6 básico: por qué coexiste con IPv4 y no lo reemplaza de golpe",
+         explicacion=(
+             "La mayoría de redes hoy corren en modo 'dual stack' (IPv4 e IPv6 simultáneos) — "
+             "un equipo puede tener conectividad IPv4 perfecta pero problemas específicos de "
+             "IPv6 (o viceversa) de forma independiente, ya que son protocolos separados con "
+             "su propio enrutamiento, DNS y reglas de firewall."
+         ),
+         relevancia_diagnostica=(
+             "Un problema de conectividad que aparece solo en ciertas aplicaciones (las que "
+             "prefieren IPv6 si está disponible) mientras la mayoría funciona bien — revisar "
+             "si hay un problema específico de la configuración IPv6, no solo de IPv4."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="redes_ip", concepto="Direcciones IP privadas (RFC1918) y por qué nunca deben verse en internet",
+         explicacion=(
+             "Los rangos 10.0.0.0/8, 172.16.0.0/12 y 192.168.0.0/16 están reservados para uso "
+             "interno y NO se enrutan en internet público — si una IP de estos rangos aparece "
+             "intentando comunicarse directamente hacia afuera sin pasar por NAT, hay un "
+             "problema de configuración de enrutamiento o NAT."
+         ),
+         relevancia_diagnostica=(
+             "Un dispositivo con IP privada que 'no tiene internet' mientras otros en la misma "
+             "red sí — verificar que esté usando el gateway/NAT correcto, no que le falte "
+             "una IP pública propia (nunca debería tenerla)."
+         ),
+         fuente="CompTIA Network+ N10-009"),
+
+    # ══════════════════════ ENERGÍA ELÉCTRICA (más allá del UPS básico) ══════════════════════
+    dict(dominio="energia", concepto="Tipos de UPS: standby, line-interactive y online de doble conversión",
+         explicacion=(
+             "Un UPS standby solo entra en acción cuando detecta corte (con un breve tiempo de "
+             "transferencia, milisegundos, que la mayoría de equipos tolera). Line-interactive "
+             "regula variaciones de voltaje sin cambiar a batería. Online de doble conversión "
+             "SIEMPRE alimenta desde la batería, regenerando la energía constantemente — cero "
+             "tiempo de transferencia, el estándar para equipos que no toleran NINGÚN "
+             "microcorte (servidores críticos, equipos médicos)."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor crítico con reinicios inexplicables coincidiendo con pequeñas "
+             "variaciones de voltaje de la red eléctrica (no cortes totales) puede beneficiarse "
+             "de un UPS online de doble conversión en vez de uno standby, que no reacciona a "
+             "variaciones menores."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="energia", concepto="Transferencia automática a planta eléctrica: el hueco de tiempo real",
+         explicacion=(
+             "Una planta/generador eléctrico tarda segundos (típicamente 10-30s) en encender y "
+             "estabilizarse tras un corte — el UPS es lo que cubre exactamente ESE hueco de "
+             "tiempo, no un respaldo de horas. Un UPS dimensionado solo para cubrir unos "
+             "minutos, en un sitio SIN generador, deja todo sin energía apenas se agota, sin "
+             "ningún plan de respaldo real más allá de eso."
+         ),
+         relevancia_diagnostica=(
+             "Antes de asumir que 'tenemos UPS, estamos cubiertos', verificar cuánto tiempo de "
+             "autonomía real tiene y si existe (o no) un generador detrás — son dos capas de "
+             "protección distintas con propósitos distintos."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="energia", concepto="Factor de potencia y por qué el VA de un UPS no es lo mismo que los watts reales",
+         explicacion=(
+             "Un UPS se especifica en VA (voltiamperios), pero la carga real de equipos "
+             "electrónicos se mide en watts — la relación entre ambos (factor de potencia) "
+             "varía según el tipo de carga; sobrestimar cuánta carga real soporta un UPS por "
+             "confiar solo en su rating de VA puede llevar a sobrecargarlo sin saberlo."
+         ),
+         relevancia_diagnostica=(
+             "Un UPS que se apaga o falla bajo una carga que 'en teoría' debería soportar según "
+             "su VA nominal — recalcular la carga real en watts considerando el factor de "
+             "potencia de los equipos conectados."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ══════════════════════ PMS / HOSPITALIDAD — AMPLIACIÓN ══════════════════════
+    dict(dominio="pms_integracion", concepto="Channel manager: el punto único de falla de la distribución de reservas",
+         explicacion=(
+             "Un 'channel manager' sincroniza disponibilidad y tarifas entre el PMS y "
+             "múltiples plataformas de reserva externas (OTAs) — si falla silenciosamente, el "
+             "PMS puede seguir funcionando perfecto para operación interna mientras las "
+             "plataformas externas muestran disponibilidad desactualizada, generando "
+             "sobreventas (overbooking) sin ninguna alerta visible en el día a día."
+         ),
+         relevancia_diagnostica=(
+             "Sobreventas o discrepancias de disponibilidad entre canales externos y el PMS, "
+             "sin ningún síntoma técnico visible en el sistema principal, apuntan al channel "
+             "manager como sospechoso primario, no al PMS en sí."
+         ),
+         fuente="Industria hotelera -- patrón de integración documentado"),
+    dict(dominio="pms_integracion", concepto="Sistemas de llaves electrónicas y su ventana de sincronización",
+         explicacion=(
+             "Los sistemas de llaves de habitación (RFID/tarjeta) generalmente sincronizan "
+             "periódicamente con el PMS, no en tiempo real absoluto — un check-out procesado "
+             "en el PMS puede tardar un intervalo de sincronización en reflejarse en el "
+             "sistema de llaves, permitiendo brevemente que una tarjeta vieja siga funcionando."
+         ),
+         relevancia_diagnostica=(
+             "'La tarjeta de un huésped que ya hizo check-out todavía abre la puerta' puede ser "
+             "normal dentro de la ventana de sincronización esperada, no necesariamente una "
+             "falla de seguridad — verificar el intervalo de sincronización configurado antes "
+             "de escalar como incidente grave."
+         ),
+         fuente="Industria hotelera -- patrón de integración documentado"),
+    dict(dominio="pms_integracion", concepto="Revenue management y su dependencia de datos limpios del PMS",
+         explicacion=(
+             "Los sistemas de gestión de ingresos (revenue management) que ajustan tarifas "
+             "automáticamente dependen de datos históricos y actuales limpios del PMS — errores "
+             "de integración que no se notan operativamente (una reserva mal clasificada, una "
+             "tarifa mal registrada) pueden sesgar silenciosamente las decisiones automáticas "
+             "de precios durante semanas antes de notarse."
+         ),
+         relevancia_diagnostica=(
+             "Tarifas automáticas que no tienen sentido con la demanda real observada — revisar "
+             "la calidad de los datos que alimentan el sistema de revenue management, no "
+             "asumir que el algoritmo está mal calibrado."
+         ),
+         fuente="Industria hotelera -- patrón de integración documentado"),
+
+    # ══════════════════════ METODOLOGÍA — AMPLIACIÓN ══════════════════════
+    dict(dominio="metodologia", concepto="Documentar no es opcional: por qué el paso 7 de CompTIA existe",
+         explicacion=(
+             "Documentar qué se probó, qué funcionó y qué no, no es burocracia — es lo que "
+             "convierte un incidente resuelto en conocimiento reutilizable la próxima vez que "
+             "pase algo parecido. Sin documentación, cada técnico reinicia el proceso de "
+             "diagnóstico desde cero aunque el mismo problema ya se haya resuelto antes."
+         ),
+         relevancia_diagnostica=(
+             "Un problema recurrente que cada vez se diagnostica 'desde cero' pese a haberse "
+             "resuelto antes, señala una falla de documentación, no de conocimiento técnico — "
+             "el conocimiento existió, simplemente no quedó accesible para la próxima vez."
+         ),
+         fuente="Metodología CompTIA de 7 pasos"),
+    dict(dominio="metodologia", concepto="Cuándo escalar en vez de seguir intentando",
+         explicacion=(
+             "Un ingeniero de soporte maduro reconoce cuándo un problema excede su nivel de "
+             "acceso, conocimiento o autoridad, y escala explícitamente — seguir intentando "
+             "indefinidamente sin escalar, en un sistema crítico de negocio, prolonga el "
+             "impacto real sin garantía de resolución."
+         ),
+         relevancia_diagnostica=(
+             "Tiempo de diagnóstico prolongado sin ningún avance medible en un sistema crítico "
+             "es, en sí mismo, una señal de que debería escalarse — no es una falla admitir que "
+             "algo requiere otro nivel de soporte."
+         ),
+         fuente="Metodología general de soporte técnico por niveles (ITIL)"),
+    dict(dominio="metodologia", concepto="Comunicación con el usuario/cliente durante el diagnóstico",
+         explicacion=(
+             "Mantener informado a quien reportó el problema, con actualizaciones de progreso "
+             "aunque no haya solución aún, reduce la percepción de que 'no se está haciendo "
+             "nada' — el silencio durante un diagnóstico largo genera más fricción que el "
+             "problema técnico en sí."
+         ),
+         relevancia_diagnostica=(
+             "Quejas sobre 'falta de atención' en incidentes que sí se estaban trabajando "
+             "activamente, a menudo son un problema de comunicación, no de esfuerzo técnico "
+             "real — vale la pena distinguir ambos."
+         ),
+         fuente="Metodología general de soporte técnico (ITIL)"),
 ]
 
 
@@ -938,6 +1707,190 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="—",
          recomendacion="Dar seguimiento igual -- puede repetirse y la causa real seguir sin resolverse",
          fuente="Metodología general de diagnóstico"),
+
+    # ── Cableado y PoE (ampliación) ──
+    dict(dominio="cableado", patron="Enlace certificado Cat6a con errores solo bajo alta temperatura ambiente",
+         causa_probable="Degradación de las propiedades eléctricas del cable por calor excesivo en la ruta del tendido",
+         recomendacion="Revisar si el cable pasa cerca de fuentes de calor (techos sin aislar, ductos) antes de sospechar del equipo",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="cableado", patron="Switch PoE reinicia solo al conectar varios equipos de golpe",
+         causa_probable="Pico de demanda de energía (inrush current) al energizar varios puertos PoE simultáneamente supera la fuente",
+         recomendacion="Conectar los equipos de forma escalonada y verificar la capacidad real de la fuente del switch",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="cableado", patron="Un solo hilo de un cable multipar (ej. telefonía) con ruido, el resto bien",
+         causa_probable="Daño físico puntual o empalme defectuoso en ese par específico",
+         recomendacion="Aislar y probar par por par antes de descartar todo el cable",
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ── Switching (ampliación) ──
+    dict(dominio="switching", patron="Un puerto trunk deja de pasar UNA VLAN específica, las demás funcionan bien",
+         causa_probable="Esa VLAN fue removida de la lista permitida en el trunk en uno de los dos extremos",
+         recomendacion="Comparar la lista de VLANs permitidas en ambos extremos del trunk, no revisar solo uno",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", patron="Switch con uso de CPU alto sostenido sin tráfico aparentemente alto",
+         causa_probable="Tormenta de broadcast/multicast de bajo volumen pero constante, o un proceso de control (STP recalculando) en loop",
+         recomendacion="Revisar el detalle de qué proceso consume CPU en el switch, no solo el tráfico de datos",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="switching", patron="Dispositivos con IP fija dejan de comunicarse tras cambiar un switch por otro de otra marca",
+         causa_probable="Configuración de VLAN/trunk no migrada correctamente al nuevo equipo",
+         recomendacion="Verificar configuración de VLANs y trunk del switch nuevo contra el que reemplazó, no asumir plug-and-play",
+         fuente="Comunidad técnica -- interoperabilidad entre marcas"),
+
+    # ── WAN (ampliación) ──
+    dict(dominio="wan", patron="VPN se conecta pero las aplicaciones internas no cargan datos grandes",
+         causa_probable="Problema de MTU/fragmentación por el overhead de encapsulado VPN",
+         recomendacion="Ajustar el MTU del túnel VPN antes de sospechar de las aplicaciones o el firewall",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wan", patron="Servicio expuesto a internet no es alcanzable pese a tener el puerto abierto en el router",
+         causa_probable="El ISP entrega una IP de CGNAT, no una IP pública real",
+         recomendacion="Confirmar con el ISP si la IP asignada es pública real antes de seguir revisando configuración local",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wan", patron="Llamadas de voz entrecortadas con velocidad de internet medida como 'buena'",
+         causa_probable="Jitter alto o falta de QoS priorizando el tráfico de voz, no falta de ancho de banda",
+         recomendacion="Medir jitter específicamente y revisar configuración de QoS antes de pedir más ancho de banda al proveedor",
+         fuente="CompTIA Network+ N10-009"),
+
+    # ── WiFi (ampliación) ──
+    dict(dominio="wifi", patron="Portal cautivo no aparece en un dispositivo específico, en otros sí",
+         causa_probable="Ese sistema operativo/navegador usa DNS-over-HTTPS o falla su detección de red con portal",
+         recomendacion="Abrir manualmente un sitio HTTP simple para forzar la redirección, no asumir que el portal está roto",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", patron="Dispositivos viejos no se conectan a una red configurada recientemente",
+         causa_probable="La red quedó configurada solo en WPA3, incompatible con hardware antiguo",
+         recomendacion="Usar modo mixto WPA2/WPA3 si hay dispositivos antiguos que deben coexistir",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", patron="Cobertura débil en un pasillo largo pese a tener un AP potente en el centro",
+         causa_probable="Un AP omnidireccional no es la mejor opción geométrica para espacios alargados",
+         recomendacion="Evaluar antenas sectoriales orientadas o APs adicionales a lo largo del pasillo, no solo subir potencia",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="wifi", patron="Enlace inalámbrico punto a punto exterior se degrada progresivamente durante meses",
+         causa_probable="Crecimiento vegetal o construcción nueva invadiendo la zona de Fresnel del enlace",
+         recomendacion="Inspeccionar físicamente la línea entre ambos puntos, no solo revisar configuración",
+         fuente="CompTIA Network+ N10-009"),
+
+    # ── Hardware / almacenamiento ──
+    dict(dominio="hardware", patron="Servidor con RAID 5 lento tras la falla y reemplazo de un disco",
+         causa_probable="El proceso de reconstrucción (rebuild) de paridad consume recursos intensivamente mientras dura",
+         recomendacion="Es esperado durante la reconstrucción; monitorear que termine y no ocurra una segunda falla en ese periodo",
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="backup", patron="Backup incremental de varios días falla al intentar restaurar",
+         causa_probable="Uno de los incrementales intermedios de la cadena está corrupto o incompleto",
+         recomendacion="Verificar la integridad de toda la cadena periódicamente, no solo del backup más reciente",
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="backup", patron="Nadie puede confirmar si el backup realmente sirve para restaurar",
+         causa_probable="Nunca se ha hecho una prueba de restauración real, solo se confía en que 'el proceso terminó sin error'",
+         recomendacion="Programar pruebas de restauración periódicas, no solo monitorear que el backup corra",
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ── Voz IP ──
+    dict(dominio="voz_ip", patron="Llamada conecta y timbra pero no hay audio en ningún sentido",
+         causa_probable="Tráfico RTP bloqueado por firewall o mal manejado por NAT, mientras SIP sí pasa",
+         recomendacion="Revisar reglas de firewall/NAT específicas para el rango de puertos RTP, no solo el puerto SIP",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="voz_ip", patron="Mala calidad de llamadas solo cuando hay varias simultáneas",
+         causa_probable="El códec de voz en uso (ej. G.711 sin comprimir) satura el enlace disponible con varias llamadas a la vez",
+         recomendacion="Evaluar cambiar a un códec más eficiente (ej. G.729) para el enlace WAN disponible",
+         fuente="CompTIA Network+ N10-009"),
+
+    # ── Cámaras / CCTV ──
+    dict(dominio="camaras_cctv", patron="Grabación con cuadros perdidos en el NVR pese a que cada cámara responde bien individualmente",
+         causa_probable="Saturación del ancho de banda agregado hacia el NVR por la suma de todas las cámaras",
+         recomendacion="Revisar el consumo total de banda del sistema completo, no cámara por cámara",
+         fuente="Conocimiento técnico de sistemas CCTV/vigilancia IP"),
+    dict(dominio="camaras_cctv", patron="Cámara nueva de otra marca conectada al NVR pero le faltan funciones avanzadas",
+         causa_probable="Incompatibilidad de perfil ONVIF entre la cámara y el NVR (ambos 'ONVIF' pero de distinto nivel)",
+         recomendacion="Verificar qué perfil ONVIF soporta cada equipo antes de asumir compatibilidad total",
+         fuente="Conocimiento técnico de sistemas CCTV/vigilancia IP"),
+
+    # ── Control de acceso ──
+    dict(dominio="control_acceso", patron="Un usuario dado de baja en el sistema central todavía puede acceder por un lector específico",
+         causa_probable="Ese lector opera en modo standalone y no ha sincronizado el cambio de permisos",
+         recomendacion="Forzar sincronización de ese lector de inmediato -- es un riesgo de seguridad, tratarlo con prioridad",
+         fuente="Conocimiento técnico de sistemas de control de acceso"),
+    dict(dominio="control_acceso", patron="El biométrico rechaza frecuentemente a personal autorizado",
+         causa_probable="Sensibilidad configurada muy estricta (baja tasa de falso acepto a costa de más falsos rechazos)",
+         recomendacion="Ajustar sensibilidad con conocimiento del trade-off de seguridad, no solo por comodidad",
+         fuente="Conocimiento técnico de sistemas de control de acceso"),
+
+    # ── Bases de datos ──
+    dict(dominio="bases_datos", patron="Varias estaciones distintas se congelan a la vez usando la misma aplicación",
+         causa_probable="Bloqueo (lock) de base de datos sostenido por una transacción lenta o mal cerrada",
+         recomendacion="Revisar transacciones activas y bloqueos en la base de datos antes de sospechar de la red",
+         fuente="Buenas prácticas de administración de bases de datos, genérico"),
+    dict(dominio="bases_datos", patron="Sistema que antes era rápido se ha ido poniendo lento con los meses",
+         causa_probable="Crecimiento de datos sin mantenimiento de índices en la base de datos",
+         recomendacion="Evaluar mantenimiento/reindexado de la base de datos antes de recomendar hardware nuevo",
+         fuente="Buenas prácticas de administración de bases de datos, genérico"),
+
+    # ── Linux ──
+    dict(dominio="linux", patron="Un servicio que funcionaba bien no vuelve a arrancar tras un reinicio o corte de energía",
+         causa_probable="El servicio nunca fue habilitado (enabled) para arranque automático, solo se inició manualmente antes",
+         recomendacion="Verificar el estado de habilitación del servicio en el gestor de arranque, no solo su configuración",
+         fuente="CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"),
+    dict(dominio="linux", patron="Un proceso funciona al probarlo manualmente pero falla al ejecutarse automáticamente",
+         causa_probable="Diferencia de permisos entre la prueba manual (con privilegios elevados) y la ejecución automática real",
+         recomendacion="Revisar con qué usuario/permisos corre el proceso automático, no repetir la prueba manual como diagnóstico",
+         fuente="CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"),
+
+    # ── Nube / cloud ──
+    dict(dominio="cloud", patron="Aplicación en la nube se siente lenta pese a tener buen ancho de banda medido",
+         causa_probable="Latencia base hacia el servicio (distancia geográfica), no falta de capacidad",
+         recomendacion="Medir latencia (RTT) hacia el servicio específico antes de invertir en más ancho de banda",
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="cloud", patron="No se puede resolver un problema de un servicio en la nube desde el lado del cliente",
+         causa_probable="El modelo de servicio (SaaS/PaaS) delega esa responsabilidad completamente al proveedor",
+         recomendacion="Identificar el modelo de servicio antes de seguir invirtiendo tiempo local -- puede requerir ticket al proveedor",
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ── Monitoreo ──
+    dict(dominio="monitoreo", patron="Equipo de red configurado con comunidad SNMP 'public' en producción",
+         causa_probable="Configuración de fábrica nunca cambiada",
+         recomendacion="Cambiar a una comunidad SNMP propia y restringir el acceso solo al servidor de monitoreo -- es un hallazgo de seguridad real",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="monitoreo", patron="Se silenciaron varias alertas por ser 'ruido' y luego pasó desapercibido un problema real",
+         causa_probable="Ajuste de umbrales que redujo falsos positivos pero aumentó el riesgo de falsos negativos",
+         recomendacion="Revisar cada umbral silenciado evaluando qué tan grave sería no enterarse del problema real, no solo la molestia del ruido",
+         fuente="Metodología general de observabilidad de sistemas"),
+
+    # ── Seguridad de endpoints ──
+    dict(dominio="seguridad_endpoint", patron="Software de EDR/antivirus nuevo bloquea una aplicación de negocio legítima",
+         causa_probable="Falso positivo por comportamiento no reconocido de una aplicación poco común",
+         recomendacion="Crear una excepción específica para esa aplicación en vez de deshabilitar la protección por completo",
+         fuente="CompTIA A+ Core 2 220-1202"),
+    dict(dominio="seguridad_endpoint", patron="Los backups están siempre accesibles desde cualquier equipo de la red corporativa",
+         causa_probable="Falta de aislamiento real entre backups y la red de producción",
+         recomendacion="Evaluar backups offline/inmutables como protección ante ransomware, no solo backups conectados permanentemente",
+         fuente="CompTIA A+ Core 2 220-1202"),
+
+    # ── Direccionamiento IP ──
+    dict(dominio="redes_ip", patron="Dos equipos con IPs numéricamente parecidas no logran comunicarse directamente",
+         causa_probable="Están en subredes distintas según la máscara configurada, aunque las IPs 'se vean cerca'",
+         recomendacion="Verificar la máscara de subred de ambos antes de asumir un problema de cableado o switch",
+         fuente="CompTIA Network+ N10-009"),
+    dict(dominio="redes_ip", patron="Un dispositivo con IP privada no tiene salida a internet mientras otros similares sí",
+         causa_probable="Configuración incorrecta de gateway/NAT en ese dispositivo específico",
+         recomendacion="Revisar la configuración de gateway de ese equipo puntual antes de sospechar de la red completa",
+         fuente="CompTIA Network+ N10-009"),
+
+    # ── Energía eléctrica ──
+    dict(dominio="energia", patron="Servidor crítico con reinicios inexplicables coincidiendo con variaciones menores de voltaje",
+         causa_probable="UPS tipo standby que no reacciona ante variaciones de voltaje, solo ante cortes totales",
+         recomendacion="Evaluar un UPS online de doble conversión para equipos que no toleran ninguna variación",
+         fuente="CompTIA A+ Core 1 220-1201"),
+    dict(dominio="energia", patron="UPS que se apaga bajo una carga que en teoría debería soportar según su capacidad nominal",
+         causa_probable="La capacidad nominal está en VA, no en watts reales -- la carga real puede exceder lo calculado",
+         recomendacion="Recalcular la carga real en watts considerando el factor de potencia de los equipos conectados",
+         fuente="CompTIA A+ Core 1 220-1201"),
+
+    # ── PMS / hospitalidad (ampliación) ──
+    dict(dominio="pms_integracion", patron="Sobreventas o disponibilidad desactualizada en plataformas externas de reserva",
+         causa_probable="Falla silenciosa del channel manager, no del PMS principal",
+         recomendacion="Diagnosticar el channel manager como sospechoso primario antes que el PMS",
+         fuente="Industria hotelera -- patrón de integración documentado"),
+    dict(dominio="pms_integracion", patron="La tarjeta de un huésped que ya hizo check-out todavía abre su habitación",
+         causa_probable="Ventana normal de sincronización entre el PMS y el sistema de llaves electrónicas",
+         recomendacion="Verificar el intervalo de sincronización configurado antes de tratarlo como falla de seguridad grave",
+         fuente="Industria hotelera -- patrón de integración documentado"),
 ]
 
 
