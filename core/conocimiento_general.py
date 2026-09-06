@@ -1974,6 +1974,270 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "dado el costo' -- incluso un plan frío bien documentado es mejor que ninguno."
          ),
          fuente="CompTIA Server+ SK0-005 — Security and Disaster Recovery"),
+
+    # ══════════════════════ A+ CORE 1 (220-1201) — TEMARIO OFICIAL COMPLETO ══════════════════════
+    # Trabajado con el documento oficial de objetivos (versión 2.0, 2024), no de memoria --
+    # dominios: 1.0 Mobile Devices (13%), 2.0 Networking (23%), 3.0 Hardware (25%),
+    # 4.0 Virtualization/Cloud (11%), 5.0 Hardware and Network Troubleshooting (28%).
+
+    # ── 1.0 Dispositivos móviles (dominio completo, antes casi sin cubrir) ──
+    dict(dominio="dispositivos_moviles", concepto="Componentes de hardware reemplazables en dispositivos móviles",
+         explicacion=(
+             "A diferencia de un PC de escritorio, en móviles/laptops los componentes "
+             "reemplazables típicos son: batería, teclado, RAM (cuando es modular), "
+             "disco (HDD/SSD), tarjetas inalámbricas, conector de antena WiFi, cámara/webcam y "
+             "micrófono — cada uno con procedimientos y riesgos distintos (ej. la batería en "
+             "equipos sellados requiere despegar adhesivos, riesgo de dañar la carcasa)."
+         ),
+         relevancia_diagnostica=(
+             "Antes de diagnosticar un problema de conectividad WiFi en un laptop como 'falla "
+             "de tarjeta', confirmar que el conector de antena esté bien asentado -- es un "
+             "punto de falla común tras un servicio de mantenimiento previo."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 1.1 Mobile Devices"),
+    dict(dominio="dispositivos_moviles", concepto="Métodos de conexión y accesorios de dispositivos móviles",
+         explicacion=(
+             "USB-C ha ido reemplazando microUSB/miniUSB por ser reversible y soportar más "
+             "energía/datos. NFC permite comunicación de muy corto alcance (pagos, "
+             "emparejamiento rápido). Tethering/hotspot comparte la conexión celular del "
+             "móvil con otros dispositivos -- consume datos del plan y batería "
+             "significativamente más rápido que el uso normal."
+         ),
+         relevancia_diagnostica=(
+             "Un dispositivo usado como hotspot con batería agotándose mucho más rápido de lo "
+             "normal no es una falla de batería -- es el consumo esperado de esa función, no "
+             "hay que reemplazar nada."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 1.2 Mobile Devices"),
+    dict(dominio="dispositivos_moviles", concepto="Gestión de dispositivos móviles (MDM): corporativo vs BYOD",
+         explicacion=(
+             "MDM permite aplicar configuraciones y políticas remotamente. En modalidad "
+             "corporativa, la empresa controla el dispositivo completo. En BYOD (dispositivo "
+             "propio del empleado), el MDM típicamente solo gestiona un contenedor separado "
+             "de apps/datos corporativos, sin tocar el resto del teléfono personal -- son "
+             "modelos de control muy distintos aunque ambos se llamen 'MDM'."
+         ),
+         relevancia_diagnostica=(
+             "Al perder o dar de baja un dispositivo BYOD, un borrado remoto (`remote wipe`) "
+             "mal configurado puede borrar el teléfono COMPLETO del empleado en vez de solo el "
+             "contenedor corporativo -- verificar el modo de MDM configurado antes de emitir "
+             "esa orden."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 1.3 Mobile Devices"),
+
+    # ── 2.0 Redes — lo específico que faltaba de A+ Core 1 ──
+    dict(dominio="redes_ip", concepto="Puertos TCP/UDP más comunes y su propósito",
+         explicacion=(
+             "Los puertos clave a reconocer: 20-21 FTP, 22 SSH, 23 Telnet (inseguro, sin "
+             "cifrar), 25 SMTP (correo saliente), 53 DNS, 67/68 DHCP, 80 HTTP, 110 POP3, 143 "
+             "IMAP, 389 LDAP (directorio), 443 HTTPS, 445 SMB/CIFS (compartición de archivos "
+             "Windows), 3389 RDP (escritorio remoto). Cada uno tiene un propósito específico y "
+             "bloquearlo sin saber para qué se usa puede romper un servicio sin síntoma obvio "
+             "de 'por qué'."
+         ),
+         relevancia_diagnostica=(
+             "Un hallazgo de auditoría marcando 'puerto 445 abierto' como riesgo debe "
+             "evaluarse sabiendo que es compartición de archivos Windows -- cerrarlo sin más "
+             "puede romper el acceso a carpetas compartidas legítimas del negocio."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 2.1 Networking"),
+    dict(dominio="redes_ip", concepto="TCP vs UDP: confiable y ordenado vs rápido y sin garantías",
+         explicacion=(
+             "TCP confirma la entrega de cada paquete y los reordena si llegan desordenados "
+             "-- ideal para datos que deben llegar completos (archivos, páginas web). UDP no "
+             "confirma nada, es más rápido pero puede perder paquetes sin aviso -- se usa para "
+             "voz/video en tiempo real, donde es preferible perder un paquete que esperar a "
+             "que se reenvíe (eso generaría más retraso que el paquete perdido)."
+         ),
+         relevancia_diagnostica=(
+             "Pérdida de paquetes en una app basada en UDP (voz, video) no genera errores "
+             "visibles del protocolo -- se percibe como calidad degradada, no como una "
+             "conexión que 'falla' de forma evidente."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 2.1 Networking"),
+    dict(dominio="redes_ip", concepto="Tipos de red por alcance: PAN, LAN, MAN, WAN, SAN, WLAN",
+         explicacion=(
+             "PAN (personal, ej. Bluetooth entre un teléfono y audífonos), LAN (una ubicación), "
+             "WLAN (LAN inalámbrica), MAN (una ciudad, poco común hoy), WAN (conecta sitios "
+             "distintos, ej. entre sucursales), SAN (red dedicada solo para almacenamiento, "
+             "separada del tráfico normal de datos) -- cada una implica tecnología y alcance "
+             "distintos, no son sinónimos de 'la red'."
+         ),
+         relevancia_diagnostica=(
+             "Un problema de rendimiento de almacenamiento en un entorno con SAN dedicada debe "
+             "diagnosticarse en la red de almacenamiento específicamente, no en la LAN general "
+             "-- son infraestructuras físicamente distintas aunque compartan el mismo edificio."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 2.7 Networking"),
+    dict(dominio="redes_ip", concepto="Herramientas físicas de diagnóstico de red y para qué sirve cada una",
+         explicacion=(
+             "Crimper (poncha conectores RJ45), ponchadora/punchdown tool (fija cables a un "
+             "patch panel), probador de cable (verifica continuidad pin por pin), certificador "
+             "(mide parámetros reales de transmisión), tonificador/toner probe (encuentra "
+             "físicamente un cable específico entre muchos siguiendo un tono audible), "
+             "loopback plug (prueba un puerto sin necesidad de otro equipo al otro extremo), "
+             "network tap (copia tráfico para análisis sin interrumpirlo)."
+         ),
+         relevancia_diagnostica=(
+             "Para encontrar UN cable específico entre decenas sin etiquetar en un rack, la "
+             "herramienta correcta es el tonificador (toner probe), no un simple probador de "
+             "continuidad -- confundir estas herramientas hace perder tiempo real en campo."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 2.8 Networking"),
+
+    # ── 3.0 Hardware — componentes físicos detallados ──
+    dict(dominio="hardware", concepto="Tipos de pantalla: LCD (IPS/TN/VA) vs OLED vs Mini-LED",
+         explicacion=(
+             "TN es la más barata y rápida pero con peor ángulo de visión y color. IPS tiene "
+             "mejor color/ángulo de visión pero es más lenta y cara. VA tiene mejor contraste "
+             "que ambas. OLED no necesita retroiluminación (cada píxel emite su propia luz), "
+             "logrando negros más profundos, pero es susceptible a 'quemado' de imagen "
+             "estática prolongada (burn-in)."
+         ),
+         relevancia_diagnostica=(
+             "Una marca fantasma persistente en una pantalla OLED que muestra contenido "
+             "estático mucho tiempo (ej. un panel NOC con el mismo dashboard fijo) es burn-in, "
+             "un desgaste real del panel, no una falla de configuración."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.1 Hardware"),
+    dict(dominio="hardware", concepto="Tipos de conectores de fibra óptica: ST, SC, LC",
+         explicacion=(
+             "ST usa un mecanismo de giro/traba tipo bayoneta (más antiguo). SC usa un "
+             "mecanismo de empuje-clic simple. LC es más pequeño (permite más densidad de "
+             "puertos en el mismo espacio) y es el más común en instalaciones modernas de "
+             "centro de datos. No son intercambiables sin un adaptador -- un cable con "
+             "conector LC no entra físicamente en un puerto SC."
+         ),
+         relevancia_diagnostica=(
+             "Al reemplazar un patch cord de fibra, confirmar el tipo de conector exacto (ST/"
+             "SC/LC) del equipo antes de pedir el cable -- son físicamente distintos, no un "
+             "detalle menor."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.2 Hardware"),
+    dict(dominio="hardware", concepto="RAM: SODIMM vs DIMM, generaciones DDR, y ECC",
+         explicacion=(
+             "DIMM es el formato de escritorio/servidor; SODIMM es la versión compacta para "
+             "laptops. Cada generación DDR (DDR4, DDR5, etc.) es físicamente incompatible con "
+             "la anterior -- una ranura DDR4 no acepta un módulo DDR5 aunque ambos se vean "
+             "similares. RAM ECC (error-correcting code) detecta y corrige errores de memoria "
+             "menores automáticamente -- estándar en servidores críticos, no en equipos de "
+             "escritorio comunes, y no es intercambiable con RAM no-ECC en la mayoría de "
+             "placas."
+         ),
+         relevancia_diagnostica=(
+             "Errores aleatorios/intermitentes de aplicaciones en un servidor sin RAM ECC son "
+             "más difíciles de descartar como causa de memoria -- sin ECC, errores menores de "
+             "memoria pueden pasar silenciosos en vez de corregirse solos."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.3 Hardware"),
+    dict(dominio="hardware", concepto="RAID 0, 1, 5, 6 y 10: qué protege cada uno realmente",
+         explicacion=(
+             "RAID 0 reparte datos sin redundancia (más velocidad, cero protección -- la "
+             "pérdida de UN disco pierde TODO). RAID 1 duplica en espejo. RAID 5 usa paridad "
+             "distribuida, tolera 1 disco, pero la reconstrucción tras un fallo estresa los "
+             "discos restantes. RAID 6 usa doble paridad, tolera 2 discos simultáneos -- más "
+             "seguro que RAID 5 para arreglos grandes. RAID 10 combina espejo y "
+             "fragmentación -- mejor rendimiento Y tolerancia que RAID 5, a costa de usar el "
+             "doble de capacidad total."
+         ),
+         relevancia_diagnostica=(
+             "En un servidor con muchos discos (8+), RAID 6 es preferible a RAID 5 -- con "
+             "arreglos grandes, la probabilidad de una SEGUNDA falla durante la reconstrucción "
+             "de RAID 5 ya no es un caso extremo, es un riesgo real y documentado."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.4 Hardware"),
+    dict(dominio="hardware", concepto="TPM y arranque seguro (Secure Boot)",
+         explicacion=(
+             "El Trusted Platform Module (TPM) es un chip dedicado que almacena claves "
+             "criptográficas de forma aislada del sistema operativo -- necesario para cifrado "
+             "de disco completo (ej. BitLocker) y Secure Boot, que verifica que el firmware/"
+             "sistema operativo no haya sido alterado antes de arrancar. Sin TPM habilitado en "
+             "BIOS/UEFI, algunas funciones de seguridad simplemente no están disponibles, no "
+             "es un problema de configuración del sistema operativo."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo que no puede activar cifrado de disco completo pese a tener sistema "
+             "operativo compatible -- verificar que TPM esté habilitado en BIOS/UEFI antes de "
+             "sospechar de licencias o configuración de software."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.5 Hardware"),
+    dict(dominio="hardware", concepto="Especificaciones de fuente de poder: voltaje, wattage y eficiencia",
+         explicacion=(
+             "Una fuente entrega distintos voltajes (3.3V, 5V, 12V) para distintos componentes "
+             "simultáneamente -- el wattage nominal es el máximo TOTAL combinado, no por línea "
+             "de voltaje individual. Una fuente 'redundante' permite que si una unidad falla, "
+             "otra la reemplace sin apagar el equipo; una fuente 'modular' permite conectar "
+             "solo los cables que se necesitan, reduciendo desorden y mejorando flujo de aire."
+         ),
+         relevancia_diagnostica=(
+             "Reinicios aleatorios bajo carga alta (muchos discos/tarjetas agregadas después "
+             "de la instalación original) pueden ser una fuente de poder que ya no alcanza el "
+             "wattage real necesario -- recalcular la carga total, no asumir falla de "
+             "componente individual."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.6 Hardware"),
+    dict(dominio="impresoras", concepto="PCL vs PostScript: dos lenguajes de impresión distintos",
+         explicacion=(
+             "PCL (Printer Command Language) es más simple y rápido para documentos de texto "
+             "estándar. PostScript maneja mejor gráficos complejos y es más consistente entre "
+             "distintas impresoras -- un driver configurado con el lenguaje equivocado puede "
+             "producir texto con errores de formato o símbolos incorrectos, sin que sea una "
+             "falla de la impresora en sí."
+         ),
+         relevancia_diagnostica=(
+             "Documentos con caracteres/símbolos corruptos o mal formateados desde UN "
+             "programa específico, mientras otros imprimen bien -- revisar qué lenguaje de "
+             "impresión (PCL/PostScript) espera ese programa vs. el configurado en el driver."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.7 Hardware"),
+    dict(dominio="impresoras", concepto="Impresoras de impacto: todavía existen y fallan distinto",
+         explicacion=(
+             "Las impresoras de impacto (matriciales) usan una cinta entintada y agujas "
+             "físicas -- todavía se usan para papel multiparte (copias sin papel carbón, "
+             "común en algunos recibos/formularios legales). Sus fallas típicas son cinta "
+             "gastada, cabezal de impresión desgastado y atascos de papel multiparte "
+             "específicamente, no las mismas fallas que láser/inkjet/térmica."
+         ),
+         relevancia_diagnostica=(
+             "Si un sitio todavía usa formularios multiparte con impresora de impacto, no "
+             "asumir que sus fallas se resuelven con el mismo procedimiento que impresoras "
+             "modernas -- es tecnología distinta con mantenimiento distinto (reemplazo de "
+             "cinta, no de tóner/tinta)."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 3.8 Hardware"),
+
+    # ── 4.0 Virtualización y nube — lo que faltaba ──
+    dict(dominio="virtualizacion", concepto="Contenedores vs máquinas virtuales completas",
+         explicacion=(
+             "Una máquina virtual completa incluye su propio sistema operativo entero. Un "
+             "contenedor comparte el kernel del sistema anfitrión y solo empaqueta la "
+             "aplicación con sus dependencias -- mucho más liviano y rápido de iniciar, pero "
+             "con menos aislamiento que una VM completa (un problema del kernel anfitrión "
+             "afecta a todos los contenedores que corren sobre él)."
+         ),
+         relevancia_diagnostica=(
+             "Un problema que afecta a TODOS los contenedores de un host a la vez, pero no a "
+             "las máquinas virtuales completas en el mismo servidor físico, apunta al kernel/"
+             "sistema anfitrión compartido, no a cada aplicación contenedorizada por separado."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 4.1 Virtualization and Cloud Computing"),
+    dict(dominio="cloud", concepto="Elasticidad, multitenencia y utilización medida en la nube",
+         explicacion=(
+             "Elasticidad es la capacidad de escalar recursos automáticamente según demanda "
+             "real (subir en horas pico, bajar después). Multitenencia significa que varios "
+             "clientes distintos comparten la misma infraestructura física, aislados "
+             "lógicamente entre sí. Utilización medida (metered) cobra por consumo real "
+             "(ingreso/egreso de datos, cómputo usado), no una tarifa fija -- un pico de "
+             "tráfico inesperado puede generar un costo inesperado sin que sea un error de "
+             "facturación."
+         ),
+         relevancia_diagnostica=(
+             "Un aumento inesperado en la factura de un servicio en la nube puede ser "
+             "consumo real por un pico de tráfico legítimo (o un mal uso/ataque generando "
+             "tráfico), no necesariamente un error de facturación del proveedor -- revisar "
+             "métricas de uso real antes de disputar el cargo."
+         ),
+         fuente="CompTIA A+ Core 1 220-1201 — 4.2 Virtualization and Cloud Computing"),
 ]
 
 
@@ -2499,6 +2763,87 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Falta de definición de RPO/RTO antes de diseñar la estrategia de respaldo",
          recomendacion="Definir primero cuánta pérdida de datos y cuánto tiempo de caída tolera el negocio para ese sistema específico",
          fuente="CompTIA Server+ SK0-005 — Security and Disaster Recovery"),
+
+    # ══════════════════════ A+ CORE 1 — 5.0 TROUBLESHOOTING (28% del examen, temario oficial) ══════════════════════
+    # ── 5.1 Motherboard, RAM, CPU y energía ──
+    dict(dominio="hardware", patron="Pitidos (POST beeps) al encender, antes de que cargue el sistema operativo",
+         causa_probable="Falla de hardware detectada por el BIOS antes de iniciar el SO -- RAM, video u otro componente crítico",
+         recomendacion="Contar el patrón de pitidos y consultarlo contra el manual del fabricante de la placa -- cada patrón indica un componente distinto",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"),
+    dict(dominio="hardware", patron="Equipo no enciende, sin luces ni ventiladores (no power)",
+         causa_probable="Fuente de poder, cable de energía, o el propio botón de encendido -- no necesariamente la placa o el CPU",
+         recomendacion="Descartar fuente/cable/botón (lo más barato y rápido de probar) antes de sospechar de componentes internos costosos",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"),
+    dict(dominio="hardware", patron="Olor a quemado o hinchazón visible en un capacitor de la placa",
+         causa_probable="Falla eléctrica real del componente, riesgo de daño mayor o incendio si se sigue usando",
+         recomendacion="Apagar y desconectar de inmediato -- no es un síntoma para 'seguir usando hasta que falle del todo'",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"),
+    dict(dominio="hardware", patron="Fecha/hora del sistema incorrecta cada vez que se reinicia el equipo",
+         causa_probable="Batería CMOS agotada -- no guarda la configuración de reloj sin energía externa",
+         recomendacion="Reemplazar la batería CMOS -- es una pieza barata, no un problema de software ni de red (aunque puede causar fallas de autenticación por desincronización horaria)",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"),
+
+    # ── 5.2 Discos y RAID ──
+    dict(dominio="hardware", patron="Ruido de clic o rechinido proveniente de un disco duro mecánico",
+         causa_probable="Falla mecánica real del disco, posible falla inminente o ya en curso",
+         recomendacion="Respaldar los datos de inmediato antes de cualquier otro diagnóstico -- el ruido mecánico es una señal tardía, no temprana",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"),
+    dict(dominio="hardware", patron="Un arreglo RAID aparece como incompleto o falta un disco del arreglo",
+         causa_probable="Un disco individual falló o se desconectó, el arreglo sigue funcionando en modo degradado (si el nivel de RAID lo permite)",
+         recomendacion="Identificar y reemplazar el disco específico fallido cuanto antes -- en modo degradado ya no hay tolerancia a una segunda falla",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"),
+    dict(dominio="hardware", patron="Tiempos de lectura/escritura mucho más largos de lo normal, sin error explícito",
+         causa_probable="Disco degradándose (posible predecesor de falla) o arreglo RAID reconstruyendo en segundo plano",
+         recomendacion="Revisar el estado SMART del disco y si hay una reconstrucción de RAID en curso antes de asumir un problema de software",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"),
+
+    # ── 5.3 Video, proyectores y pantallas ──
+    dict(dominio="hardware", patron="Imagen borrosa o distorsionada en un monitor o proyector",
+         causa_probable="Cable de video de mala calidad/dañado, resolución mal configurada, o fuente de entrada incorrecta",
+         recomendacion="Verificar primero la fuente de entrada y el cable físico antes de sospechar del panel/proyector en sí",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.3 Troubleshooting"),
+    dict(dominio="hardware", patron="Apagado intermitente de un proyector durante el uso",
+         causa_probable="Sobrecalentamiento (filtro de aire obstruido) o lámpara llegando al fin de su vida útil",
+         recomendacion="Revisar limpieza del filtro de aire y horas de uso de la lámpara antes de asumir falla electrónica",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.3 Troubleshooting"),
+
+    # ── 5.4 Dispositivos móviles ──
+    dict(dominio="dispositivos_moviles", patron="Batería de dispositivo móvil visiblemente hinchada",
+         causa_probable="Degradación química de la batería -- riesgo real de seguridad, no solo pérdida de autonomía",
+         recomendacion="Dejar de usar el dispositivo y reemplazar la batería de inmediato -- no es un problema estético",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.4 Troubleshooting"),
+    dict(dominio="dispositivos_moviles", patron="Dispositivo móvil se recarga muy lento o de forma inconsistente",
+         causa_probable="Cable/puerto de carga dañado, o el cargador no entrega la potencia que el dispositivo espera",
+         recomendacion="Probar con un cable y cargador distintos, conocidos como buenos, antes de sospechar de la batería",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.4 Troubleshooting"),
+
+    # ── 5.5 Red (síntomas específicos que faltaban) ──
+    dict(dominio="redes_ip", patron="Un puerto de switch sube y baja repetidamente (port flapping)",
+         causa_probable="Cable defectuoso, problema de dúplex, o el dispositivo conectado tiene una NIC fallando",
+         recomendacion="Revisar el cable físico primero (causa más común y más barata de descartar) antes que configuración",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.5 Troubleshooting"),
+    dict(dominio="redes_ip", patron="Fallas de autenticación de red intermitentes sin cambio de credenciales",
+         causa_probable="Desincronización de reloj del equipo (afecta protocolos como Kerberos) o certificado próximo a vencer",
+         recomendacion="Verificar hora del sistema y vigencia de certificados antes de sospechar de la contraseña o el servidor de autenticación",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.5 Troubleshooting"),
+
+    # ── 5.6 Impresoras (síntomas específicos que faltaban) ──
+    dict(dominio="impresoras", patron="Imágenes duplicadas o 'eco' desplazadas en la impresión láser",
+         causa_probable="Tambor de imagen (unidad de imagen) desgastado o dañado",
+         recomendacion="Reemplazar la unidad de imagen -- no se resuelve con más tóner ni limpieza superficial",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"),
+    dict(dominio="impresoras", patron="Puntos o manchas (speckling) repetidos en el papel impreso",
+         causa_probable="Tóner derramado internamente o unidad de fusión contaminada",
+         recomendacion="Revisar/limpiar la unidad de fusión antes de reemplazar el cartucho de tóner completo",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"),
+    dict(dominio="impresoras", patron="Atasco de grapado o perforado en un finalizador de impresora multifunción",
+         causa_probable="Problema específico del módulo de acabado (finisher), no del motor de impresión principal",
+         recomendacion="Aislar el diagnóstico al módulo de acabado -- reiniciar la impresora completa no resuelve un atasco mecánico ahí",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"),
+    dict(dominio="impresoras", patron="Impresora no reconoce una bandeja de papel específica",
+         causa_probable="Sensor de la bandeja sucio/dañado o la bandeja no está completamente asentada",
+         recomendacion="Reasentar físicamente la bandeja y limpiar el sensor antes de sospechar de una falla electrónica mayor",
+         fuente="CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"),
 ]
 
 

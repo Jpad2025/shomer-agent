@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.14.0 — 2026-09-06
+
+- **A+ Core 1 (220-1201) completo — primer paso de un trabajo multi-sesión pedido explícitamente
+  por Juan Pablo: cubrir el temario oficial COMPLETO de las 6 certificaciones, no una selección
+  curada por criterio propio.** Corrección de método real: en vez de escribir de memoria "lo que
+  parece relevante", se descargó y leyó el documento oficial de objetivos de CompTIA (versión 2.0,
+  2024) y se trabajó cada subtema listado, en orden, sin saltar ninguno.
+  - Dominio 1.0 Mobile Devices (13% del examen) — antes casi sin cubrir: hardware reemplazable,
+    métodos de conexión, MDM corporativo vs BYOD.
+  - Dominio 2.0 Networking — huecos que faltaban: tabla de puertos TCP/UDP, TCP vs UDP, tipos de
+    red por alcance (PAN/LAN/MAN/WAN/SAN), herramientas físicas de diagnóstico.
+  - Dominio 3.0 Hardware — huecos que faltaban: tipos de pantalla, conectores de fibra (ST/SC/LC),
+    RAM (SODIMM/DIMM/DDR/ECC), RAID 0/1/5/6/10 en profundidad, TPM/Secure Boot, especificaciones
+    de fuente de poder, PCL vs PostScript, impresoras de impacto.
+  - Dominio 4.0 Virtualization/Cloud — contenedores vs VMs, elasticidad/multitenencia.
+  - **Dominio 5.0 Hardware and Network Troubleshooting (28%, el dominio más grande del examen)** —
+    convertido íntegro en reglas de diagnóstico: síntomas de motherboard/RAM/CPU/energía, discos/
+    RAID, video/proyectores, dispositivos móviles, red, e impresoras (specklng, imágenes eco,
+    atascos de finalizador).
+  - Total: 272 entradas (128 reglas + 144 teoría). Probado (siembra + idempotencia) antes de
+    desplegar. Quedan pendientes, en el mismo método exhaustivo: Network+, A+ Core 2, Security+,
+    Server+, CySA+ — se seguirá en próximas sesiones, sin apuro artificial.
+
 ## 1.13.0 — 2026-09-06
 
 - **Security+, Server+ y CySA+ agregadas (de 212 a 238 entradas).** Ampliación pedida por Juan
