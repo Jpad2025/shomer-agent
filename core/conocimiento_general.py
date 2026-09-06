@@ -1734,6 +1734,246 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "impresora completa."
          ),
          fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
+
+    # ══════════════════════ SEGURIDAD — ARQUITECTURA (CompTIA Security+ SY0-701) ══════════════════════
+    dict(dominio="seguridad_arquitectura", concepto="Defensa en profundidad: por qué una sola capa nunca basta",
+         explicacion=(
+             "Defensa en profundidad significa que ningún control de seguridad individual "
+             "(firewall, antivirus, segmentación) debe ser el único obstáculo entre un atacante "
+             "y el objetivo — se combinan varias capas independientes para que la falla de UNA "
+             "no comprometa todo. En Shomer esto ya existe en la práctica: Hunter (IDS/firewall "
+             "perimetral) + segmentación VLAN + autenticación de panel son capas distintas, no "
+             "una sola."
+         ),
+         relevancia_diagnostica=(
+             "Si se propone eliminar o debilitar un control 'porque ya hay otro' (ej. 'no hace "
+             "falta VLAN separada porque el firewall ya bloquea'), es una señal de que se está "
+             "perdiendo una capa de defensa en profundidad, no una simplificación segura."
+         ),
+         fuente="CompTIA Security+ SY0-701 — Security Architecture"),
+    dict(dominio="seguridad_arquitectura", concepto="Zero Trust: nunca confiar solo por estar 'adentro' de la red",
+         explicacion=(
+             "El modelo tradicional asume que todo lo que está dentro del perímetro de red es "
+             "confiable. Zero Trust asume lo contrario: cada solicitud se verifica "
+             "explícitamente sin importar si viene de adentro o afuera de la red — relevante "
+             "porque un atacante que ya logró entrar a la red de huéspedes no debería, solo por "
+             "eso, tener camino libre hacia sistemas administrativos."
+         ),
+         relevancia_diagnostica=(
+             "Un hallazgo de auditoría de red que dice 'tráfico interno no verificado entre "
+             "segmentos' no es un tecnicismo — es la brecha exacta que Zero Trust busca cerrar; "
+             "priorizarlo aunque el tráfico venga de 'dentro' de la red del hotel."
+         ),
+         fuente="CompTIA Security+ SY0-701 — Security Architecture"),
+    dict(dominio="seguridad_arquitectura", concepto="Superficie de ataque y por qué cada servicio expuesto cuenta",
+         explicacion=(
+             "Cada puerto abierto, servicio expuesto o cuenta con acceso es una posible vía de "
+             "entrada — reducir la superficie de ataque significa desactivar/cerrar todo lo que "
+             "no se usa activamente, no solo proteger lo que sí se usa. Un servicio olvidado y "
+             "sin actualizar, aunque nadie lo use, sigue siendo una puerta abierta."
+         ),
+         relevancia_diagnostica=(
+             "Hallazgos de auditoría de red mostrando puertos abiertos de servicios que 'nadie "
+             "recuerda para qué son' deben tratarse como riesgo real, no ignorarse por "
+             "antigüedad — cerrarlos si no tienen un uso activo confirmado."
+         ),
+         fuente="CompTIA Security+ SY0-701 — Threats, Vulnerabilities and Mitigations"),
+
+    # ══════════════════════ GESTIÓN DE VULNERABILIDADES (CompTIA CySA+ CS0-003) ══════════════════════
+    dict(dominio="gestion_vulnerabilidades", concepto="CVSS: por qué la puntuación de severidad no basta sola",
+         explicacion=(
+             "El puntaje CVSS (0-10) mide la severidad TÉCNICA teórica de una vulnerabilidad, "
+             "pero no considera el contexto real del sitio — una vulnerabilidad CVSS 9 en un "
+             "equipo aislado sin acceso a internet puede ser menos urgente en la práctica que "
+             "una CVSS 6 en un equipo expuesto y crítico para el negocio. Priorizar solo por "
+             "puntaje, sin contexto, lleva a gastar esfuerzo en el orden equivocado."
+         ),
+         relevancia_diagnostica=(
+             "Al revisar hallazgos de auditoría de red (`run_network_audit_scan`), priorizar "
+             "por severidad Y exposición/criticidad real del equipo, no solo por la etiqueta "
+             "'crítico/alto/medio/bajo' de forma aislada."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Falsos positivos en escaneos automáticos de vulnerabilidades",
+         explicacion=(
+             "Un escaneo automático (como el de Tracker/Hunter contra los equipos de la red) "
+             "puede reportar un servicio como 'vulnerable' basándose solo en la versión "
+             "anunciada por el banner, sin confirmar si el parche de seguridad específico ya "
+             "fue aplicado por separado (backport) — algunos fabricantes actualizan la "
+             "seguridad sin cambiar el número de versión visible."
+         ),
+         relevancia_diagnostica=(
+             "Un hallazgo de 'versión vulnerable' en un equipo de marca con soporte activo "
+             "(ej. MikroTik, UniFi) merece verificación manual antes de escalarse como crítico "
+             "-- puede ser un falso positivo por versión de banner desactualizada en el "
+             "reporte."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", concepto="Ventana de exposición: el tiempo entre descubrir y corregir",
+         explicacion=(
+             "El riesgo real de una vulnerabilidad no es solo su severidad, sino cuánto tiempo "
+             "queda expuesta sin corregir — un hallazgo de hace meses sin resolver representa "
+             "más riesgo acumulado que uno nuevo de alta severidad recién descubierto, aunque "
+             "el segundo 'se vea peor' en el reporte de hoy."
+         ),
+         relevancia_diagnostica=(
+             "Al priorizar la lista de hallazgos, dar peso también a la ANTIGÜEDAD del "
+             "hallazgo sin resolver, no solo a su severidad puntual del día de hoy."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Vulnerability Management"),
+
+    # ══════════════════════ SIEM / ANÁLISIS DE LOGS (CompTIA CySA+ — directo a Hunter/Suricata/Wazuh) ══════════════════════
+    dict(dominio="siem_analisis", concepto="Indicadores de Compromiso (IoC) vs ruido normal de internet",
+         explicacion=(
+             "Un IDS perimetral (como Suricata en Hunter) genera alertas por firmas conocidas "
+             "de ataque — la mayoría de tráfico de internet hoy incluye escaneos automatizados "
+             "constantes de bots que prueban puertos/vulnerabilidades masivamente sin ningún "
+             "interés específico en un sitio ('ruido de fondo de internet'). Un IoC real "
+             "(indicador de compromiso genuino) es evidencia de que algo YA tuvo éxito, no solo "
+             "que alguien lo intentó."
+         ),
+         relevancia_diagnostica=(
+             "Un bloqueo de una IP externa con firma de 'escaneo genérico' no es automáticamente "
+             "un ataque dirigido — la mayoría es ruido de fondo de internet; reservar la "
+             "urgencia real para señales de éxito (ej. tráfico saliente inusual DESPUÉS de una "
+             "alerta, no solo la alerta de entrada en sí)."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Security Operations"),
+    dict(dominio="siem_analisis", concepto="Correlación de eventos: por qué un evento aislado dice menos que un patrón",
+         explicacion=(
+             "Un SIEM maduro no mira eventos individuales en aislamiento — busca CADENAS: un "
+             "escaneo de puertos seguido de un intento de login fallido seguido de tráfico "
+             "saliente inusual, en ese orden y desde el mismo origen, es mucho más indicativo "
+             "que cualquiera de esos tres eventos por separado."
+         ),
+         relevancia_diagnostica=(
+             "Esto es exactamente el principio detrás de la correlación temporal que ya hace "
+             "el cerebro de Shomer (`brain.py`) — agrupar eventos relacionados en el tiempo en "
+             "vez de tratarlos aislados es aplicar este mismo principio de SIEM a la red del "
+             "hotel, no solo a seguridad perimetral."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Security Operations"),
+    dict(dominio="siem_analisis", concepto="Threat hunting: buscar activamente, no solo esperar la alerta",
+         explicacion=(
+             "El 'threat hunting' parte de una hipótesis ('¿podría haber algo que las reglas "
+             "automáticas no detectan?') y busca activamente evidencia, en vez de esperar "
+             "pasivamente a que una firma conocida dispare una alerta — útil precisamente para "
+             "amenazas nuevas que aún no tienen firma."
+         ),
+         relevancia_diagnostica=(
+             "Revisar periódicamente tráfico o accesos fuera de lo común AUNQUE ninguna alerta "
+             "automática haya saltado, especialmente en sistemas críticos (pagos, dominio) — "
+             "no depender solo de que Hunter/Suricata avise."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Security Operations"),
+
+    # ══════════════════════ RESPUESTA A INCIDENTES (CompTIA Security+ / CySA+) ══════════════════════
+    dict(dominio="respuesta_incidentes", concepto="Las fases formales de respuesta a incidentes",
+         explicacion=(
+             "Preparación (tener el plan ANTES de que pase algo) → Detección y análisis → "
+             "Contención (aislar, sin necesariamente resolver aún) → Erradicación (eliminar la "
+             "causa) → Recuperación (volver a operación normal) → Lecciones aprendidas. Saltarse "
+             "'contención' para ir directo a 'arreglar' puede permitir que el problema se siga "
+             "propagando mientras se investiga."
+         ),
+         relevancia_diagnostica=(
+             "Ante un hallazgo de seguridad real (no falso positivo), la primera acción "
+             "debería ser aislar/contener (ej. bloquear la IP, aislar el equipo) ANTES de "
+             "investigar a fondo la causa — no al revés."
+         ),
+         fuente="CompTIA Security+ SY0-701 / CySA+ CS0-003 — Incident Response"),
+    dict(dominio="respuesta_incidentes", concepto="Por qué el sistema de escalamiento de Shomer ya sigue este principio",
+         explicacion=(
+             "El módulo de escalamiento de incidentes (`incident_escalation.py`) agrupa "
+             "eventos relacionados en una ventana de tiempo, pide confirmación al técnico, y "
+             "si no hay respuesta escala a un coordinador — esto es, en esencia, el proceso "
+             "formal de respuesta a incidentes aplicado a fallas de infraestructura, no solo a "
+             "seguridad: detección, intento de confirmación humana, y escalamiento si no se "
+             "resuelve a tiempo."
+         ),
+         relevancia_diagnostica=(
+             "Cuando se diseñan nuevos flujos de alerta en Shomer, el patrón ya probado "
+             "(detectar → agrupar → confirmar → escalar si no hay respuesta) es el punto de "
+             "partida correcto, no hay que reinventar la metodología desde cero."
+         ),
+         fuente="CompTIA CySA+ CS0-003 — Incident Response, aplicado al diseño existente de Shomer"),
+
+    # ══════════════════════ SERVER+ — ADMINISTRACIÓN Y ALTA DISPONIBILIDAD ══════════════════════
+    dict(dominio="servidor_administracion", concepto="Clustering y alta disponibilidad: qué resuelve realmente",
+         explicacion=(
+             "Un clúster de servidores permite que si UNO falla, otro tome su lugar "
+             "automáticamente (failover) — pero solo protege contra falla de HARDWARE/proceso, "
+             "no contra errores de datos o de aplicación: si la base de datos se corrompe, el "
+             "servidor de respaldo hereda la MISMA corrupción, un clúster no sustituye un "
+             "backup real."
+         ),
+         relevancia_diagnostica=(
+             "'Tenemos servidores redundantes' no es lo mismo que 'tenemos protección contra "
+             "pérdida de datos' — son dos protecciones distintas para riesgos distintos (falla "
+             "de hardware vs. corrupción/error de datos)."
+         ),
+         fuente="CompTIA Server+ SK0-005 — Server Administration"),
+    dict(dominio="servidor_administracion", concepto="Almacenamiento SAN/NAS vs almacenamiento local del servidor",
+         explicacion=(
+             "Almacenamiento local vive dentro del servidor mismo — si el servidor falla "
+             "físicamente, el almacenamiento puede fallar con él. SAN/NAS separa el "
+             "almacenamiento en un equipo dedicado en la red, permitiendo que varios "
+             "servidores lo compartan y que uno pueda fallar sin llevarse los datos — a cambio, "
+             "ahora depende de la red para acceder a sus propios datos."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor con almacenamiento en SAN/NAS que 'se congela' o pierde acceso a "
+             "datos puede tener el problema en la RED hacia el storage, no en el servidor "
+             "mismo ni en el disco -- diagnosticar la conectividad de almacenamiento por "
+             "separado."
+         ),
+         fuente="CompTIA Server+ SK0-005 — Server Hardware Installation and Management"),
+    dict(dominio="servidor_administracion", concepto="Ventanas de mantenimiento y por qué existen formalmente",
+         explicacion=(
+             "Una ventana de mantenimiento es un periodo acordado de antemano donde se espera "
+             "interrupción de servicio para aplicar cambios — su propósito es que una "
+             "interrupción PLANEADA en horario de bajo impacto sea preferible a que el mismo "
+             "cambio cause una interrupción NO planeada en horario crítico."
+         ),
+         relevancia_diagnostica=(
+             "Cambios de configuración de servidores/red en horario operativo alto (check-in, "
+             "check-out, comidas) sin ventana de mantenimiento acordada es un riesgo evitable, "
+             "independientemente de qué tan seguro parezca el cambio en teoría."
+         ),
+         fuente="CompTIA Server+ SK0-005 — Server Administration"),
+
+    # ══════════════════════ SERVER+ — DISASTER RECOVERY (más allá de backup básico) ══════════════════════
+    dict(dominio="servidor_recuperacion_desastres", concepto="RTO y RPO: las dos preguntas que definen un plan de recuperación",
+         explicacion=(
+             "RPO (Recovery Point Objective) responde '¿cuántos datos podemos permitirnos "
+             "perder?' (ej. si el último backup fue hace 24h, el RPO es 24h). RTO (Recovery "
+             "Time Objective) responde '¿cuánto tiempo podemos estar caídos?' — un sistema "
+             "crítico como el PMS necesita RPO/RTO mucho más ajustados que un archivo de "
+             "reportes históricos, y el plan de backup debe diseñarse distinto para cada uno, "
+             "no aplicar la misma frecuencia a todo por igual."
+         ),
+         relevancia_diagnostica=(
+             "Antes de definir 'cada cuánto se hace backup' de un sistema, primero preguntar "
+             "cuánta pérdida de datos y cuánto tiempo de caída tolera el negocio para ESE "
+             "sistema específico -- no todos los sistemas necesitan el mismo nivel de "
+             "protección."
+         ),
+         fuente="CompTIA Server+ SK0-005 — Security and Disaster Recovery"),
+    dict(dominio="servidor_recuperacion_desastres", concepto="Sitio de recuperación frío, tibio y caliente",
+         explicacion=(
+             "Un sitio frío (cold site) es solo espacio/infraestructura básica, se necesita "
+             "tiempo considerable para operar ahí. Un sitio tibio (warm site) tiene sistemas "
+             "parcialmente configurados y datos no del todo actualizados. Un sitio caliente "
+             "(hot site) es una réplica activa, lista para operar casi de inmediato -- cada "
+             "nivel cuesta progresivamente más pero reduce el RTO real ante una pérdida total "
+             "del sitio principal."
+         ),
+         relevancia_diagnostica=(
+             "Para un sitio sin ningún plan de recuperación ante pérdida total (incendio, "
+             "robo), la pregunta relevante no es 'cuál construir' sino 'cuál es aceptable "
+             "dado el costo' -- incluso un plan frío bien documentado es mejor que ninguno."
+         ),
+         fuente="CompTIA Server+ SK0-005 — Security and Disaster Recovery"),
 ]
 
 
@@ -2207,6 +2447,58 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Desgaste o residuos acumulados en el mecanismo de corte automático",
          recomendacion="Limpiar/revisar el cortador específicamente, no la impresora completa",
          fuente="Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"),
+
+    # ── Seguridad — arquitectura ──
+    dict(dominio="seguridad_arquitectura", patron="Se propone quitar o debilitar un control de seguridad porque 'ya hay otro que cubre lo mismo'",
+         causa_probable="Pérdida de una capa de defensa en profundidad, no una simplificación segura",
+         recomendacion="Mantener capas independientes -- la falla de un control no debe dejar el sistema sin ninguna protección",
+         fuente="CompTIA Security+ SY0-701 — Security Architecture"),
+    dict(dominio="seguridad_arquitectura", patron="Hallazgo de auditoría muestra un puerto/servicio abierto que nadie recuerda para qué es",
+         causa_probable="Servicio olvidado que amplía la superficie de ataque sin ningún uso activo real",
+         recomendacion="Cerrar el servicio si no se confirma un uso activo, no dejarlo abierto por costumbre",
+         fuente="CompTIA Security+ SY0-701 — Threats, Vulnerabilities and Mitigations"),
+
+    # ── Gestión de vulnerabilidades ──
+    dict(dominio="gestion_vulnerabilidades", patron="Hallazgo de auditoría marcado como severidad alta en un equipo aislado sin exposición real",
+         causa_probable="El puntaje de severidad técnica no considera el contexto real de exposición del equipo",
+         recomendacion="Priorizar combinando severidad Y exposición/criticidad real, no solo la etiqueta de severidad aislada",
+         fuente="CompTIA CySA+ CS0-003 — Vulnerability Management"),
+    dict(dominio="gestion_vulnerabilidades", patron="Escaneo automático marca como vulnerable un equipo de marca con soporte activo y parches recientes",
+         causa_probable="Posible falso positivo por versión de banner desactualizada en el reporte, sin reflejar parches de seguridad aplicados",
+         recomendacion="Verificar manualmente antes de escalar como crítico en equipos con historial de actualizaciones activas",
+         fuente="CompTIA CySA+ CS0-003 — Vulnerability Management"),
+
+    # ── SIEM / análisis (Hunter) ──
+    dict(dominio="siem_analisis", patron="Bloqueo de IP externa con firma de escaneo genérico, sin actividad posterior",
+         causa_probable="Ruido de fondo normal de internet (bots escaneando masivamente), no un ataque dirigido",
+         recomendacion="No escalar como urgente salvo que haya señales de éxito posteriores (tráfico saliente inusual, no solo el intento de entrada)",
+         fuente="CompTIA CySA+ CS0-003 — Security Operations"),
+    dict(dominio="siem_analisis", patron="Ningún sistema crítico (pagos, dominio) ha sido revisado manualmente en mucho tiempo, sin alertas activas",
+         causa_probable="Dependencia exclusiva de alertas automáticas, sin revisión activa (threat hunting) de amenazas sin firma conocida",
+         recomendacion="Programar revisión periódica manual de sistemas críticos, no depender solo de que el IDS avise",
+         fuente="CompTIA CySA+ CS0-003 — Security Operations"),
+
+    # ── Respuesta a incidentes ──
+    dict(dominio="respuesta_incidentes", patron="Ante un hallazgo de seguridad real, se empieza a investigar la causa antes de aislar el problema",
+         causa_probable="Orden invertido del proceso formal de respuesta a incidentes -- se salta la fase de contención",
+         recomendacion="Contener/aislar primero (bloquear IP, aislar equipo), investigar la causa raíz después",
+         fuente="CompTIA Security+ SY0-701 / CySA+ CS0-003 — Incident Response"),
+
+    # ── Server+ administración ──
+    dict(dominio="servidor_administracion", patron="Servidor con storage en SAN/NAS se congela o pierde acceso a datos, el servidor mismo responde bien",
+         causa_probable="Problema de conectividad de red hacia el almacenamiento compartido, no del servidor ni del disco",
+         recomendacion="Diagnosticar la red hacia el storage por separado del servidor",
+         fuente="CompTIA Server+ SK0-005 — Server Hardware Installation and Management"),
+    dict(dominio="servidor_administracion", patron="Cambio de configuración de servidor programado en horario operativo alto (check-in/check-out)",
+         causa_probable="Falta de ventana de mantenimiento acordada para el cambio",
+         recomendacion="Reprogramar a horario de bajo impacto, aunque el cambio parezca seguro en teoría",
+         fuente="CompTIA Server+ SK0-005 — Server Administration"),
+
+    # ── Recuperación ante desastres ──
+    dict(dominio="servidor_recuperacion_desastres", patron="Se define la frecuencia de backup de un sistema sin haber definido antes cuánta pérdida de datos es tolerable",
+         causa_probable="Falta de definición de RPO/RTO antes de diseñar la estrategia de respaldo",
+         recomendacion="Definir primero cuánta pérdida de datos y cuánto tiempo de caída tolera el negocio para ese sistema específico",
+         fuente="CompTIA Server+ SK0-005 — Security and Disaster Recovery"),
 ]
 
 

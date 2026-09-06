@@ -4,6 +4,24 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.13.0 — 2026-09-06
+
+- **Security+, Server+ y CySA+ agregadas (de 212 a 238 entradas).** Ampliación pedida por Juan
+  Pablo tras revisar qué certificaciones CompTIA faltaban. Dominios oficiales verificados con
+  fuentes antes de escribir contenido (SY0-701: 5 dominios; SK0-005: 4 dominios; CS0-003: 4
+  dominios). 7 dominios nuevos:
+  - `seguridad_arquitectura` (Security+): defensa en profundidad, Zero Trust, superficie de ataque
+  - `gestion_vulnerabilidades` (CySA+): CVSS en contexto, falsos positivos de escaneo, ventana
+    de exposición — directamente aplicable a los hallazgos de `run_network_audit_scan`
+  - `siem_analisis` (CySA+): IoC vs ruido de internet, correlación de eventos, threat hunting —
+    conecta explícitamente con el principio que ya usa `brain.py` para correlacionar
+  - `respuesta_incidentes` (Security+/CySA+): fases formales de respuesta — y se documentó que
+    `incident_escalation.py` ya sigue este mismo patrón sin haberlo llamado así
+  - `servidor_administracion` (Server+): clustering/HA, SAN/NAS, ventanas de mantenimiento
+  - `servidor_recuperacion_desastres` (Server+): RTO/RPO, sitios fríos/tibios/calientes
+  - Total: 238 entradas (111 reglas + 127 teoría) en 38 dominios de teoría / 34 de reglas.
+  - Probado (siembra + idempotencia) contra copia aislada antes de desplegar.
+
 ## 1.12.0 — 2026-09-06
 
 - **Fase 3 (verificación en vivo) y Fase 4 (cerrar el ciclo de aprendizaje) del plan de "ingeniero
