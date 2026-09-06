@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.20.1 — 2026-09-06
+
+- **Unificación de la metodología de troubleshooting, pedida por Juan Pablo tras la auditoría**:
+  existían dos marcos coexistiendo (A+ genérico de 6 pasos -- plan e implementación combinados --
+  y Network+ N10-009 de 7 pasos -- separados), ambos oficiales pero potencialmente confusos
+  dentro del dominio `metodologia` que el cerebro usa como respaldo genérico. Shomer ahora
+  estandariza en UNA sola versión: la de 7 pasos (identificar → teorizar → probar → plan de
+  acción → implementar o escalar → verificar → documentar), porque separar "planear" de
+  "implementar o escalar" es justo la distinción que importa para un sistema que recomienda una
+  acción pero no la ejecuta directamente -- el paso "o escalar" no existe en la versión combinada
+  de A+.
+  - Las 3 entradas que citaban "Metodología CompTIA A+ de 6 pasos" ahora citan "Metodología de
+    troubleshooting de 7 pasos (estándar unificado de Shomer, CompTIA Network+ N10-009 — 5.1)".
+  - Renumerado "paso 6" → "paso 7" en la entrada sobre por qué documentar no es opcional.
+  - El concepto principal (antes "Los 7 pasos formales de troubleshooting de red (versión
+    completa oficial)") ahora se titula "Los 7 pasos de troubleshooting (estándar unificado de
+    Shomer)" y su explicación deja explícito por qué se eligió esta versión sobre la de A+.
+  - Sin cambio en el total de entradas (436) -- unificación de citas/redacción, no contenido
+    nuevo. Probado (seed + idempotencia) contra copia aislada antes de desplegar.
+
 ## 1.20.0 — 2026-09-06
 
 - **Auditoría externa COMPLETA de las 436 entradas de la base de conocimiento** (no una muestra

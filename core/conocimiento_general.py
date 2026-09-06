@@ -727,7 +727,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "agente_skills) solo es confiable si cada acción se prueba y registra por "
              "separado — mezclar varias soluciones a la vez contamina el aprendizaje futuro."
          ),
-         fuente="Metodología CompTIA A+ de 6 pasos (Network+ N10-009 usa una variante de 7, separando plan e implementación)"),
+         fuente="Metodología de troubleshooting de 7 pasos (estándar unificado de Shomer, CompTIA Network+ N10-009 — 5.1)"),
 
     # ══════════════════════ CABLEADO — AMPLIACIÓN ══════════════════════
     dict(dominio="cableado", concepto="T568A vs T568B y por qué casi nunca importa hoy",
@@ -1464,7 +1464,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="Industria hotelera -- patrón de integración documentado"),
 
     # ══════════════════════ METODOLOGÍA — AMPLIACIÓN ══════════════════════
-    dict(dominio="metodologia", concepto="Documentar no es opcional: por qué el paso 6 de CompTIA existe",
+    dict(dominio="metodologia", concepto="Documentar no es opcional: por qué el paso 7 existe",
          explicacion=(
              "Documentar qué se probó, qué funcionó y qué no, no es burocracia — es lo que "
              "convierte un incidente resuelto en conocimiento reutilizable la próxima vez que "
@@ -1476,7 +1476,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "resuelto antes, señala una falla de documentación, no de conocimiento técnico — "
              "el conocimiento existió, simplemente no quedó accesible para la próxima vez."
          ),
-         fuente="Metodología CompTIA A+ de 6 pasos (Network+ N10-009 usa una variante de 7, separando plan e implementación)"),
+         fuente="Metodología de troubleshooting de 7 pasos (estándar unificado de Shomer, CompTIA Network+ N10-009 — 5.1)"),
     dict(dominio="metodologia", concepto="Cuándo escalar en vez de seguir intentando",
          explicacion=(
              "Un ingeniero de soporte maduro reconoce cuándo un problema excede su nivel de "
@@ -2716,7 +2716,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="CompTIA Network+ N10-009 — 4.3 Network Security"),
 
     # ── 5.0 Troubleshooting de red — metodología formal completa ──
-    dict(dominio="metodologia", concepto="Los 7 pasos formales de troubleshooting de red (versión completa oficial)",
+    dict(dominio="metodologia", concepto="Los 7 pasos de troubleshooting (estándar unificado de Shomer)",
          explicacion=(
              "1) Identificar el problema: recopilar información, preguntar a los usuarios, "
              "identificar síntomas, determinar qué cambió, intentar reproducir el problema. "
@@ -2725,7 +2725,10 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "vencer). 3) Probar la teoría. 4) Plan de acción considerando efectos "
              "secundarios. 5) Implementar o escalar. 6) Verificar funcionalidad completa "
              "(no solo que 'parece resuelto'). 7) Documentar todo el proceso, no solo el "
-             "resultado final."
+             "resultado final. Shomer estandariza en esta versión de 7 pasos (la de "
+             "CompTIA Network+ N10-009) en vez de la versión genérica de A+ que combina los "
+             "pasos 4 y 5 en uno solo -- separar 'planear' de 'implementar o escalar' importa "
+             "para un sistema que recomienda una acción pero no la ejecuta directamente."
          ),
          relevancia_diagnostica=(
              "El paso 'determinar qué cambió' antes de teorizar es el más saltado en la "
@@ -4474,7 +4477,7 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="metodologia", patron="Cualquier falla nueva sin diagnóstico previo",
          causa_probable="—",
          recomendacion="Descartar primero la capa física (cable, puerto, energía) antes de sospechar de software o aplicaciones -- es la causa más común y la más rápida de verificar",
-         fuente="Metodología CompTIA A+ de 6 pasos (identificar → teorizar → probar → plan de acción e implementación → verificar → documentar; Network+ N10-009 usa una variante de 7 pasos, separando plan e implementación)"),
+         fuente="Metodología de troubleshooting de 7 pasos (estándar unificado de Shomer: identificar → teorizar → probar → plan de acción → implementar o escalar → verificar → documentar; CompTIA Network+ N10-009 — 5.1)"),
     dict(dominio="metodologia", patron="Un problema afecta a un solo usuario o equipo",
          causa_probable="—",
          recomendacion="Casi nunca es de red compartida -- enfocar el diagnóstico en ese punto específico primero",
