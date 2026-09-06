@@ -2822,6 +2822,361 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "veces."
          ),
          fuente="CompTIA Network+ N10-009 — 5.5 Network Troubleshooting"),
+
+    # ══════ A+ CORE 2 220-1202 — 1.0 SISTEMAS OPERATIVOS (28%) ══════
+    dict(dominio="sistemas_operativos", concepto="Sistemas de archivos y sus diferencias prácticas",
+         explicacion=(
+             "NTFS (Windows) soporta permisos granulares, cifrado (EFS) y archivos grandes -- "
+             "es el estándar en discos internos Windows. exFAT no tiene permisos ni journaling "
+             "pero es compatible entre Windows/macOS/Linux, ideal para USBs compartidos entre "
+             "sistemas distintos. FAT32 es aún más compatible pero limitado a archivos de 4GB "
+             "máximo. ext4 es el estándar en Linux (journaling, sin límite práctico de tamaño). "
+             "APFS es el de macOS moderno (snapshots, cifrado nativo)."
+         ),
+         relevancia_diagnostica=(
+             "Un archivo de más de 4GB que 'no cabe' o falla al copiarse a un USB, sospechar "
+             "de que el USB está formateado en FAT32 -- reformatear a exFAT resuelve sin "
+             "perder compatibilidad multiplataforma."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
+    dict(dominio="sistemas_operativos", concepto="Ediciones de Windows y qué función depende de cuál se tenga",
+         explicacion=(
+             "Windows Home NO incluye BitLocker, Group Policy Editor ni la capacidad de unirse "
+             "a un dominio -- estas tres cosas son exclusivas de Pro/Enterprise/Education. "
+             "Pro for Workstations agrega soporte para más RAM/CPUs y ReFS, pensado para "
+             "estaciones de trabajo de alto rendimiento, no para uso general."
+         ),
+         relevancia_diagnostica=(
+             "Si un equipo 'no puede unirse al dominio' o 'no tiene la opción de BitLocker' "
+             "en el menú, verificar primero la edición de Windows instalada antes de "
+             "sospechar de una falla de configuración o de red -- puede ser Home."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
+    dict(dominio="sistemas_operativos", concepto="Herramientas de administración de Windows (snap-ins de MMC)",
+         explicacion=(
+             "Visor de eventos (Event Viewer) registra errores/advertencias del sistema y "
+             "aplicaciones -- primer lugar a revisar ante un fallo intermitente sin causa "
+             "obvia. Administrador de dispositivos muestra hardware y sus controladores/errores "
+             "(código amarillo = advertencia, código rojo = deshabilitado/fallando). "
+             "Administración de discos permite particionar/formatear sin perder datos de otras "
+             "particiones. Programador de tareas automatiza scripts/mantenimiento. "
+             "Servicios (services.msc) muestra qué procesos de fondo están corriendo/detenidos "
+             "y su tipo de inicio (automático/manual/deshabilitado)."
+         ),
+         relevancia_diagnostica=(
+             "Ante 'la aplicación deja de funcionar sin mensaje de error claro', revisar el "
+             "Visor de Eventos primero -- casi siempre hay un registro con el motivo real, "
+             "ahorra tiempo comparado con reinstalar a ciegas."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+    dict(dominio="sistemas_operativos", concepto="Comandos de línea de comandos de Windows esenciales",
+         explicacion=(
+             "sfc /scannow repara archivos de sistema corruptos. chkdsk revisa/repara errores "
+             "del disco. gpupdate /force aplica cambios de política de grupo sin esperar el "
+             "ciclo automático. gpresult /r muestra qué políticas se aplicaron realmente a un "
+             "equipo (útil cuando una política 'no se aplica'). diskpart administra particiones "
+             "a bajo nivel. net use conecta unidades de red. netstat -ano muestra conexiones "
+             "activas con su PID, útil para identificar qué proceso usa un puerto sospechoso."
+         ),
+         relevancia_diagnostica=(
+             "Una política de grupo que se configuró correctamente pero 'no se aplica' a un "
+             "equipo específico, correr gpresult /r en ESE equipo revela si la política llegó "
+             "y por qué, en vez de reconfigurar la política de nuevo sin diagnóstico."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.4 / 1.5 Operating Systems"),
+    dict(dominio="windows_ad", concepto="Active Directory: unidades organizativas (OU) y objetos de política de grupo (GPO)",
+         explicacion=(
+             "Las OU agrupan equipos/usuarios para aplicar políticas distintas por área (ej. "
+             "recepción vs administración). Un GPO vinculado a una OU aplica solo a los objetos "
+             "de esa OU y sus sub-OUs -- no es global salvo que se vincule al dominio raíz. "
+             "Las carpetas home y scripts de inicio de sesión también se configuran vía "
+             "políticas ligadas al perfil de usuario en el DC."
+         ),
+         relevancia_diagnostica=(
+             "Un usuario que se mueve de un área a otra (ej. de recepción a administración) y "
+             "conserva permisos o restricciones del área anterior, sospechar de que su cuenta "
+             "no se movió a la OU correcta en Active Directory -- no es una falla de red."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+    dict(dominio="sistemas_operativos", concepto="Comandos básicos de Linux para diagnóstico rápido",
+         explicacion=(
+             "ps aux lista procesos corriendo. top/htop muestra uso de CPU/RAM en vivo. df -h "
+             "muestra espacio en disco por partición. grep busca texto dentro de archivos "
+             "(muy usado sobre logs). chmod/chown administran permisos y dueño de archivos. "
+             "systemctl status <servicio> muestra si un servicio está activo, fallando, o "
+             "detenido, y sus últimas líneas de log."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor Linux que 'se puso lento' sin causa aparente, correr top/htop primero "
+             "identifica en segundos si es CPU, RAM o un proceso específico descontrolado -- "
+             "más rápido que revisar configuración a ciegas."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.10 Operating Systems / administración Linux"),
+
+    # ══════ A+ CORE 2 220-1202 — 2.0 SEGURIDAD (28%) ══════
+    dict(dominio="seguridad", concepto="Zero Trust, MFA, SSO y gestión de acceso privilegiado (PAM)",
+         explicacion=(
+             "Zero Trust asume que ningún dispositivo o usuario es confiable por defecto, "
+             "incluso dentro de la red interna -- cada acceso se verifica explícitamente. MFA "
+             "(autenticación multifactor) combina algo que sabes (contraseña) + algo que tienes "
+             "(token/app) + a veces algo que eres (biometría). SSO (inicio de sesión único) "
+             "permite autenticarse una vez para acceder a múltiples sistemas -- reduce fatiga "
+             "de contraseñas pero también significa que una sola cuenta comprometida abre más "
+             "puertas. PAM restringe y audita específicamente las cuentas con privilegios "
+             "administrativos, que son el objetivo más valioso para un atacante."
+         ),
+         relevancia_diagnostica=(
+             "Al diseñar accesos para un cliente nuevo, las cuentas administrativas de "
+             "infraestructura (routers, switches, PMS) deben tener MFA y estar bajo un esquema "
+             "PAM -- son las que, si se comprometen, dan control total de la operación."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.1 Security"),
+    dict(dominio="seguridad_endpoint", concepto="BitLocker vs EFS: cifrado de disco completo vs cifrado de archivo",
+         explicacion=(
+             "BitLocker cifra el disco completo -- protege contra robo físico del equipo (si "
+             "roban el disco, no pueden leer nada sin la clave de recuperación). EFS (Encrypting "
+             "File System) cifra archivos/carpetas específicos y está ligado a la cuenta de "
+             "usuario de Windows -- si se reinstala el perfil o se resetea la contraseña sin la "
+             "clave de recuperación de EFS, los archivos cifrados quedan irrecuperables."
+         ),
+         relevancia_diagnostica=(
+             "Antes de resetear la contraseña de un usuario o reconstruir su perfil de Windows, "
+             "verificar si tiene archivos cifrados con EFS -- resetear sin exportar antes el "
+             "certificado de EFS puede volver esos archivos permanentemente inaccesibles."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+    dict(dominio="seguridad_endpoint", concepto="Permisos NTFS vs permisos de recurso compartido (share): cuál gana",
+         explicacion=(
+             "Cuando un recurso se accede por red, aplican DOS capas de permisos: los del "
+             "recurso compartido (share) y los de NTFS del archivo/carpeta subyacente. El "
+             "resultado efectivo es el MÁS RESTRICTIVO de ambos -- si el share da 'control "
+             "total' pero NTFS solo da 'lectura', el usuario solo puede leer. Accediendo "
+             "localmente (no por red) solo aplican los permisos NTFS."
+         ),
+         relevancia_diagnostica=(
+             "Un usuario que 'no puede escribir' en una carpeta compartida aunque el "
+             "administrador jura que le dio permiso completo -- revisar AMBAS capas (share y "
+             "NTFS), casi siempre una de las dos quedó más restrictiva que la otra."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+    dict(dominio="seguridad_endpoint", concepto="Taxonomía de malware y por qué importa distinguir el tipo",
+         explicacion=(
+             "Ransomware cifra archivos y exige pago. Keylogger captura pulsaciones de teclado "
+             "silenciosamente (roba credenciales, no daña archivos). Rootkit se esconde a nivel "
+             "de sistema operativo/kernel, difícil de detectar con antivirus normal. Spyware "
+             "recopila información de uso sin consentimiento. Cryptominer usa CPU/GPU de la "
+             "víctima para minar criptomonedas -- síntoma característico: ventiladores a tope y "
+             "CPU alta constante sin razón aparente. Malware sin archivo (fileless) vive en "
+             "memoria/PowerShell, no deja archivo en disco, por lo que escaneos tradicionales de "
+             "archivos no lo detectan."
+         ),
+         relevancia_diagnostica=(
+             "Un equipo con CPU al 100% constante, ventiladores siempre a máxima velocidad, sin "
+             "ningún proceso pesado visible en Task Manager, sospechar de cryptominer o malware "
+             "sin archivo -- requiere herramientas de detección de comportamiento, no solo "
+             "escaneo de archivos."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+    dict(dominio="seguridad", concepto="Proceso de eliminación de malware en 7 pasos (metodología SOHO)",
+         explicacion=(
+             "1) Identificar y verificar los síntomas de malware. 2) Poner en cuarentena el "
+             "sistema afectado (desconectar de la red). 3) Deshabilitar la restauración del "
+             "sistema (System Restore) en Windows, para no reintroducir el malware desde un "
+             "punto de restauración infectado. 4) Remediar el sistema afectado (actualizar "
+             "software antimalware, escanear y eliminar). 5) Programar escaneos y actualizar "
+             "el software de seguridad. 6) Habilitar de nuevo System Restore y crear un punto "
+             "limpio. 7) Educar al usuario final sobre cómo se infectó, para prevenir "
+             "recurrencia. El orden importa -- deshabilitar restauración ANTES de remediar es "
+             "lo que evita que el malware regrese desde un punto de restauración guardado."
+         ),
+         relevancia_diagnostica=(
+             "Si un equipo se reinfecta poco después de haberse 'limpiado', sospechar que no se "
+             "deshabilitó System Restore antes de remediar, y el malware volvió desde un punto "
+             "de restauración infectado guardado previamente."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+    dict(dominio="seguridad", concepto="Variantes de ingeniería social más allá del phishing genérico",
+         explicacion=(
+             "Vishing es phishing por llamada de voz. Smishing es phishing por SMS. Whaling es "
+             "phishing dirigido específicamente a ejecutivos/gerencia (objetivo de alto valor, "
+             "mensaje muy personalizado). Pretexting es inventar un escenario falso creíble para "
+             "obtener información (ej. hacerse pasar por soporte técnico pidiendo la "
+             "contraseña 'para verificar la cuenta'). Todas explotan confianza o urgencia, no "
+             "una falla técnica -- por eso ninguna solución de software las previene por "
+             "completo, se requiere capacitación del usuario."
+         ),
+         relevancia_diagnostica=(
+             "Un empleado que reporta haber dado una contraseña por teléfono a alguien que "
+             "'sonaba como soporte técnico de la empresa' es un caso de vishing/pretexting -- "
+             "la respuesta correcta es cambiar esa credencial de inmediato y reforzar "
+             "capacitación, no buscar una falla técnica que explique el incidente."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.5 Security"),
+    dict(dominio="control_acceso", concepto="Medidas de seguridad física: capas complementarias, no sustitutas",
+         explicacion=(
+             "Badges/tarjetas de acceso, biometría, mantrap (esclusa de doble puerta que impide "
+             "el 'tailgating' -- que alguien sin acceso entre pegado a alguien autorizado), "
+             "cámaras, guardias y cerraduras físicas son capas independientes. Ninguna sustituye "
+             "a las demás: un mantrap sin cámaras no deja evidencia de quién intentó colarse; "
+             "cámaras sin control de acceso solo graban, no impiden la entrada."
+         ),
+         relevancia_diagnostica=(
+             "Al evaluar la seguridad física de un cuarto de equipos/servidores en un hotel, "
+             "revisar que exista control de acceso (no solo cerradura simple) Y registro "
+             "(cámara o bitácora) -- una sola capa deja un punto ciego evidente ante auditoría."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
+    dict(dominio="dispositivos_moviles", concepto="Endurecimiento (hardening) de dispositivos móviles corporativos",
+         explicacion=(
+             "Requerir biometría o PIN fuerte para desbloqueo, mantener el sistema operativo "
+             "actualizado, habilitar cifrado de almacenamiento, gestionar el dispositivo vía MDM "
+             "(Mobile Device Management) para poder aplicar políticas remotas, y tener "
+             "capacidad de borrado remoto (remote wipe) en caso de pérdida o robo."
+         ),
+         relevancia_diagnostica=(
+             "Un dispositivo móvil corporativo perdido o robado sin capacidad de borrado remoto "
+             "configurada representa una exposición real de datos -- verificar que el MDM esté "
+             "activo ANTES de que ocurra un incidente, no después."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.9 Security"),
+    dict(dominio="seguridad_endpoint", concepto="Métodos de destrucción de datos y cuándo usar cada uno",
+         explicacion=(
+             "Borrado seguro por software (sobrescritura múltiple) sirve para discos que se "
+             "reutilizarán. Desmagnetización (degaussing) destruye discos mecánicos por completo "
+             "pero NO funciona en SSD (no tienen componente magnético). Trituración física es el "
+             "único método verdaderamente irreversible, requerido cuando el disco contiene "
+             "información muy sensible y no se reutilizará. Un 'formateo rápido' NO destruye "
+             "datos -- solo borra la tabla de referencia, los datos siguen recuperables."
+         ),
+         relevancia_diagnostica=(
+             "Antes de dar de baja o revender un equipo que manejó datos de huéspedes/pagos, "
+             "nunca confiar en un formateo simple -- requiere borrado seguro certificado o "
+             "destrucción física, según la sensibilidad de los datos que manejó."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.10 Security"),
+    dict(dominio="seguridad", concepto="Seguridad de red SOHO: lo mínimo que no debería faltar",
+         explicacion=(
+             "Cambiar credenciales por defecto del router/AP (la causa #1 de compromisos SOHO), "
+             "deshabilitar puertos/servicios de administración no usados (ej. WPS, gestión "
+             "remota desde WAN), considerar whitelisting de MAC para dispositivos críticos, "
+             "mantener firmware actualizado, y segmentar redes de invitados de las "
+             "administrativas."
+         ),
+         relevancia_diagnostica=(
+             "Antes de dar por ‘seguro’ un router/AP recién instalado, verificar explícitamente "
+             "que las credenciales por defecto se cambiaron -- es el hallazgo más común y más "
+             "crítico en auditorías, y se olvida con facilidad en instalaciones apuradas."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.11 Security"),
+
+    # ══════ A+ CORE 2 220-1202 — 4.0 PROCEDIMIENTOS OPERATIVOS (21%) ══════
+    dict(dominio="backup", concepto="Esquema de rotación de backups GFS (abuelo-padre-hijo) y la regla 3-2-1",
+         explicacion=(
+             "GFS mantiene backups diarios (hijo), semanales (padre) y mensuales (abuelo), cada "
+             "nivel con su propio tiempo de retención -- permite restaurar tanto un archivo "
+             "borrado ayer como uno borrado hace dos meses, sin guardar un backup diario "
+             "completo indefinidamente. La regla 3-2-1 complementa esto: 3 copias de los datos, "
+             "en 2 tipos de medio distintos, con 1 copia fuera del sitio (offsite) -- para que "
+             "un incendio o robo local no destruya también el backup."
+         ),
+         relevancia_diagnostica=(
+             "Si todos los backups de un cliente están en un disco dentro del mismo cuarto que "
+             "el servidor, eso viola la regla 3-2-1 (falta la copia offsite) -- un incendio o "
+             "robo destruiría datos y backup a la vez, sin importar qué tan buena sea la "
+             "rotación GFS interna."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.2 Operational Procedures"),
+    dict(dominio="gestion_documentacion", concepto="Gestión de cambios (change management) formal",
+         explicacion=(
+             "Un cambio en producción (actualizar firmware, cambiar VLAN, reemplazar un switch "
+             "core) debería pasar por: solicitud documentada, análisis de impacto/riesgo, "
+             "aprobación, ventana de mantenimiento acordada, y -- crítico -- un plan de "
+             "rollback definido ANTES de ejecutar el cambio, no improvisado si algo sale mal."
+         ),
+         relevancia_diagnostica=(
+             "Antes de aplicar un cambio de red en horario de operación del hotel (no en "
+             "ventana de mantenimiento), evaluar si el riesgo de interrupción justifica no "
+             "esperar -- y siempre tener claro cómo revertir el cambio en menos de 5 minutos si "
+             "algo falla."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.3 Operational Procedures"),
+    dict(dominio="metodologia", concepto="Cadena de custodia y orden de volatilidad en respuesta a incidentes",
+         explicacion=(
+             "Cadena de custodia es el registro documentado de quién tuvo acceso a una "
+             "evidencia digital y cuándo -- necesario si el incidente puede terminar en acción "
+             "legal. Orden de volatilidad indica qué evidencia capturar primero porque se pierde "
+             "más rápido: registros de RAM/caché primero, luego conexiones de red activas, "
+             "luego procesos corriendo, y al final archivos en disco (lo más persistente)."
+         ),
+         relevancia_diagnostica=(
+             "Ante un incidente de seguridad grave (ej. sospecha de intrusión activa), nunca "
+             "apagar el equipo comprometido de inmediato -- eso destruye la evidencia más "
+             "volátil (RAM, conexiones activas) antes de poder capturarla."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.7 Operational Procedures"),
+    dict(dominio="metodologia", concepto="Comunicación profesional con el usuario final",
+         explicacion=(
+             "Evitar jerga técnica innecesaria, escuchar activamente sin interrumpir, no "
+             "menospreciar el conocimiento del usuario ni culparlo, mantener la calma incluso "
+             "ante frustración del cliente, y confirmar que el usuario entendió la solución "
+             "antes de cerrar el caso -- no solo que el problema técnico se resolvió."
+         ),
+         relevancia_diagnostica=(
+             "Un ticket técnicamente resuelto pero donde el usuario sigue confundido sobre qué "
+             "pasó o qué hacer si se repite, no está realmente cerrado desde la perspectiva de "
+             "servicio -- confirmar comprensión es parte del cierre, no un extra."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.8 Operational Procedures"),
+    dict(dominio="metodologia", concepto="Fundamentos de scripting para automatización básica",
+         explicacion=(
+             "Variables, bucles y comillas correctas son la base de cualquier script en "
+             "Bash/PowerShell/Python. Un riesgo real: correr un script encontrado en internet "
+             "sin leerlo primero, o sin probarlo en un entorno aislado -- un script mal escrito "
+             "puede borrar archivos, saturar un servicio, o modificar permisos masivamente sin "
+             "posibilidad de deshacer el daño."
+         ),
+         relevancia_diagnostica=(
+             "Antes de correr cualquier script de automatización nuevo contra un servidor de "
+             "producción, probarlo primero en un entorno de prueba o al menos leerlo línea por "
+             "línea -- el ahorro de tiempo de no revisarlo no compensa el riesgo de un error "
+             "irreversible en producción."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.9 Operational Procedures"),
+    dict(dominio="acceso_remoto", concepto="Tecnologías de acceso remoto y su tradeoff de seguridad",
+         explicacion=(
+             "RDP (Escritorio Remoto) da control total de una sesión Windows -- nunca debe "
+             "exponerse directamente a internet sin VPN, es uno de los vectores de ataque más "
+             "comunes cuando se deja abierto. VNC es similar pero multiplataforma, con cifrado "
+             "más débil por defecto en muchas implementaciones. SSH da acceso a línea de "
+             "comandos, cifrado por diseño, el estándar para administración remota de "
+             "servidores Linux/red. Las herramientas de asistencia remota comercial (ej. "
+             "AnyDesk, TeamViewer) facilitan soporte puntual pero requieren confiar en el "
+             "proveedor del software como intermediario."
+         ),
+         relevancia_diagnostica=(
+             "Un servidor con el puerto RDP (3389) expuesto directamente a internet sin VPN de "
+             "por medio es una vulnerabilidad crítica inmediata, independientemente de qué tan "
+             "fuerte sea la contraseña -- los ataques de fuerza bruta contra RDP expuesto son "
+             "automatizados y constantes."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures"),
+    dict(dominio="metodologia", concepto="Limitaciones de la IA generativa aplicadas a soporte técnico",
+         explicacion=(
+             "CompTIA incorporó en A+ Core 2 V15 (2024) el reconocimiento explícito de que las "
+             "herramientas de IA generativa usadas en soporte técnico tienen limitaciones "
+             "reales: sesgo heredado de los datos de entrenamiento, alucinaciones (generar "
+             "respuestas que suenan seguras pero son incorrectas), precisión variable según el "
+             "tema, y riesgo de privacidad si se envía información sensible del cliente a un "
+             "servicio de IA externo sin control sobre dónde queda esa información."
+         ),
+         relevancia_diagnostica=(
+             "Este es exactamente el motivo de diseño detrás de las Fases 3 y 4 del cerebro de "
+             "Shomer: el LLM propone una hipótesis (puede alucinar), pero el sistema la "
+             "verifica en vivo contra el equipo real ANTES de concluir, y solo aprende de "
+             "conclusiones confirmadas -- nunca se confía ciegamente en la salida del modelo "
+             "de lenguaje, siguiendo exactamente esta precaución oficial de CompTIA."
+         ),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.11 Operational Procedures (nuevo en V15, 2024)"),
 ]
 
 
@@ -3450,6 +3805,84 @@ _SEED_RULES: list[dict[str, str]] = [
          causa_probable="Jitter o pérdida de paquetes puntual, no falta de ancho de banda total",
          recomendacion="Medir jitter y pérdida de paquetes específicamente, no solo velocidad de descarga/subida",
          fuente="CompTIA Network+ N10-009 — 5.4 Network Troubleshooting"),
+
+    # ══════ A+ CORE 2 220-1202 — 2.0 SEGURIDAD (síntomas y causas) ══════
+    dict(dominio="seguridad_endpoint", patron="CPU al 100% de forma constante sin ningún proceso pesado visible en el administrador de tareas",
+         causa_probable="Cryptominer o malware sin archivo (fileless) ejecutándose en memoria/PowerShell",
+         recomendacion="Usar una herramienta de detección de comportamiento (no solo escaneo de archivos) y revisar procesos de PowerShell/WMI activos",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+    dict(dominio="seguridad_endpoint", patron="El equipo se reinfecta poco después de haberse limpiado de malware",
+         causa_probable="No se deshabilitó System Restore antes de remediar, el malware volvió desde un punto de restauración guardado",
+         recomendacion="Deshabilitar System Restore, remediar de nuevo, y solo entonces rehabilitarlo con un punto limpio",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+    dict(dominio="seguridad_endpoint", patron="Archivos con extensión desconocida y una nota de rescate en el escritorio o carpetas",
+         causa_probable="Infección de ransomware activa o reciente",
+         recomendacion="Aislar el equipo de la red inmediatamente (desconectar cable/WiFi), NO pagar el rescate, restaurar desde el backup más reciente verificado",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+    dict(dominio="seguridad_endpoint", patron="Un usuario no puede escribir en una carpeta compartida aunque el administrador confirma que le dio permiso total",
+         causa_probable="Los permisos NTFS de la carpeta son más restrictivos que los del recurso compartido (share), y el más restrictivo gana",
+         recomendacion="Revisar ambas capas de permisos (share y NTFS) por separado -- casi siempre una quedó más restrictiva que la otra",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+    dict(dominio="seguridad_endpoint", patron="Archivos cifrados con EFS quedan inaccesibles tras resetear la contraseña o reconstruir el perfil de un usuario",
+         causa_probable="El certificado de cifrado EFS no se exportó/respaldó antes del reseteo, y estaba ligado a la cuenta anterior",
+         recomendacion="Siempre exportar el certificado EFS del usuario ANTES de resetear su contraseña o reconstruir su perfil",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+    dict(dominio="seguridad", patron="Un empleado reporta haber dado una contraseña por teléfono a alguien que sonaba como soporte técnico interno",
+         causa_probable="Ataque de vishing/pretexting -- ingeniería social por voz, no una falla técnica",
+         recomendacion="Cambiar esa credencial de inmediato y reforzar capacitación -- no hay solución de software que prevenga esto por sí sola",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.5 Security"),
+    dict(dominio="seguridad", patron="Un router o AP recién instalado sigue usando el usuario/contraseña de fábrica",
+         causa_probable="Paso de endurecimiento básico omitido durante la instalación",
+         recomendacion="Cambiar credenciales por defecto de inmediato -- es el hallazgo de seguridad más común y más crítico en instalaciones apuradas",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.11 Security"),
+    dict(dominio="dispositivos_moviles", patron="Un dispositivo móvil corporativo se pierde o es robado y no tiene MDM configurado",
+         causa_probable="Falta de gestión de dispositivos móviles (MDM) implementada preventivamente",
+         recomendacion="Sin MDM no hay borrado remoto posible -- documentar como brecha de datos potencial y priorizar MDM en todos los dispositivos restantes",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.9 Security"),
+
+    # ══════ A+ CORE 2 220-1202 — 1.0 / 3.0 SISTEMAS OPERATIVOS Y TROUBLESHOOTING ══════
+    dict(dominio="sistemas_operativos", patron="Un equipo Windows no tiene la opción de BitLocker ni de unirse a un dominio en el menú",
+         causa_probable="La edición instalada es Windows Home, que no incluye BitLocker, Group Policy Editor ni unión a dominio",
+         recomendacion="Verificar la edición de Windows antes de sospechar de una falla de configuración o de red",
+         fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
+    dict(dominio="sistemas_operativos", patron="Una política de grupo (GPO) configurada correctamente no se aplica a un equipo específico",
+         causa_probable="El equipo no está en la OU correcta de Active Directory, o el GPO está vinculado a la OU equivocada",
+         recomendacion="Correr gpresult /r en ese equipo para ver qué políticas llegaron realmente, antes de reconfigurar el GPO de nuevo",
+         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+    dict(dominio="sistemas_operativos", patron="Una aplicación deja de funcionar sin ningún mensaje de error visible al usuario",
+         causa_probable="Fallo registrado a nivel de sistema, no visible en la interfaz de la aplicación",
+         recomendacion="Revisar el Visor de Eventos de Windows primero -- casi siempre hay un registro del motivo real antes de reinstalar a ciegas",
+         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+    dict(dominio="sistemas_operativos", patron="Windows falla repetidamente al instalar una actualización acumulativa",
+         causa_probable="Espacio en disco insuficiente o componente WinSxS corrupto",
+         recomendacion="Verificar espacio libre en disco y correr sfc /scannow / DISM antes de reintentar la actualización repetidamente sin diagnóstico",
+         fuente="CompTIA A+ Core 2 220-1202 — 1.6 Operating Systems"),
+    dict(dominio="sistemas_operativos", patron="Windows muestra pantalla azul (BSOD) justo después de instalar una actualización o controlador reciente",
+         causa_probable="Incompatibilidad del controlador/actualización reciente con el hardware o software instalado",
+         recomendacion="Arrancar en modo seguro y desinstalar el controlador/actualización más reciente antes de investigar otras causas de hardware",
+         fuente="CompTIA A+ Core 2 220-1202 — 3.1 Software Troubleshooting"),
+    dict(dominio="sistemas_operativos", patron="Un servicio de Windows que funcionaba bien no vuelve a iniciar tras un reinicio o corte de energía",
+         causa_probable="El servicio quedó en estado de inicio 'Manual' o 'Deshabilitado' tras el corte, en vez de 'Automático'",
+         recomendacion="Verificar el tipo de inicio del servicio en services.msc antes de sospechar de corrupción de archivos del servicio",
+         fuente="CompTIA A+ Core 2 220-1202 — 3.1 Software Troubleshooting"),
+    dict(dominio="dispositivos_moviles", patron="Un dispositivo móvil no logra autenticarse en una red WiFi corporativa que antes sí funcionaba",
+         causa_probable="Certificado de red o perfil WiFi corrupto/vencido en el dispositivo",
+         recomendacion="Olvidar y volver a configurar el perfil de red en el dispositivo antes de sospechar del AP o del servidor RADIUS",
+         fuente="CompTIA A+ Core 2 220-1202 — 3.3 Software Troubleshooting"),
+    dict(dominio="dispositivos_moviles", patron="La batería de un dispositivo móvil corporativo se agota mucho más rápido de lo normal",
+         causa_probable="Aplicaciones en segundo plano sin restricción o el GPS/ubicación siempre activo",
+         recomendacion="Revisar uso de batería por app antes de asumir que la batería física está degradada",
+         fuente="CompTIA A+ Core 2 220-1202 — 3.3 Software Troubleshooting"),
+
+    # ══════ A+ CORE 2 220-1202 — 4.0 PROCEDIMIENTOS OPERATIVOS ══════
+    dict(dominio="backup", patron="Todos los backups de un sitio están guardados en un disco dentro del mismo cuarto que el servidor",
+         causa_probable="Violación de la regla 3-2-1 -- falta la copia offsite",
+         recomendacion="Configurar al menos una copia de backup fuera del sitio (nube o ubicación física distinta) antes de considerar el esquema completo",
+         fuente="CompTIA A+ Core 2 220-1202 — 4.2 Operational Procedures"),
+    dict(dominio="acceso_remoto", patron="El puerto de Escritorio Remoto (3389) de un servidor está expuesto directamente a internet",
+         causa_probable="Configuración de acceso remoto sin VPN de por medio",
+         recomendacion="Cerrar la exposición directa de RDP a internet y requerir VPN antes de permitir el acceso remoto -- es un vector de ataque automatizado constante",
+         fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures"),
 ]
 
 
@@ -3583,6 +4016,8 @@ _DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
     "windows_ad":               ("srvad", "dominio"),
     "bases_datos":              ("srvzeus", "pms", "base de datos"),
     "pms_integracion":          ("pms", "zeus", "pos"),
+    "sistemas_operativos":      ("srv", "servidor", "laptop", "notebook", "workstation"),
+    "dispositivos_moviles":     ("tablet", "celular", "móvil", "movil", "smartphone"),
 }
 
 

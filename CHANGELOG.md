@@ -4,6 +4,38 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.16.0 — 2026-09-06
+
+- **A+ Core 2 (220-1202) completo — tercer certificado del método exhaustivo (de 315 a 356
+  entradas).** Descargado y leído el documento oficial de objetivos (v4.0/V15, 2024), los 4
+  dominios cubiertos: 1.0 Operating Systems (28%), 2.0 Security (28%), 3.0 Software
+  Troubleshooting (23%), 4.0 Operational Procedures (21%). Ya existía contenido curado de A+
+  Core 2 en `conocimiento_general.py` desde v1.13.0 (escenarios prácticos de Ópera) -- esta
+  entrada AGREGA la base teórica/fundamentos oficiales que faltaba, no reemplaza lo anterior.
+  - Nuevos dominios: `sistemas_operativos` (sistemas de archivos, ediciones de Windows,
+    herramientas MMC, comandos CLI, Active Directory OU/GPO, comandos Linux).
+  - Ampliado: `seguridad_endpoint` (BitLocker vs EFS, permisos NTFS vs share, taxonomía de
+    malware, destrucción de datos), `seguridad` (Zero Trust/MFA/SSO/PAM, proceso de 7 pasos
+    para eliminar malware, ingeniería social: vishing/smishing/whaling/pretexting, seguridad
+    SOHO), `control_acceso` (capas físicas complementarias), `dispositivos_moviles` (MDM,
+    hardening, keyword de matching agregado por primera vez), `backup` (esquema GFS + regla
+    3-2-1), `gestion_documentacion` (change management formal), `metodologia` (cadena de
+    custodia/orden de volatilidad, comunicación profesional, fundamentos de scripting, y una
+    entrada nueva de CompTIA V15 sobre limitaciones de IA generativa -- sesgo, alucinaciones,
+    privacidad -- que documenta explícitamente por qué el cerebro de Shomer nunca concluye sin
+    verificación en vivo, ver `core/brain.py` Fase 3), `acceso_remoto` (RDP/VNC/SSH, riesgo de
+    exposición directa a internet).
+  - **Bug encontrado y corregido antes de desplegar**: la keyword `"pc"` agregada a
+    `_DOMAIN_KEYWORDS["sistemas_operativos"]` producía falso positivo por coincidencia de
+    substring dentro de palabras como "rece**pc**ion" (el matching es por substring, no por
+    palabra completa). Se detectó probando `matching_domains(["Tablet Recepcion"])` contra la
+    copia aislada antes de desplegar, y se corrigió quitando `"pc"` (dejando `laptop`/
+    `notebook`/`workstation`, sin colisión conocida).
+  - Total: 356 entradas (151 reglas + 205 teoría). Probado (seed + idempotencia + matching de
+    dominios) contra copia aislada de la base real antes de desplegar. Pendiente en el mismo
+    método: Security+, Server+, CySA+ -- su contenido actual (desde v1.13.0) es curado, no
+    exhaustivo, y necesita su propio documento oficial de objetivos.
+
 ## 1.15.0 — 2026-09-06
 
 - **Network+ (N10-009) completo — segundo certificado del método exhaustivo (de 272 a 315
