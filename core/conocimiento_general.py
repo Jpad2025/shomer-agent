@@ -2841,15 +2841,23 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
     dict(dominio="sistemas_operativos", concepto="Ediciones de Windows y qué función depende de cuál se tenga",
          explicacion=(
-             "Windows Home NO incluye BitLocker, Group Policy Editor ni la capacidad de unirse "
-             "a un dominio -- estas tres cosas son exclusivas de Pro/Enterprise/Education. "
-             "Pro for Workstations agrega soporte para más RAM/CPUs y ReFS, pensado para "
-             "estaciones de trabajo de alto rendimiento, no para uso general."
+             "Windows Home NO incluye BitLocker (con su panel de control, gestión granular y "
+             "'BitLocker to go' para USBs), Group Policy Editor ni la capacidad de unirse a un "
+             "dominio -- estas tres cosas son exclusivas de Pro/Enterprise/Education. Ojo con un "
+             "matiz real: Windows Home SÍ puede tener 'Device Encryption' en equipos modernos "
+             "compatibles (TPM 2.0 + Modern Standby) -- es una versión simplificada que usa la "
+             "misma tecnología de cifrado por debajo, pero se activa automáticamente al iniciar "
+             "sesión con cuenta Microsoft, resguarda la clave de recuperación en esa cuenta, y "
+             "no permite configuración granular como BitLocker completo. Pro for Workstations "
+             "agrega soporte para más RAM/CPUs y ReFS, pensado para estaciones de trabajo de "
+             "alto rendimiento, no para uso general."
          ),
          relevancia_diagnostica=(
-             "Si un equipo 'no puede unirse al dominio' o 'no tiene la opción de BitLocker' "
-             "en el menú, verificar primero la edición de Windows instalada antes de "
-             "sospechar de una falla de configuración o de red -- puede ser Home."
+             "Si un equipo Windows Home muestra el disco 'cifrado' bajo Configuración > "
+             "Privacidad y seguridad, no es BitLocker completo -- es Device Encryption "
+             "automático ligado a la cuenta Microsoft del usuario. Para BitLocker con panel de "
+             "control, unión a dominio, o Group Policy, verificar primero la edición instalada "
+             "antes de sospechar de una falla de configuración o de red -- puede ser Home."
          ),
          fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
     dict(dominio="sistemas_operativos", concepto="Herramientas de administración de Windows (snap-ins de MMC)",

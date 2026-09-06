@@ -4,6 +4,36 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.19.1 — 2026-09-06
+
+- **Primera auditoría externa de la base de conocimiento (436 entradas), pedida explícitamente por
+  Juan Pablo tras aclarar que "cubrir el temario oficial" NO significa "tener las respuestas del
+  examen"** -- el contenido lo escribió Claude desde su propio conocimiento técnico, usando el
+  temario solo como checklist de cobertura, sin verificación externa entrada por entrada hasta
+  ahora. Se auditaron 19 afirmaciones técnicas específicas y verificables (cifras exactas,
+  fórmulas, comportamiento de protocolos), una muestra distribuida en las 6 certificaciones,
+  contra fuentes autorizadas (documentación de Microsoft, Cisco, NIST SP 800-207, MITRE, CISA,
+  IBM, TechTarget): RAID 5/6 tolerancia a fallos, NAS vs SAN (NFS/CIFS vs iSCSI/FC/FCoE), fórmulas
+  SLE/ALE/ARO, tolerancia de reloj de Kerberos (5 min), límite de 2TB de MBR, esquema de rotación
+  GFS, regla de backup 3-2-1, componentes de Zero Trust (NIST 800-207: Policy Engine/
+  Administrator/Enforcement Point), cyber kill chain (7 fases), Diamond Model (4 vértices),
+  BPDU Guard/err-disabled, password spraying vs fuerza bruta, honeypot/honeynet/honeyfile/
+  honeytoken, TOC/TOU, componentes de CVSS, 802.1X/EAP, agotamiento de presupuesto PoE, y
+  agotamiento de pool DHCP/APIPA.
+  - **Resultado: 18 de 19 confirmadas exactas contra la fuente.**
+  - **1 hallazgo real, corregido**: la entrada sobre ediciones de Windows (`sistemas_operativos`,
+    A+ Core 2 — 1.1) decía que Windows Home "no incluye BitLocker" sin matizar que SÍ existe
+    "Device Encryption" en equipos modernos compatibles (TPM 2.0 + Modern Standby) -- una versión
+    automática y simplificada de la misma tecnología, ligada a la cuenta Microsoft, sin gestión
+    granular. No era falso, pero podía inducir a error frente a un equipo Home que sí muestra
+    cifrado activo. Corregida la explicación y la relevancia diagnóstica; la regla de diagnóstico
+    asociada ya era correcta (hablaba de BitLocker completo con panel de control) y no requirió
+    cambio.
+  - Total sigue en 436 entradas (solo se corrigió texto, no se agregó ni quitó contenido).
+  - Esto es una auditoría por MUESTRA, no exhaustiva -- de las 436 entradas se verificaron 19
+    afirmaciones puntuales. Da una señal de confianza real (95% de aciertos en la muestra) pero
+    no es garantía de que las 417 entradas restantes no tengan errores similares sin detectar.
+
 ## 1.19.0 — 2026-09-06
 
 - **CySA+ (CS0-003) completo — SEXTO y último certificado del método exhaustivo (de 414 a 436
