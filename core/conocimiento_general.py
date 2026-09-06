@@ -157,7 +157,8 @@ _SEED_TEORIA: list[dict[str, str]] = [
          explicacion=(
              "802.3af (PoE) entrega hasta 15.4W en la fuente, ~12.95W disponibles en el "
              "dispositivo tras pérdida en el cable. 802.3at (PoE+) sube a 30W/25.5W. 802.3bt "
-             "(PoE++) tipo 3 llega a 60W y tipo 4 a 100W, pensado para APs WiFi6 de alta "
+             "(PoE++) tipo 3 llega a 60W/51W y tipo 4 a 90W en la fuente (~71.3W garantizados en "
+             "el dispositivo), pensado para APs WiFi6 de alta "
              "potencia, PTZ de cámaras y pantallas. Cada dispositivo se anuncia en una 'clase' "
              "(0 a 8) que le dice al switch cuánta energía reservarle."
          ),
@@ -726,7 +727,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "agente_skills) solo es confiable si cada acción se prueba y registra por "
              "separado — mezclar varias soluciones a la vez contamina el aprendizaje futuro."
          ),
-         fuente="Metodología CompTIA de 7 pasos"),
+         fuente="Metodología CompTIA A+ de 6 pasos (Network+ N10-009 usa una variante de 7, separando plan e implementación)"),
 
     # ══════════════════════ CABLEADO — AMPLIACIÓN ══════════════════════
     dict(dominio="cableado", concepto="T568A vs T568B y por qué casi nunca importa hoy",
@@ -745,9 +746,11 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="CompTIA Network+ N10-009"),
     dict(dominio="cableado", concepto="Modos PoE A y B (spare pairs vs data pairs)",
          explicacion=(
-             "El PoE puede viajar sobre los mismos pares que llevan datos (modo B, común en "
-             "Gigabit donde los 4 pares llevan datos) o sobre los pares 'libres' en cableado "
-             "10/100 (modo A). Si un inyector PoE y un switch/AP usan modos distintos de forma "
+             "El PoE puede viajar sobre los mismos pares que llevan datos (modo A, pines 1-2 y "
+             "3-6 -- funciona igual en 10/100 y Gigabit porque la alimentación DC no interfiere "
+             "con la señal) o sobre los pares 'libres' en cableado 10/100 (modo B, pines 4-5 y "
+             "7-8 -- no aplica en Gigabit puro porque ahí los 4 pares ya llevan datos). Si un "
+             "inyector PoE y un switch/AP usan modos distintos de forma "
              "incompatible, el equipo simplemente no recibe energía aunque el cable esté "
              "perfecto."
          ),
@@ -1093,9 +1096,13 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="CompTIA Network+ N10-009"),
     dict(dominio="voz_ip", concepto="Códecs de voz y su impacto en ancho de banda vs calidad",
          explicacion=(
-             "G.711 no comprime (mejor calidad, ~64-87kbps por llamada) — ideal con ancho de "
-             "banda de sobra. G.729 comprime mucho más (~8kbps) a costa de algo de calidad y "
-             "más uso de CPU para codificar/decodificar — preferible en enlaces WAN limitados. "
+             "G.711 no comprime (mejor calidad; el codec corre a 64kbps, pero el ancho de banda "
+             "real por llamada sube a ~80-87kbps al sumar el overhead de RTP/IP y capa 2) — "
+             "ideal con ancho de banda de sobra. G.729 comprime mucho más (el codec corre a "
+             "8kbps, pero el ancho de banda real por llamada con ese mismo overhead es de "
+             "~24-31kbps, no 8kbps) a costa de algo de calidad y más uso de CPU para "
+             "codificar/decodificar — preferible en enlaces WAN limitados, aunque el ahorro "
+             "real ronda un tercio del ancho de banda de G.711, no un octavo. "
              "Elegir el códec incorrecto para el enlace disponible es una causa común de mala "
              "calidad de llamada que no tiene que ver con 'la red estar mal'."
          ),
@@ -1457,7 +1464,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
          fuente="Industria hotelera -- patrón de integración documentado"),
 
     # ══════════════════════ METODOLOGÍA — AMPLIACIÓN ══════════════════════
-    dict(dominio="metodologia", concepto="Documentar no es opcional: por qué el paso 7 de CompTIA existe",
+    dict(dominio="metodologia", concepto="Documentar no es opcional: por qué el paso 6 de CompTIA existe",
          explicacion=(
              "Documentar qué se probó, qué funcionó y qué no, no es burocracia — es lo que "
              "convierte un incidente resuelto en conocimiento reutilizable la próxima vez que "
@@ -1469,7 +1476,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "resuelto antes, señala una falla de documentación, no de conocimiento técnico — "
              "el conocimiento existió, simplemente no quedó accesible para la próxima vez."
          ),
-         fuente="Metodología CompTIA de 7 pasos"),
+         fuente="Metodología CompTIA A+ de 6 pasos (Network+ N10-009 usa una variante de 7, separando plan e implementación)"),
     dict(dominio="metodologia", concepto="Cuándo escalar en vez de seguir intentando",
          explicacion=(
              "Un ingeniero de soporte maduro reconoce cuándo un problema excede su nivel de "
@@ -2136,9 +2143,9 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "pérdida de UN disco pierde TODO). RAID 1 duplica en espejo. RAID 5 usa paridad "
              "distribuida, tolera 1 disco, pero la reconstrucción tras un fallo estresa los "
              "discos restantes. RAID 6 usa doble paridad, tolera 2 discos simultáneos -- más "
-             "seguro que RAID 5 para arreglos grandes. RAID 10 combina espejo y "
-             "fragmentación -- mejor rendimiento Y tolerancia que RAID 5, a costa de usar el "
-             "doble de capacidad total."
+             "seguro que RAID 5 para arreglos grandes. RAID 10 combina espejo y striping "
+             "(segmentación en bandas) -- mejor rendimiento Y tolerancia que RAID 5, a costa de "
+             "usar el doble de capacidad total."
          ),
          relevancia_diagnostica=(
              "En un servidor con muchos discos (8+), RAID 6 es preferible a RAID 5 -- con "
@@ -2357,9 +2364,13 @@ _SEED_TEORIA: list[dict[str, str]] = [
          explicacion=(
              "SASE combina funciones de red (SD-WAN) y seguridad (firewall, filtrado web, "
              "Zero Trust) en un solo servicio entregado desde la nube, en vez de equipos "
-             "físicos en cada sitio -- diseñado para organizaciones con muchos sitios "
-             "pequeños o trabajadores remotos, donde no es práctico tener un firewall físico "
-             "completo en cada ubicación."
+             "físicos en cada sitio. SSE (Security Service Edge) es el subconjunto de SASE "
+             "que entrega SOLO la parte de seguridad (SWG, CASB, ZTNA, firewall como servicio), "
+             "SIN el componente de red/SD-WAN -- tiene sentido cuando la organización ya cuenta "
+             "con su propia WAN y solo necesita centralizar la seguridad en la nube, sin "
+             "reemplazar la conectividad existente. Ambos modelos están pensados para "
+             "organizaciones con muchos sitios pequeños o trabajadores remotos, donde no es "
+             "práctico tener un firewall físico completo en cada ubicación."
          ),
          relevancia_diagnostica=(
              "Para un negocio con múltiples sitios pequeños (ej. una cadena hotelera con "
@@ -2372,16 +2383,21 @@ _SEED_TEORIA: list[dict[str, str]] = [
     # ── 2.0 Implementación de red ──
     dict(dominio="wan", concepto="Selección de ruta: distancia administrativa, prefijo y métrica",
          explicacion=(
-             "Cuando un router aprende la misma ruta por más de un protocolo, la distancia "
-             "administrativa decide cuál protocolo 'confiar' más (una ruta estática "
-             "manualmente configurada suele ganar sobre una aprendida dinámicamente). Entre "
-             "rutas del MISMO protocolo, gana la de prefijo más específico (más largo), y "
-             "luego la de menor métrica (costo)."
+             "El criterio que manda primero, sin importar el protocolo de origen, es el "
+             "prefijo más específico (más largo, longest prefix match) -- el router siempre "
+             "reenvía usando la ruta más específica disponible para el destino, aunque "
+             "provenga de un protocolo con peor distancia administrativa. La distancia "
+             "administrativa solo entra en juego cuando dos o más protocolos aprenden "
+             "EXACTAMENTE el mismo prefijo/máscara -- ahí decide cuál protocolo 'confiar' más "
+             "(una ruta estática manualmente configurada suele ganar sobre una aprendida "
+             "dinámicamente). Y solo si compiten rutas del MISMO protocolo hacia ese mismo "
+             "prefijo exacto, gana la de menor métrica (costo)."
          ),
          relevancia_diagnostica=(
              "Tráfico tomando una ruta 'inesperada' pese a que la ruta 'correcta' esté "
-             "configurada -- revisar si hay una ruta estática con menor distancia "
-             "administrativa compitiendo silenciosamente contra la dinámica."
+             "configurada -- revisar primero si existe una ruta más específica (prefijo más "
+             "largo) compitiendo por ese destino; el prefijo más largo gana siempre, sin "
+             "importar qué protocolo lo anunció ni su distancia administrativa."
          ),
          fuente="CompTIA Network+ N10-009 — 2.1 Network Implementation"),
     dict(dominio="wan", concepto="FHRP y IP virtual: redundancia de gateway sin que el cliente lo note",
@@ -2859,7 +2875,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "control, unión a dominio, o Group Policy, verificar primero la edición instalada "
              "antes de sospechar de una falla de configuración o de red -- puede ser Home."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.3 Operating Systems"),
     dict(dominio="sistemas_operativos", concepto="Herramientas de administración de Windows (snap-ins de MMC)",
          explicacion=(
              "Visor de eventos (Event Viewer) registra errores/advertencias del sistema y "
@@ -2905,7 +2921,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "conserva permisos o restricciones del área anterior, sospechar de que su cuenta "
              "no se movió a la OU correcta en Active Directory -- no es una falla de red."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Operating Systems"),
     dict(dominio="sistemas_operativos", concepto="Comandos básicos de Linux para diagnóstico rápido",
          explicacion=(
              "ps aux lista procesos corriendo. top/htop muestra uso de CPU/RAM en vivo. df -h "
@@ -2952,7 +2968,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "verificar si tiene archivos cifrados con EFS -- resetear sin exportar antes el "
              "certificado de EFS puede volver esos archivos permanentemente inaccesibles."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
     dict(dominio="seguridad_endpoint", concepto="Permisos NTFS vs permisos de recurso compartido (share): cuál gana",
          explicacion=(
              "Cuando un recurso se accede por red, aplican DOS capas de permisos: los del "
@@ -2966,7 +2982,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "administrador jura que le dio permiso completo -- revisar AMBAS capas (share y "
              "NTFS), casi siempre una de las dos quedó más restrictiva que la otra."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
     dict(dominio="seguridad_endpoint", concepto="Taxonomía de malware y por qué importa distinguir el tipo",
          explicacion=(
              "Ransomware cifra archivos y exige pago. Keylogger captura pulsaciones de teclado "
@@ -2984,16 +3000,20 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "sin archivo -- requiere herramientas de detección de comportamiento, no solo "
              "escaneo de archivos."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
-    dict(dominio="seguridad", concepto="Proceso de eliminación de malware en 7 pasos (metodología SOHO)",
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+    dict(dominio="seguridad", concepto="Proceso de eliminación de malware en pasos (metodología SOHO)",
          explicacion=(
              "1) Identificar y verificar los síntomas de malware. 2) Poner en cuarentena el "
              "sistema afectado (desconectar de la red). 3) Deshabilitar la restauración del "
              "sistema (System Restore) en Windows, para no reintroducir el malware desde un "
-             "punto de restauración infectado. 4) Remediar el sistema afectado (actualizar "
-             "software antimalware, escanear y eliminar). 5) Programar escaneos y actualizar "
-             "el software de seguridad. 6) Habilitar de nuevo System Restore y crear un punto "
-             "limpio. 7) Educar al usuario final sobre cómo se infectó, para prevenir "
+             "punto de restauración infectado. 4) Remediar el sistema afectado (actualizar el "
+             "software antimalware, luego escanear y eliminar con las técnicas disponibles -- "
+             "modo seguro, entorno de preinstalación). 5) Si la remediación no es confiable o "
+             "la infección fue severa, reimagen/reinstalación completa del sistema -- la "
+             "versión actual del objetivo oficial (220-1202 V15) reconoce esto como paso "
+             "independiente, no como último recurso improvisado. 6) Programar escaneos y "
+             "actualizar el software de seguridad. 7) Habilitar de nuevo System Restore y crear "
+             "un punto limpio. 8) Educar al usuario final sobre cómo se infectó, para prevenir "
              "recurrencia. El orden importa -- deshabilitar restauración ANTES de remediar es "
              "lo que evita que el malware regrese desde un punto de restauración guardado."
          ),
@@ -3033,7 +3053,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "revisar que exista control de acceso (no solo cerradura simple) Y registro "
              "(cámara o bitácora) -- una sola capa deja un punto ciego evidente ante auditoría."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.1 Security"),
     dict(dominio="dispositivos_moviles", concepto="Endurecimiento (hardening) de dispositivos móviles corporativos",
          explicacion=(
              "Requerir biometría o PIN fuerte para desbloqueo, mantener el sistema operativo "
@@ -3046,7 +3066,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "configurada representa una exposición real de datos -- verificar que el MDM esté "
              "activo ANTES de que ocurra un incidente, no después."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.9 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.8 Security"),
     dict(dominio="seguridad_endpoint", concepto="Métodos de destrucción de datos y cuándo usar cada uno",
          explicacion=(
              "Borrado seguro por software (sobrescritura múltiple) sirve para discos que se "
@@ -3061,7 +3081,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "nunca confiar en un formateo simple -- requiere borrado seguro certificado o "
              "destrucción física, según la sensibilidad de los datos que manejó."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.10 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.9 Security"),
     dict(dominio="seguridad", concepto="Seguridad de red SOHO: lo mínimo que no debería faltar",
          explicacion=(
              "Cambiar credenciales por defecto del router/AP (la causa #1 de compromisos SOHO), "
@@ -3075,7 +3095,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "que las credenciales por defecto se cambiaron -- es el hallazgo más común y más "
              "crítico en auditorías, y se olvida con facilidad en instalaciones apuradas."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 2.11 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.10 Security"),
 
     # ══════ A+ CORE 2 220-1202 — 4.0 PROCEDIMIENTOS OPERATIVOS (21%) ══════
     dict(dominio="backup", concepto="Esquema de rotación de backups GFS (abuelo-padre-hijo) y la regla 3-2-1",
@@ -3093,7 +3113,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "robo destruiría datos y backup a la vez, sin importar qué tan buena sea la "
              "rotación GFS interna."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.2 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.3 Operational Procedures"),
     dict(dominio="gestion_documentacion", concepto="Gestión de cambios (change management) formal",
          explicacion=(
              "Un cambio en producción (actualizar firmware, cambiar VLAN, reemplazar un switch "
@@ -3107,21 +3127,24 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "esperar -- y siempre tener claro cómo revertir el cambio en menos de 5 minutos si "
              "algo falla."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.3 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.2 Operational Procedures"),
     dict(dominio="metodologia", concepto="Cadena de custodia y orden de volatilidad en respuesta a incidentes",
          explicacion=(
              "Cadena de custodia es el registro documentado de quién tuvo acceso a una "
              "evidencia digital y cuándo -- necesario si el incidente puede terminar en acción "
-             "legal. Orden de volatilidad indica qué evidencia capturar primero porque se pierde "
-             "más rápido: registros de RAM/caché primero, luego conexiones de red activas, "
-             "luego procesos corriendo, y al final archivos en disco (lo más persistente)."
+             "legal. Orden de volatilidad (RFC 3227) indica qué evidencia capturar primero "
+             "porque se pierde más rápido: registros y caché de CPU primero (se pierden en "
+             "nanosegundos), luego tablas de enrutamiento, caché ARP, tabla de procesos activos "
+             "y estadísticas del kernel, luego el volcado completo de memoria RAM, luego "
+             "sistemas de archivos temporales, y al final archivos en disco (lo más "
+             "persistente)."
          ),
          relevancia_diagnostica=(
              "Ante un incidente de seguridad grave (ej. sospecha de intrusión activa), nunca "
              "apagar el equipo comprometido de inmediato -- eso destruye la evidencia más "
              "volátil (RAM, conexiones activas) antes de poder capturarla."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.7 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.6 Operational Procedures"),
     dict(dominio="metodologia", concepto="Comunicación profesional con el usuario final",
          explicacion=(
              "Evitar jerga técnica innecesaria, escuchar activamente sin interrumpir, no "
@@ -3134,7 +3157,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "pasó o qué hacer si se repite, no está realmente cerrado desde la perspectiva de "
              "servicio -- confirmar comprensión es parte del cierre, no un extra."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.8 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.7 Operational Procedures"),
     dict(dominio="metodologia", concepto="Fundamentos de scripting para automatización básica",
          explicacion=(
              "Variables, bucles y comillas correctas son la base de cualquier script en "
@@ -3149,7 +3172,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "línea -- el ahorro de tiempo de no revisarlo no compensa el riesgo de un error "
              "irreversible en producción."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.9 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.8 Operational Procedures"),
     dict(dominio="acceso_remoto", concepto="Tecnologías de acceso remoto y su tradeoff de seguridad",
          explicacion=(
              "RDP (Escritorio Remoto) da control total de una sesión Windows -- nunca debe "
@@ -3167,7 +3190,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "fuerte sea la contraseña -- los ataques de fuerza bruta contra RDP expuesto son "
              "automatizados y constantes."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.9 Operational Procedures"),
     dict(dominio="metodologia", concepto="Limitaciones de la IA generativa aplicadas a soporte técnico",
          explicacion=(
              "CompTIA incorporó en A+ Core 2 V15 (2024) el reconocimiento explícito de que las "
@@ -3184,7 +3207,7 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "conclusiones confirmadas -- nunca se confía ciegamente en la salida del modelo "
              "de lenguaje, siguiendo exactamente esta precaución oficial de CompTIA."
          ),
-         fuente="CompTIA A+ Core 2 220-1202 — 4.11 Operational Procedures (nuevo en V15, 2024)"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures (nuevo en V15, 2024)"),
 
     # ══════ SECURITY+ SY0-701 — 1.0 CONCEPTOS GENERALES DE SEGURIDAD (12%) ══════
     dict(dominio="seguridad", concepto="Categorías y tipos de controles de seguridad",
@@ -3712,9 +3735,12 @@ _SEED_TEORIA: list[dict[str, str]] = [
              "Instalación GUI (interfaz gráfica completa) vs Core (Windows Server Core, sin "
              "GUI, menor superficie de ataque y menos recursos, administración por línea de "
              "comandos/PowerShell remoto). Bare metal instala directamente sobre hardware físico "
-             "sin capa de virtualización. Instalación desatendida (slipstreamed/unattended) usa "
-             "un archivo de respuestas para automatizar sin intervención humana, útil para "
-             "desplegar muchos servidores idénticos. Imaging/cloning despliega una plantilla "
+             "sin capa de virtualización. Instalación desatendida (unattended) usa un archivo de "
+             "respuestas (answer file) para automatizar sin intervención humana, útil para "
+             "desplegar muchos servidores idénticos -- distinto de slipstreaming, que es integrar "
+             "actualizaciones o service packs directamente en el medio de instalación ANTES de "
+             "desplegarlo (ambas técnicas se combinan en la práctica, pero no son lo mismo). "
+             "Imaging/cloning despliega una plantilla "
              "preconfigurada en vez de instalar desde cero cada vez -- P2V (physical to virtual) "
              "convierte un servidor físico existente en una máquina virtual."
          ),
@@ -4448,7 +4474,7 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="metodologia", patron="Cualquier falla nueva sin diagnóstico previo",
          causa_probable="—",
          recomendacion="Descartar primero la capa física (cable, puerto, energía) antes de sospechar de software o aplicaciones -- es la causa más común y la más rápida de verificar",
-         fuente="Metodología CompTIA de 7 pasos (identificar → teorizar → probar → plan → implementar → verificar → documentar)"),
+         fuente="Metodología CompTIA A+ de 6 pasos (identificar → teorizar → probar → plan de acción e implementación → verificar → documentar; Network+ N10-009 usa una variante de 7 pasos, separando plan e implementación)"),
     dict(dominio="metodologia", patron="Un problema afecta a un solo usuario o equipo",
          causa_probable="—",
          recomendacion="Casi nunca es de red compartida -- enfocar el diagnóstico en ese punto específico primero",
@@ -4863,8 +4889,8 @@ _SEED_RULES: list[dict[str, str]] = [
 
     # ══════════════════════ NETWORK+ N10-009 — 5.0 NETWORK TROUBLESHOOTING (24%) ══════════════════════
     dict(dominio="cableado", patron="Contadores de error CRC crecientes en una interfaz específica",
-         causa_probable="Cable dañado, conector mal terminado, o transmisor/receptor invertido (TX/RX transpuestos)",
-         recomendacion="Revisar terminación del cable y orientación TX/RX antes de sospechar del equipo",
+         causa_probable="Cable dañado, conector mal terminado, o un par dividido (split pair) -- un error de ponchado que pasa la prueba de continuidad básica pero rompe la cancelación de ruido del par trenzado",
+         recomendacion="Revisar la terminación del cable con un certificador (no solo un tester de continuidad) para descartar pares divididos, antes de sospechar del equipo",
          fuente="CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"),
     dict(dominio="cableado", patron="Un equipo PoE no enciende y el switch reporta presupuesto de energía excedido",
          causa_probable="El switch ya alcanzó su límite total de potencia PoE con los equipos ya conectados",
@@ -4887,7 +4913,7 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="seguridad_endpoint", patron="CPU al 100% de forma constante sin ningún proceso pesado visible en el administrador de tareas",
          causa_probable="Cryptominer o malware sin archivo (fileless) ejecutándose en memoria/PowerShell",
          recomendacion="Usar una herramienta de detección de comportamiento (no solo escaneo de archivos) y revisar procesos de PowerShell/WMI activos",
-         fuente="CompTIA A+ Core 2 220-1202 — 2.6 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
     dict(dominio="seguridad_endpoint", patron="El equipo se reinfecta poco después de haberse limpiado de malware",
          causa_probable="No se deshabilitó System Restore antes de remediar, el malware volvió desde un punto de restauración guardado",
          recomendacion="Deshabilitar System Restore, remediar de nuevo, y solo entonces rehabilitarlo con un punto limpio",
@@ -4899,11 +4925,11 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="seguridad_endpoint", patron="Un usuario no puede escribir en una carpeta compartida aunque el administrador confirma que le dio permiso total",
          causa_probable="Los permisos NTFS de la carpeta son más restrictivos que los del recurso compartido (share), y el más restrictivo gana",
          recomendacion="Revisar ambas capas de permisos (share y NTFS) por separado -- casi siempre una quedó más restrictiva que la otra",
-         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
     dict(dominio="seguridad_endpoint", patron="Archivos cifrados con EFS quedan inaccesibles tras resetear la contraseña o reconstruir el perfil de un usuario",
          causa_probable="El certificado de cifrado EFS no se exportó/respaldó antes del reseteo, y estaba ligado a la cuenta anterior",
          recomendacion="Siempre exportar el certificado EFS del usuario ANTES de resetear su contraseña o reconstruir su perfil",
-         fuente="CompTIA A+ Core 2 220-1202 — 2.4 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Security"),
     dict(dominio="seguridad", patron="Un empleado reporta haber dado una contraseña por teléfono a alguien que sonaba como soporte técnico interno",
          causa_probable="Ataque de vishing/pretexting -- ingeniería social por voz, no una falla técnica",
          recomendacion="Cambiar esa credencial de inmediato y reforzar capacitación -- no hay solución de software que prevenga esto por sí sola",
@@ -4911,21 +4937,21 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="seguridad", patron="Un router o AP recién instalado sigue usando el usuario/contraseña de fábrica",
          causa_probable="Paso de endurecimiento básico omitido durante la instalación",
          recomendacion="Cambiar credenciales por defecto de inmediato -- es el hallazgo de seguridad más común y más crítico en instalaciones apuradas",
-         fuente="CompTIA A+ Core 2 220-1202 — 2.11 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.10 Security"),
     dict(dominio="dispositivos_moviles", patron="Un dispositivo móvil corporativo se pierde o es robado y no tiene MDM configurado",
          causa_probable="Falta de gestión de dispositivos móviles (MDM) implementada preventivamente",
          recomendacion="Sin MDM no hay borrado remoto posible -- documentar como brecha de datos potencial y priorizar MDM en todos los dispositivos restantes",
-         fuente="CompTIA A+ Core 2 220-1202 — 2.9 Security"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.8 Security"),
 
     # ══════ A+ CORE 2 220-1202 — 1.0 / 3.0 SISTEMAS OPERATIVOS Y TROUBLESHOOTING ══════
     dict(dominio="sistemas_operativos", patron="Un equipo Windows no tiene la opción de BitLocker ni de unirse a un dominio en el menú",
          causa_probable="La edición instalada es Windows Home, que no incluye BitLocker, Group Policy Editor ni unión a dominio",
          recomendacion="Verificar la edición de Windows antes de sospechar de una falla de configuración o de red",
-         fuente="CompTIA A+ Core 2 220-1202 — 1.1 Operating Systems"),
+         fuente="CompTIA A+ Core 2 220-1202 — 1.3 Operating Systems"),
     dict(dominio="sistemas_operativos", patron="Una política de grupo (GPO) configurada correctamente no se aplica a un equipo específico",
          causa_probable="El equipo no está en la OU correcta de Active Directory, o el GPO está vinculado a la OU equivocada",
          recomendacion="Correr gpresult /r en ese equipo para ver qué políticas llegaron realmente, antes de reconfigurar el GPO de nuevo",
-         fuente="CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"),
+         fuente="CompTIA A+ Core 2 220-1202 — 2.2 Operating Systems"),
     dict(dominio="sistemas_operativos", patron="Una aplicación deja de funcionar sin ningún mensaje de error visible al usuario",
          causa_probable="Fallo registrado a nivel de sistema, no visible en la interfaz de la aplicación",
          recomendacion="Revisar el Visor de Eventos de Windows primero -- casi siempre hay un registro del motivo real antes de reinstalar a ciegas",
@@ -4945,21 +4971,21 @@ _SEED_RULES: list[dict[str, str]] = [
     dict(dominio="dispositivos_moviles", patron="Un dispositivo móvil no logra autenticarse en una red WiFi corporativa que antes sí funcionaba",
          causa_probable="Certificado de red o perfil WiFi corrupto/vencido en el dispositivo",
          recomendacion="Olvidar y volver a configurar el perfil de red en el dispositivo antes de sospechar del AP o del servidor RADIUS",
-         fuente="CompTIA A+ Core 2 220-1202 — 3.3 Software Troubleshooting"),
+         fuente="CompTIA A+ Core 2 220-1202 — 3.2 Software Troubleshooting"),
     dict(dominio="dispositivos_moviles", patron="La batería de un dispositivo móvil corporativo se agota mucho más rápido de lo normal",
          causa_probable="Aplicaciones en segundo plano sin restricción o el GPS/ubicación siempre activo",
          recomendacion="Revisar uso de batería por app antes de asumir que la batería física está degradada",
-         fuente="CompTIA A+ Core 2 220-1202 — 3.3 Software Troubleshooting"),
+         fuente="CompTIA A+ Core 2 220-1202 — 3.2 Software Troubleshooting"),
 
     # ══════ A+ CORE 2 220-1202 — 4.0 PROCEDIMIENTOS OPERATIVOS ══════
     dict(dominio="backup", patron="Todos los backups de un sitio están guardados en un disco dentro del mismo cuarto que el servidor",
          causa_probable="Violación de la regla 3-2-1 -- falta la copia offsite",
          recomendacion="Configurar al menos una copia de backup fuera del sitio (nube o ubicación física distinta) antes de considerar el esquema completo",
-         fuente="CompTIA A+ Core 2 220-1202 — 4.2 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.3 Operational Procedures"),
     dict(dominio="acceso_remoto", patron="El puerto de Escritorio Remoto (3389) de un servidor está expuesto directamente a internet",
          causa_probable="Configuración de acceso remoto sin VPN de por medio",
          recomendacion="Cerrar la exposición directa de RDP a internet y requerir VPN antes de permitir el acceso remoto -- es un vector de ataque automatizado constante",
-         fuente="CompTIA A+ Core 2 220-1202 — 4.10 Operational Procedures"),
+         fuente="CompTIA A+ Core 2 220-1202 — 4.9 Operational Procedures"),
 
     # ══════ SECURITY+ SY0-701 — REGLAS DIAGNÓSTICAS (síntomas y causas) ══════
     dict(dominio="siem_analisis", patron="El mismo usuario aparece autenticado desde dos ubicaciones geográficamente imposibles en poco tiempo",

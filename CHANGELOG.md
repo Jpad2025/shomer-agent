@@ -4,6 +4,61 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.20.0 — 2026-09-06
+
+- **Auditoría externa COMPLETA de las 436 entradas de la base de conocimiento** (no una muestra
+  como en v1.19.1), pedida explícitamente por Juan Pablo: "audítalas todas". Se paralelizó en 8
+  lotes (uno por certificación, Network+ dividido en dos por tamaño), cada uno verificando sus
+  afirmaciones técnicas contra fuentes autorizadas reales (Microsoft Learn, Cisco, Fluke Networks,
+  Ethernet Alliance/IEEE 802.3bt, RFC 3227, NIST SP 800-88, MITRE, Gartner, CompTIA -- incluyendo
+  descargar de nuevo el PDF oficial de A+ Core 2 para verificar numeración exacta de sub-objetivos).
+  - **Resultado: 397 de 436 confirmadas correctas sin cambios (91%). 39 entradas con algún
+    hallazgo, las 39 corregidas.**
+  - A+ Core 1: 65 revisadas, 1 corregida -- RAID 10 usaba el término "fragmentación" en vez de
+    "striping" (segmentación en bandas); inconsistente con la entrada hermana que sí decía
+    striping correctamente.
+  - **A+ Core 2: 69 revisadas, 28 con hallazgo (el lote con más problemas).** 26 entradas tenían
+    el CONTENIDO técnico correcto pero el número de sub-objetivo mal citado en `fuente` (ej.
+    contenido de BitLocker/ediciones de Windows citado como "1.1" cuando es "1.3"; contenido de
+    NTFS-vs-share citado como "2.4" cuando es "2.2"; toda la sección 4.x con los números
+    desplazados en cascada). Corregidas las 26 citas por posición exacta en el archivo (no
+    reemplazo global de texto, para no tocar citas de OTRAS entradas que sí tenían el número
+    correcto). Además 2 errores de CONTENIDO real: el proceso de eliminación de malware SOHO
+    tenía 7 pasos cuando la versión vigente del objetivo 2.6 (220-1202 V15) tiene 8 e incluye
+    reimagen/reinstalación como paso independiente -- agregado; y el orden de volatilidad forense
+    tenía la memoria RAM completa en primer lugar y las conexiones de red/procesos después,
+    cuando RFC 3227 pone caché de CPU primero, luego tablas de enrutamiento/ARP/procesos, y
+    RECIÉN DESPUÉS el volcado de RAM -- corregido al orden real de RFC 3227.
+  - Network+ (lote A, cableado/PoE): 62 revisadas, 3 corregidas -- los nombres de "modo A" y
+    "modo B" de PoE estaban invertidos respecto al estándar 802.3af/at (modo A = pares de datos,
+    modo B = pares libres, no al revés); 802.3bt Tipo 4 decía 100W cuando el valor normativo
+    IEEE es 90W en la fuente / 71.3W en el dispositivo; y una regla atribuía CRC crecientes a
+    "TX/RX invertido" cuando esa falla causa ausencia total de enlace, no CRC crecientes -- la
+    causa real y documentada es "split pair" (par dividido), corregida.
+  - Network+ (lote B, enrutamiento/voz/arquitectura): 63 revisadas, 3 corregidas -- el orden de
+    selección de ruta tenía la comparación de prefijo más específico subordinada al protocolo,
+    cuando en realidad el longest-prefix-match manda SIEMPRE primero, sin importar distancia
+    administrativa (corregido el orden real); la comparación de ancho de banda G.711 vs G.729
+    mezclaba una cifra con overhead de red y otra sin él, exagerando el ahorro de G.729 de ~3x a
+    ~8x (corregido con overhead consistente en ambos); y SASE/SSE se presentaban como sinónimos
+    cuando SSE es un subconjunto de SASE sin el componente de red/SD-WAN (distinción agregada).
+  - Security+: 40 revisadas, 0 con problemas. Server+: 33 revisadas, 1 corregida ("slipstreamed"
+    y "unattended" tratados como sinónimos -- son técnicas distintas y complementarias,
+    corregido). CySA+: 33 revisadas, 0 con problemas.
+  - Contenido previo/curado (marcas reales de Ópera -- UniFi, MikroTik, Hikvision, ZKTeco,
+    Ingenico, Epson, Bixolon): 71 revisadas, 3 corregidas -- tres entradas de metodología general
+    citaban "7 pasos de CompTIA" cuando la versión A+ genérica (más comúnmente citada fuera del
+    contexto de networking) combina plan de acción e implementación en un solo paso, dando 6 --
+    corregido, y aclarado explícitamente en la cita que Network+ N10-009 sí usa una variante
+    oficial de 7 pasos (objetivo 5.1, ya presente correctamente en una entrada separada del
+    dominio `metodologia` específica de Network+, verificada y sin tocar).
+  - Total sigue en 436 entradas -- todas las correcciones fueron de texto/cita, ninguna
+    agregada ni eliminada. Probado (seed + idempotencia) contra copia aislada antes de desplegar.
+  - **Con esta auditoría completa, la base de conocimiento pasa de "temario oficial cubierto sin
+    verificar" a "temario oficial cubierto y verificado contra fuentes externas al 100% de sus
+    entradas", con una tasa de acierto medida del 91% en la primera pasada y 100% tras aplicar
+    las correcciones encontradas.**
+
 ## 1.19.1 — 2026-09-06
 
 - **Primera auditoría externa de la base de conocimiento (436 entradas), pedida explícitamente por
