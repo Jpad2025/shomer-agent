@@ -5221,12 +5221,20 @@ _DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _matching_domains(entity_names: list[str]) -> set[str]:
+def _matching_domains(entity_names: list[str], strict: bool = False) -> set[str]:
+    """`strict=True` no aplica el fallback a 'metodologia' -- pensado para
+    texto libre de chat (7 sep 2026), donde un saludo o pregunta no técnica
+    no debe inyectar conocimiento igual (costo de tokens desperdiciado). El
+    fallback default (strict=False) sigue igual para cerebro: un cluster de
+    equipos siempre es una situación técnica real, así que algo genérico es
+    mejor que nada."""
     texto = " | ".join((n or "").lower() for n in entity_names)
     dominios_match = {
         dominio for dominio, kws in _DOMAIN_KEYWORDS.items()
         if any(kw in texto for kw in kws)
     }
+    if strict:
+        return dominios_match
     return dominios_match or {"metodologia"}
 
 
@@ -5278,10 +5286,11 @@ def registrar_refutacion(dominios: list[str]) -> int:
         con.close()
 
 
-def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int = 4) -> tuple[list[dict], list[dict]]:
+def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int = 4,
+                   strict: bool = False) -> tuple[list[dict], list[dict]]:
     """Reglas + teoría relevante para un grupo de entidades, por nombre.
     Determinístico (coincidencia de palabra clave), nunca decidido por el LLM."""
-    dominios_match = _matching_domains(entity_names)
+    dominios_match = _matching_domains(entity_names, strict=strict)
     con = sqlite3.connect(KNOWLEDGE_DB)
     con.row_factory = sqlite3.Row
     try:
@@ -5299,10 +5308,10 @@ def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int 
         con.close()
 
 
-def format_for_prompt(entity_names: list[str]) -> str:
+def format_for_prompt(entity_names: list[str], strict: bool = False) -> str:
     """Bloque de texto compacto para inyectar en el prompt del cerebro --
     solo lo relevante a las entidades del cluster actual, no las 212 enteras."""
-    reglas, teoria = find_relevant(entity_names)
+    reglas, teoria = find_relevant(entity_names, strict=strict)
     if not reglas and not teoria:
         return ""
     partes = ["Conocimiento técnico validado relevante (usar si aplica, no forzar si no encaja):"]

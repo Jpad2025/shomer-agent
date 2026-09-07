@@ -4,6 +4,19 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.26.1 — 2026-09-07
+
+- **Fix de costo real en la integración de KB del chat (v1.26.0), encontrado por pregunta
+  directa de Juan Pablo sobre si esto subía el costo de OpenAI.** Al probar con un saludo
+  casual ("hola como estás") encontré que SÍ inyectaba igual ~325 tokens de conocimiento
+  genérico -- `_matching_domains()` cae a un fallback fijo ('metodologia') cuando no hay
+  match real de palabra clave, comportamiento correcto para cerebro (un cluster de equipos
+  siempre es una situación técnica) pero desperdicio puro en chat casual. Nuevo parámetro
+  `strict` en `_matching_domains()`/`find_relevant()`/`format_for_prompt()` (default `False`,
+  cerebro sin cambios); `llm_router.py` ahora llama con `strict=True` -- sin match real de
+  palabra clave, no se inyecta nada. Probado con pregunta técnica (sigue trayendo KB) y
+  saludo casual (ya no trae nada) antes de desplegar.
+
 ## 1.26.0 — 2026-09-07
 
 - **KB CompTIA conectada al chat interactivo del técnico.** Auditoría pedida por Juan Pablo

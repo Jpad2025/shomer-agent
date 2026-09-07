@@ -168,7 +168,10 @@ def _inject_snapshot(history: list[dict]) -> list[dict]:
                 pregunta = str(m.get("content", "")).strip()
                 break
         if pregunta:
-            kb = _cg.format_for_prompt([pregunta])
+            # strict=True: sin el fallback generico a 'metodologia' que usa
+            # cerebro -- un saludo o pregunta no tecnica ("hola", "gracias")
+            # no debe gastar tokens de OpenAI en conocimiento que no aplica.
+            kb = _cg.format_for_prompt([pregunta], strict=True)
             if kb:
                 parts.append(kb)
     except Exception as e:
