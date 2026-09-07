@@ -927,6 +927,94 @@ def get_topology_parents(ips: list) -> dict:
     return result
 
 
+def get_recent_ip_change(ip: str, hours: int = 6) -> dict:
+    """¿Esta IP cambió recientemente por reconciliación MAC (shomer_mac_reconcile.py
+    en network_monitor)? Si un equipo aparece 'offline' pero en realidad solo cambió
+    de IP (DHCP/reconfiguración), esto evita que el cerebro lo trate como una falla
+    real. Lectura directa de mac_reconcile_log -- mismo patrón que las demás
+    funciones de topología/errores de puerto."""
+    import sqlite3 as _sqlite3
+    ip = (ip or "").strip()
+    if not ip:
+        return {}
+    DB = "/storage/db/network_monitor.db"
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        row = conn.execute(
+            "SELECT name, mac, ip_vieja, ip_nueva, ts FROM mac_reconcile_log "
+            "WHERE ip_vieja = ? AND ts >= datetime('now', ?) "
+            "ORDER BY ts DESC LIMIT 1",
+            (ip, f"-{hours} hours"),
+        ).fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as e:
+        log.debug("get_recent_ip_change error: %s", e)
+    return {}
+
+
+def get_hunter_incidents(ips: list) -> list:
+    """Incidentes de Hunter (IDS/Suricata) actualmente ABIERTOS sobre IPs
+    INTERNAS específicas -- distinto del ruido de IPs externas de mala
+    reputación (ese es la mayoría de los 108 incidentes vistos en la auditoría
+    del 6 sep 2026). Sin ventana de tiempo a propósito: los incidentes de
+    Hunter quedan abiertos indefinidamente en la práctica (ninguno se
+    reconoce/cierra hoy, confirmado en esa misma auditoría -- el más viejo
+    lleva desde junio) -- filtrar por 'reciente' descartaría exactamente los
+    casos reales. Lo que importa es si SIGUE abierto ahora, no cuándo abrió."""
+    import sqlite3 as _sqlite3
+    ips = [ip for ip in (ips or []) if ip]
+    if not ips:
+        return []
+    DB = "/storage/db/network_monitor.db"
+    out: list = []
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        placeholders = ",".join("?" * len(ips))
+        rows = conn.execute(
+            f"SELECT ip, alert_signature, severity, opened_at FROM incidents "
+            f"WHERE ip IN ({placeholders}) AND closed_at IS NULL "
+            f"ORDER BY opened_at DESC",
+            ips,
+        ).fetchall()
+        conn.close()
+        out = [dict(r) for r in rows]
+    except Exception as e:
+        log.debug("get_hunter_incidents error: %s", e)
+    return out
+
+
+def get_pending_audit_findings(ips: list) -> list:
+    """Hallazgos de auditoría de red PENDIENTES y de severidad alta/crítica
+    (ej. 'RDP expuesto', 'VNC expuesto') para IPs específicas -- si un equipo del
+    cluster ya tenía un riesgo conocido documentado, es contexto real relevante
+    para el diagnóstico, no un dato nuevo que el cerebro deba redescubrir."""
+    import sqlite3 as _sqlite3
+    ips = [ip for ip in (ips or []) if ip]
+    if not ips:
+        return []
+    DB = "/storage/db/network_monitor.db"
+    out: list = []
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        placeholders = ",".join("?" * len(ips))
+        rows = conn.execute(
+            f"SELECT ip, title, severity FROM network_audit_findings "
+            f"WHERE ip IN ({placeholders}) AND finding_status='pendiente' "
+            f"AND severity IN ('critico','alto') ORDER BY severity",
+            ips,
+        ).fetchall()
+        conn.close()
+        out = [dict(r) for r in rows]
+    except Exception as e:
+        log.debug("get_pending_audit_findings error: %s", e)
+    return out
+
+
 def get_switch_port_errors() -> list:
     """
     Lee contadores de errores SNMP por puerto de todos los switches/routers

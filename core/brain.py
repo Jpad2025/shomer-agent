@@ -297,7 +297,19 @@ _SYSTEM_PROMPT = (
     "comun -- mas fuerte que la sola coincidencia de tiempo. Si dice 'sin "
     "coincidencia', NO asumas que comparten switch solo porque cayeron juntos "
     "en el tiempo -- la coincidencia temporal sola es mas debil que topologia "
-    "confirmada, decilo como hipotesis, no como hecho. Tu trabajo: dar UNA "
+    "confirmada, decilo como hipotesis, no como hecho. Ademas recibis 4 "
+    "fuentes reales mas: 'cambios_de_ip_recientes' (si trae datos, ese equipo "
+    "NO fallo, solo cambio de IP -- no lo trates como una caida real); "
+    "'incidentes_seguridad_activos' (alertas de Hunter/IDS ya abiertas para "
+    "esa IP -- si hay una, considera que el 'offline' puede ser parte de un "
+    "incidente de seguridad, no una falla de hardware); "
+    "'riesgos_de_auditoria_pendientes' (ej. 'RDP expuesto' ya documentado "
+    "antes -- si aplica a la causa raiz, mencionalo, no lo inventes de cero); "
+    "'errores_de_puerto_switches' (contadores SNMP reales de errores de "
+    "puerto -- un puerto con miles de errores es evidencia fuerte de cable o "
+    "puerto fisico dañado, mas fuerte que 'sospechar del cable' sin datos). "
+    "Todas estas son hechos ya verificados por otro sistema -- si dicen "
+    "'ninguno', no inventes que si hay. Tu trabajo: dar UNA "
     "hipotesis de causa raiz que "
     "explique el grupo completo si comparten una causa comun (ej. un switch "
     "upstream que tira varios equipos), o aclarar que no estan relacionados si "
@@ -511,6 +523,54 @@ def run_cycle() -> list[dict]:
                     })
         except Exception as e:
             log.debug("brain: topología no disponible para este cluster: %s", e)
+
+        # Fase 6 (7 sep 2026): tres fuentes reales más, mismo principio que la
+        # Fase 5 -- hechos ya verificados por otro sistema, no algo que el
+        # modelo deba adivinar desde los eventos crudos.
+        cambios_de_ip: list[dict] = []
+        incidentes_seguridad: list[dict] = []
+        riesgos_pendientes: list[dict] = []
+        errores_puerto: list[dict] = []
+        try:
+            from core import shomer_api
+            ips_cluster = [ent["ip"] for ent in entities if ent.get("ip")]
+
+            # ¿Alguna entidad "offline" en realidad solo cambió de IP?
+            for ent in entities_for_context:
+                if not ent.get("ip"):
+                    continue
+                cambio = shomer_api.get_recent_ip_change(ent["ip"])
+                if cambio:
+                    cambios_de_ip.append({
+                        "equipo": ent["name"],
+                        "ip_vieja": cambio.get("ip_vieja"),
+                        "ip_nueva": cambio.get("ip_nueva"),
+                        "hace": cambio.get("ts"),
+                    })
+
+            incidentes_seguridad = [
+                {"ip": i["ip"], "alerta": i["alert_signature"], "severidad": i["severity"]}
+                for i in shomer_api.get_hunter_incidents(ips_cluster)
+            ]
+
+            riesgos_pendientes = [
+                {"ip": f["ip"], "hallazgo": f["title"], "severidad": f["severity"]}
+                for f in shomer_api.get_pending_audit_findings(ips_cluster)
+            ]
+
+            # Errores de puerto solo para switches/routers que SÍ están en este
+            # cluster, y solo puertos con errores reales (no inflar con puertos sanos).
+            if ips_cluster:
+                todos_los_switches = shomer_api.get_switch_port_errors()
+                for sw in todos_los_switches:
+                    if sw["ip"] not in ips_cluster:
+                        continue
+                    malos = [p for p in sw["ports"] if p["in_errors"] > 0 or p["out_errors"] > 0]
+                    if malos:
+                        errores_puerto.append({"switch": sw["name"], "puertos_con_error": malos[:5]})
+        except Exception as e:
+            log.debug("brain: contexto adicional (Fase 6) no disponible: %s", e)
+
         payload = {
             "eventos": [
                 {
@@ -524,6 +584,10 @@ def run_cycle() -> list[dict]:
             "eventos_omitidos_por_espacio": omitidos,
             "aprendizaje_por_entidad": contexto_entidades,
             "topologia_confirmada_por_lldp": topologia_confirmada or "sin coincidencia -- no asumir switch compartido",
+            "cambios_de_ip_recientes": cambios_de_ip or "ninguno -- no asumir que un offline es solo cambio de IP",
+            "incidentes_seguridad_activos": incidentes_seguridad or "ninguno",
+            "riesgos_de_auditoria_pendientes": riesgos_pendientes or "ninguno",
+            "errores_de_puerto_switches": errores_puerto or "ninguno",
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/

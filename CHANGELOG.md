@@ -4,6 +4,35 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.23.0 — 2026-09-07
+
+- **Fase 6 del cerebro: 3 fuentes reales más, todas ya existentes en el sistema pero que el
+  cerebro nunca consultaba.** Mismo principio que las fases anteriores: hechos ya verificados por
+  otro sistema, no algo que el modelo deba adivinar desde los eventos crudos.
+  - `shomer_api.get_recent_ip_change(ip)`: consulta `mac_reconcile_log` -- si un equipo "offline"
+    en realidad solo cambió de IP (DHCP/reconfiguración), el cerebro ahora lo sabe en vez de
+    tratarlo como una caída real. Tabla vacía hoy (0 reconciliaciones registradas aún) -- la
+    función es correcta, simplemente no ha tenido nada que reconciliar todavía.
+  - `shomer_api.get_hunter_incidents(ips)`: incidentes de Hunter/Suricata actualmente abiertos
+    sobre IPs internas del cluster. **Sin ventana de tiempo a propósito** -- primer intento
+    filtraba a 24h y no encontraba nada real porque los incidentes de Hunter quedan abiertos
+    indefinidamente en la práctica (hallazgo de la auditoría de seguridad del 6 sep: ninguno se
+    cierra hoy). Corregido para verificar solo si sigue abierto AHORA, sin importar cuándo abrió.
+    Probado con datos reales: encuentra el incidente "PIN en texto plano" (192.168.0.28, abierto
+    desde el 30 de agosto, el mismo que quedó pendiente de revisión en esa auditoría).
+  - `shomer_api.get_pending_audit_findings(ips)`: hallazgos de auditoría de red pendientes de
+    severidad alta/crítica (ej. "RDP expuesto", "VNC expuesto") para IPs del cluster. Probado con
+    datos reales -- 166 hallazgos en la tabla, encuentra correctamente los de severidad alta.
+  - `get_switch_port_errors()` (ya existía, nunca se usaba desde brain.py): ahora se filtra al
+    cluster actual y solo se incluyen puertos con errores reales (no se infla el prompt con
+    puertos sanos). Probado con datos reales: un switch con 8568 errores acumulados en un puerto
+    específico -- evidencia mucho más fuerte que "sospechar del cable" sin datos.
+  - System prompt actualizado explicando las 4 fuentes (topología de Fase 5 + estas 3) y cómo
+    pesarlas: todas son hechos verificados, no conjeturas -- si dicen "ninguno", no inventar que
+    sí hay.
+  - Sin cambio de comportamiento cuando no hay datos para un cluster (todos los campos nuevos
+    caen a "ninguno" explícito, el cerebro sigue funcionando igual que antes de esta fase).
+
 ## 1.22.0 — 2026-09-06
 
 - **Fase 5 del cerebro: correlación por topología real (LLDP/SNMP), no solo coincidencia de
