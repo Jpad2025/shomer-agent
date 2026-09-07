@@ -4,6 +4,21 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.27.0 — 2026-09-07
+
+- **Fix real de timeout en reinicio manual de AP, encontrado probando AP CONTABILIDAD a
+  pedido de Juan Pablo (hora sin nadie en oficina, para verificar Guardian).** El reinicio
+  SÍ funcionó de principio a fin (offline 02:38 → online 02:40, ~2 min) pero el cliente
+  (`shomer_api.py::reboot_guardian_node()`) cortaba a los 15s con "Read timed out" -- el
+  servidor (`/reboot/{ip}`) prueba hasta 3 métodos SSH en cadena (credenciales BD → llave →
+  password de respaldo), cada uno con 10s de timeout, hasta 30s en el peor caso. Un técnico
+  usando el bot vería un error falso sobre un reinicio que sí funcionó. Subido a 40s.
+  **Pendiente, no corregido en este release**: `cb_reboot()` y `_try_remediate_ip()` en
+  `bot.py` llaman esta función de forma síncrona dentro de handlers `async def` sin
+  `asyncio.to_thread()` -- bloquean el loop de eventos del bot entero (todos los usuarios)
+  durante el reinicio, ahora hasta 40s en vez de 15s. Encontrado en la misma revisión,
+  requiere tocar más de un sitio de llamada -- reportado, no resuelto todavía.
+
 ## 1.26.2 — 2026-09-07
 
 - **Fix: `/salud` mostraba "Groq (Llama 3.3 70B)" fijo en el código, pero el modelo real

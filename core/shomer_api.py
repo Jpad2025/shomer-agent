@@ -244,13 +244,22 @@ def unblock_ip(ip: str) -> tuple[bool, str]:
 
 
 def reboot_guardian_node(ip: str) -> tuple[bool, str]:
-    """Reinicia un nodo via Guardian API (usa las credenciales SSH/SNMP ya configuradas)."""
+    """Reinicia un nodo via Guardian API (usa las credenciales SSH/SNMP ya configuradas).
+
+    Timeout 40s (7 sep 2026, bug real encontrado probando AP CONTABILIDAD): el
+    endpoint /reboot/{ip} prueba hasta 3 metodos SSH en cadena del lado del
+    servidor (credenciales BD -> llave -> password de respaldo), cada uno con
+    su propio timeout de 10s -- hasta 30s en el peor caso. Con 15s el cliente
+    cortaba con "Read timed out" mientras el reinicio SI se ejecutaba de
+    verdad del lado del servidor -- un tecnico veia un error falso sobre una
+    accion que si funciono.
+    """
     global _session_token
     try:
-        r = requests.post(f"{SHOMER_BASE}/reboot/{ip}", headers=_headers(), timeout=15)
+        r = requests.post(f"{SHOMER_BASE}/reboot/{ip}", headers=_headers(), timeout=40)
         if r.status_code == 401:
             _login()
-            r = requests.post(f"{SHOMER_BASE}/reboot/{ip}", headers=_headers(), timeout=15)
+            r = requests.post(f"{SHOMER_BASE}/reboot/{ip}", headers=_headers(), timeout=40)
         if r.status_code == 423:
             return False, "Modo mantenimiento activo — reinicio rechazado"
         if r.ok:
