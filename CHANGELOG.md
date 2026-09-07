@@ -4,6 +4,15 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## Corrección operativa — 2026-09-07 (mismo día, sin bump de versión — solo `.env`)
+
+`BRAIN_MODEL` se había subido a `gpt-4o` (ver v1.29.0 más abajo) sin releer antes una nota ya
+documentada en `CLAUDE.md` (Sesión 81, 4 sep): el proyecto de OpenAI de Shomer no tiene acceso a
+`gpt-4o` (403 `model_not_found`). Probado en vivo, sigue sin acceso. Cerebro estuvo unas horas
+fallando en silencio a OpenAI y cayendo a Groq en cada ciclo, sin ninguna mejora real sobre lo que
+ya había antes. Revertido a `gpt-4o-mini` en Ópera y en los 3 labs (que tenían el mismo problema
+desde antes de esta sesión, por defecto de código, sin relación con este cambio puntual).
+
 ## 1.29.0 — 2026-09-07
 
 - **Fase 8 del cerebro: contexto real de Guardian (mantenimiento, razón exacta del estado,
