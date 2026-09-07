@@ -1015,6 +1015,34 @@ def get_pending_audit_findings(ips: list) -> list:
     return out
 
 
+def close_stale_noise_incidents(days: int = 14) -> list[dict]:
+    """Cierra automáticamente SOLO el ruido de internet confirmado y documentado
+    (ver conocimiento_general.py, dominio siem_analisis: 'Bloqueo de IP externa
+    con firma de escaneo genérico... ruido de fondo normal de internet') --
+    IPs externas con firma 'Poor Reputation' que llevan `days` días abiertas
+    sin que nadie las cierre. Decisión explícita de Juan Pablo (7 sep 2026):
+    NUNCA cerrar automáticamente incidentes de IPs internas (192.168.x) ni
+    firmas ambiguas/distintas -- esos siempre requieren revisión humana,
+    solo este patrón específico está confirmado como seguro de auto-cerrar.
+
+    Va por HTTP a Guardian (POST /incidents/close_stale_noise), NO por
+    escritura directa a la BD -- /storage/db está montado SOLO-LECTURA en
+    este contenedor a propósito (ver docker-compose.yml), precisamente para
+    que el bot nunca pueda escribir la base de datos de Guardian sin pasar
+    por su propia lógica de auditoría. Bug real encontrado el 7 sep 2026: la
+    primera versión de esta función escribía SQL directo y fallaba en
+    silencio con 'attempt to write a readonly database' -- devolvía lista
+    vacía sin avisar del error real (log.debug no es visible a nivel
+    WARNING). Corregido a pasar por la API, igual que block_ip/unblock_ip."""
+    ok, body = _post(f"/incidents/close_stale_noise?days={int(days)}")
+    if not ok:
+        log.warning("close_stale_noise_incidents: fallo en la API -- %s", body)
+        return []
+    if isinstance(body, dict):
+        return body.get("closed") or []
+    return []
+
+
 def get_switch_port_errors() -> list:
     """
     Lee contadores de errores SNMP por puerto de todos los switches/routers

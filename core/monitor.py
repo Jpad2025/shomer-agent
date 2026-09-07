@@ -3760,6 +3760,44 @@ async def watch_active_threats(bot: Bot) -> None:
         await asyncio.sleep(600)
 
 
+async def watch_hunter_noise_cleanup(bot: Bot) -> None:
+    """Cierra automáticamente SOLO ruido de internet ya confirmado y documentado
+    (IPs externas con firma 'Poor Reputation', +14 días abiertas sin revisión) y
+    avisa por Telegram qué se cerró. Decisión explícita de Juan Pablo (7 sep
+    2026), tras la auditoría de seguridad que encontró 108 incidentes de Hunter
+    sin cerrar nunca (el más viejo desde junio, cero reconocidos): NUNCA toca
+    IPs internas (192.168.x) ni firmas distintas a 'Poor Reputation' -- esas
+    siempre esperan revisión humana, sin excepción. Corre una vez al día, no
+    necesita más frecuencia para este tipo de limpieza."""
+    _CHECK_INTERVAL = 86400  # 24 horas
+    await asyncio.sleep(600)  # espera 10 min al arrancar
+    while True:
+        try:
+            from core import shomer_api
+            cerrados = shomer_api.close_stale_noise_incidents(days=14)
+            if cerrados:
+                muestra = "\n".join(
+                    f"  • {_html.escape(c['ip'])} — {_html.escape(c['alert_signature'][:60])}"
+                    for c in cerrados[:8]
+                )
+                extra = f"\n  ...y {len(cerrados) - 8} más" if len(cerrados) > 8 else ""
+                await _send(
+                    bot,
+                    f"🧹 <b>Hunter — limpieza automática</b>\n"
+                    f"Se cerraron {len(cerrados)} alerta(s) de ruido de internet "
+                    f"confirmado (IP externa + mala reputación, +14 días sin "
+                    f"actividad):\n{muestra}{extra}\n\n"
+                    f"<i>Solo este patrón se cierra solo. IPs internas o firmas "
+                    f"distintas siempre esperan revisión manual.</i>",
+                    monitor="watch_hunter_noise_cleanup",
+                )
+            _tick("watch_hunter_noise_cleanup", alerted=bool(cerrados))
+        except Exception as e:
+            _tick("watch_hunter_noise_cleanup", error=str(e))
+            log.debug("watch_hunter_noise_cleanup error: %s", e)
+        await asyncio.sleep(_CHECK_INTERVAL)
+
+
 _audit_last_risk_counts: Optional[tuple] = None  # (criticos, altos) ya avisados
 _audit_stale_scan_alerted: bool = False
 
@@ -4162,13 +4200,14 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_memoria_sync(bot))
     loop.create_task(watch_infra(bot))
     loop.create_task(watch_active_threats(bot))
+    loop.create_task(watch_hunter_noise_cleanup(bot))
     loop.create_task(watch_port_errors(bot))
     loop.create_task(watch_pending_guardian(bot))
     loop.create_task(watch_brain(bot))
     loop.create_task(watch_poller_heartbeat(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
     log.info(
-        "Monitores iniciados (31 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (32 tasks) — triage=%s auto_tasks=%s escalation=%s",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),

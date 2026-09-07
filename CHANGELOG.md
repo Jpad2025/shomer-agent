@@ -4,6 +4,32 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.24.0 — 2026-09-07
+
+- **Cierre automático de ruido de Hunter confirmado (+14 días), con aviso por Telegram.** Nace
+  de una conversación directa sobre los 108 incidentes de Hunter nunca reconocidos (auditoría de
+  seguridad del 6 sep): en vez de cerrarlos todos por igual, se acordó con Juan Pablo un criterio
+  conservador -- solo el patrón ya documentado en la KB como ruido de internet ("ET CINS Poor
+  Reputation" en IPs externas), después de 14 días sin actividad. **IPs internas (192.168.x) y
+  firmas distintas NUNCA se cierran solas, sin excepción** -- siempre esperan revisión humana.
+  - Nuevo watcher `watch_hunter_noise_cleanup` (32ª tarea): corre una vez al día, cierra lo que
+    califique y manda un resumen por Telegram de qué se cerró y por qué.
+  - **Bug real encontrado y corregido en el camino**: la primera versión de
+    `close_stale_noise_incidents()` escribía SQL directo a `/storage/db/network_monitor.db` --
+    y falló en silencio con `attempt to write a readonly database`, porque ese volumen está
+    montado **solo-lectura** en este contenedor a propósito (`docker-compose.yml`), para que el
+    bot nunca pueda escribir la base de datos de Guardian sin pasar por su propia lógica de
+    auditoría. `log.debug()` no es visible a nivel WARNING, así que el error real quedaba
+    invisible y la función simplemente devolvía una lista vacía sin explicar por qué.
+  - Corregido construyendo el endpoint real en network_monitor
+    (`POST /incidents/close_stale_noise`, mismo repo, commit `5d0ec4d`) que reutiliza la misma
+    lógica de auditoría (`status`/`closed_by`/`notes`) que el cierre manual de un solo incidente
+    ya existente -- y `close_stale_noise_incidents()` aquí ahora llama a esa API por HTTP, mismo
+    patrón que `block_ip()`/`unblock_ip()`, en vez de tocar la base de datos directamente.
+  - Probado contra producción real: 49 incidentes de ruido externo cerrados correctamente, los 3
+    de IPs internas (incluido el de "PIN en texto plano" de la auditoría) quedaron intactos,
+    confirmado en la base de datos.
+
 ## 1.23.0 — 2026-09-07
 
 - **Fase 6 del cerebro: 3 fuentes reales más, todas ya existentes en el sistema pero que el

@@ -79,6 +79,7 @@ MONITOR_LABELS = {
     "watch_infra_flap":        "Infra — flapping (cable/PoE)",
     "watch_infra_pulse":       "Infra — detección temprana (pulso EWMA)",
     "watch_active_threats":    "Hunter — resumen IPs contenidas",
+    "watch_hunter_noise_cleanup": "Hunter — cierre automático de ruido confirmado (+14 días)",
     "watch_port_errors":       "Infra — errores de puerto (nota para resumen 7 AM)",
     "ia_diagnostico":          "IA — diagnóstico automático AP degradando",
     "evening_summary":         "Resumen de la noche (10:00 PM)",
@@ -92,7 +93,7 @@ MONITOR_GROUPS = [
     ("🎯 Hunter", [
         "watch_hunter", "watch_pipeline", "watch_hunter_verify",
         "watch_mikrotik_security", "auto_unblock",
-        "watch_network_audit", "watch_active_threats",
+        "watch_network_audit", "watch_active_threats", "watch_hunter_noise_cleanup",
     ]),
     ("🛡️ Protector", ["watch_backups", "watch_protector_retry", "watch_protector_sample", "weekly_backup"]),
     ("🏗️ Infra", [
