@@ -4,6 +4,21 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.28.0 — 2026-09-07
+
+- **Fix: reinicio manual vía Telegram ya no congela el bot para todos los usuarios.**
+  Confirmado con Juan Pablo que el bot NUNCA reinicia nada por su cuenta -- las 3 únicas
+  formas de disparar un reinicio (`cb_reboot` con confirmación Sí/No, `/diagnostico <ip>
+  reparar`, botón "Reparar") ya exigían acción humana explícita, eso no cambió. El problema
+  real era otro: esas llamadas eran síncronas dentro de handlers `async def`, así que
+  mientras esperaban la respuesta de Guardian (hasta 40s desde el fix de timeout de
+  v1.27.0) bloqueaban el único hilo de eventos del bot -- ningún otro técnico podía usar el
+  bot mientras tanto, aunque solo uno pidió el reinicio. `_try_remediate_ip()` (usado por
+  `/diagnostico ... reparar` y el botón "Reparar") y `cb_reboot()` ahora envuelven esas
+  llamadas en `asyncio.to_thread()`. Cero cambios en Guardian ni en las condiciones del
+  reinicio automático real (ping/WAN/DNS/latencia, en network_monitor) -- eso sigue exacto
+  como estaba.
+
 ## 1.27.0 — 2026-09-07
 
 - **Fix real de timeout en reinicio manual de AP, encontrado probando AP CONTABILIDAD a

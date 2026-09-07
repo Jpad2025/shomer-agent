@@ -1356,7 +1356,11 @@ async def _diag_impl(message, ctx, level: str, ip: str, *, remediate: bool = Fal
     rem_action = None
     rem_ok = False
     if remediate:
-        rem_ok, rem_lines, rem_action = _try_remediate_ip(ip)
+        # asyncio.to_thread (7 sep 2026): _try_remediate_ip es 100% bloqueante
+        # (ping, HTTP a Guardian, reboot hasta 40s) -- sin esto congelaba el
+        # loop de eventos del bot ENTERO mientras un tecnico esperaba su
+        # reinicio manual, afectando a todos los demas usuarios tambien.
+        rem_ok, rem_lines, rem_action = await asyncio.to_thread(_try_remediate_ip, ip)
         lines.extend(rem_lines)
 
     if node and node.get("status") in ("offline", "no-internet") and not remediate:
@@ -1488,11 +1492,14 @@ async def cb_reboot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         details="Reinicio manual via bot", reverse_data=None
     )
     shomer_api.log_technician_action(query.from_user.id, "reboot", ip, nombre)
+    # asyncio.to_thread (7 sep 2026): ambas llamadas son bloqueantes (HTTP a
+    # Guardian hasta 40s) -- sin esto congelaba el bot entero para todos los
+    # usuarios mientras un tecnico esperaba SU reinicio manual confirmado.
     # Intentar via Guardian API primero (tiene credenciales SSH/SNMP configuradas)
-    ok, msg = shomer_api.reboot_guardian_node(ip)
+    ok, msg = await asyncio.to_thread(shomer_api.reboot_guardian_node, ip)
     if not ok:
         # Fallback: equipo registrado solo en devices.json del agente
-        result = dm.reboot_device(ip)
+        result = await asyncio.to_thread(dm.reboot_device, ip)
         ok, msg = result["ok"], result["message"]
     if ok:
         await query.edit_message_text(
