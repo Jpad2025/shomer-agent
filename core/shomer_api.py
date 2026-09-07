@@ -300,8 +300,13 @@ def get_tracker_summary() -> dict:
                 "FROM assets ORDER BY last_seen DESC LIMIT 5"
             ).fetchall()
             # Distribución por tipo de OS
+            # 7 sep 2026: NULL y '' son grupos SQL distintos -- sin el
+            # COALESCE, "Desconocido" aparecia duplicado con conteos
+            # separados (71 y 1 reales, visto en produccion) en vez de
+            # sumarse en una sola fila.
             os_dist = con.execute(
-                "SELECT os_family, COUNT(*) FROM assets GROUP BY os_family ORDER BY COUNT(*) DESC LIMIT 5"
+                "SELECT COALESCE(NULLIF(os_family, ''), 'Desconocido') AS os_group, COUNT(*) "
+                "FROM assets GROUP BY os_group ORDER BY COUNT(*) DESC LIMIT 5"
             ).fetchall()
             return {
                 "total_devices": total,

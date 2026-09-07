@@ -4,6 +4,16 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.30.0 — 2026-09-07
+
+- **Auditoría de código de Tracker (2 fixes de este lado, el resto en network_monitor).**
+  `bot.py`: le decía al técnico "Guardian reinicia al llegar a 5" con el número fijo en el
+  texto, pero el umbral real configurado (`guardian.fail_threshold`) es 3 — ahora lee el valor
+  real de la BD en vez de un número fijo. `shomer_api.py::get_tracker_summary()`:
+  `os_distribution` mostraba "Desconocido" duplicado con conteos separados (71 y 1 reales,
+  visto en producción) porque `NULL` y `''` son grupos SQL distintos antes del `COALESCE` —
+  corregido a nivel SQL para que se combinen en una sola fila antes de contar.
+
 ## Corrección operativa — 2026-09-07 (mismo día, sin bump de versión — solo `.env`)
 
 `BRAIN_MODEL` se había subido a `gpt-4o` (ver v1.29.0 más abajo) sin releer antes una nota ya

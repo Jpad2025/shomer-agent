@@ -1309,11 +1309,19 @@ async def _diag_impl(message, ctx, level: str, ip: str, *, remediate: bool = Fal
     data = shomer_api.get_node_failures(ip)
     if data:
         fails = data.get("failures", 0)
-        f_i = "✅" if fails == 0 else ("⚠️" if fails < 3 else "🔴")
+        # 7 sep 2026 (auditoría Guardian): antes decía "reinicia al llegar a
+        # 5" fijo en el texto, pero el umbral real configurado
+        # (guardian.fail_threshold) es 3 -- le hacía creer al técnico que
+        # faltaba más de lo que realmente faltaba para el reinicio.
+        try:
+            threshold = int(shomer_api.get_config("guardian.fail_threshold") or 3)
+        except Exception:
+            threshold = 3
+        f_i = "✅" if fails == 0 else ("⚠️" if fails < threshold else "🔴")
         f_txt = str(fails)
-        if 0 < fails < 5:
-            f_txt += " (Guardian reinicia al llegar a 5)"
-        elif fails >= 5:
+        if 0 < fails < threshold:
+            f_txt += f" (Guardian reinicia al llegar a {threshold})"
+        elif fails >= threshold:
             f_txt += " — reinicio automático próximo"
         lines.append(f"  {f_i} <b>Alertas:</b> {fmt.e(f_txt)}")
         if data.get("last_reboot_ago") is not None:
