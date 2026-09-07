@@ -290,7 +290,15 @@ _SYSTEM_PROMPT = (
     "en vivo de una impresora muestra que reporta falta de papel, esa es la "
     "causa real, no una adivinanza). Si no hay verificacion en vivo para un "
     "equipo, decilo explicitamente como limitacion en vez de inventar certeza "
-    "que no tenes. Tu trabajo: dar UNA hipotesis de causa raiz que "
+    "que no tenes. Tambien recibis 'topologia_confirmada_por_lldp' -- si trae "
+    "datos, es un HECHO verificado (descubierto por SNMP/LLDP real contra el "
+    "switch, no una suposicion): esos equipos SI comparten fisicamente el "
+    "mismo switch padre. Usalo como la evidencia MAS fuerte posible de causa "
+    "comun -- mas fuerte que la sola coincidencia de tiempo. Si dice 'sin "
+    "coincidencia', NO asumas que comparten switch solo porque cayeron juntos "
+    "en el tiempo -- la coincidencia temporal sola es mas debil que topologia "
+    "confirmada, decilo como hipotesis, no como hecho. Tu trabajo: dar UNA "
+    "hipotesis de causa raiz que "
     "explique el grupo completo si comparten una causa comun (ej. un switch "
     "upstream que tira varios equipos), o aclarar que no estan relacionados si "
     "no la comparten. Da una recomendacion concreta y accionable para el "
@@ -482,6 +490,27 @@ def run_cycle() -> list[dict]:
         # una respuesta también truncada e inutilizable).
         eventos_incluidos = cluster[:MAX_EVENTS_IN_PROMPT]
         omitidos = len(cluster) - len(eventos_incluidos)
+        # Fase 5 (6 sep 2026): topología real (LLDP/SNMP, ver shomer_topology.py
+        # en network_monitor) en vez de solo coincidencia de tiempo -- si 2+
+        # entidades del cluster comparten el mismo switch padre REAL descubierto,
+        # se lo decimos explícito al modelo como hecho verificado, no conjetura.
+        topologia_confirmada: list[dict] = []
+        try:
+            from core import shomer_api
+            ips_cluster = [ent["ip"] for ent in entities if ent.get("ip")]
+            padres = shomer_api.get_topology_parents(ips_cluster)
+            por_padre: dict[str, list[str]] = {}
+            for ip, info in padres.items():
+                por_padre.setdefault(info["parent_ip"], []).append(ip)
+            for parent_ip, hijos in por_padre.items():
+                if len(hijos) >= 2:
+                    info0 = padres[hijos[0]]
+                    topologia_confirmada.append({
+                        "switch_padre": info0["parent_name"],
+                        "equipos_afectados_en_ese_switch": len(hijos),
+                    })
+        except Exception as e:
+            log.debug("brain: topología no disponible para este cluster: %s", e)
         payload = {
             "eventos": [
                 {
@@ -494,6 +523,7 @@ def run_cycle() -> list[dict]:
             ],
             "eventos_omitidos_por_espacio": omitidos,
             "aprendizaje_por_entidad": contexto_entidades,
+            "topologia_confirmada_por_lldp": topologia_confirmada or "sin coincidencia -- no asumir switch compartido",
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/

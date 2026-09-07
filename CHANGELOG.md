@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.22.0 — 2026-09-06
+
+- **Fase 5 del cerebro: correlación por topología real (LLDP/SNMP), no solo coincidencia de
+  tiempo.** Complementa las Fases 1-4 (correlación por tiempo, conocimiento técnico, verificación
+  en vivo, aprendizaje) construidas antes en esta misma sesión. Requirió construir primero el
+  descubrimiento real de topología en network_monitor (antes era un placeholder que solo releía
+  enlaces cargados a mano) y un ciclo automático que lo mantiene actualizado cada 5 minutos.
+  - `shomer_api.get_topology_parents(ips)`: lee `network_links` directamente (mismo host, solo
+    lectura, mismo patrón que `get_switch_port_errors()`) y devuelve el switch/router padre real
+    para las IPs dadas, cuando se conoce.
+  - `brain.py`: en cada cluster, si 2+ entidades comparten el mismo switch padre real (hecho
+    verificado por SNMP, no una suposición), se le informa explícitamente al modelo como
+    `topologia_confirmada_por_lldp` -- el prompt del sistema ahora distingue claramente "hecho
+    verificado por topología" (más fuerte) de "solo coincidencia de tiempo" (más débil), y pide
+    no inflar una coincidencia temporal a certeza de switch compartido si la topología no la
+    confirma.
+  - Probado end-to-end contra datos reales: `get_topology_parents(['192.168.0.1',
+    '192.168.0.217', '192.168.0.129'])` devuelve correctamente el switch padre real para cada IP
+    con enlace conocido.
+  - Sin cambio de comportamiento cuando no hay enlaces conocidos para las IPs de un cluster
+    (`topologia_confirmada_por_lldp` queda vacío, el cerebro sigue funcionando exactamente igual
+    que antes de esta fase).
+
 ## 1.21.0 — 2026-09-06
 
 - **Primera suite de pruebas automatizadas de shomer-agent — hasta ahora tenía CERO pruebas.**

@@ -892,6 +892,41 @@ def get_infra_device(ip: str) -> dict:
     return {}
 
 
+def get_topology_parents(ips: list) -> dict:
+    """Switch/equipo padre REAL (descubierto por LLDP/SNMP, ver shomer_topology.py
+    en network_monitor) para una lista de IPs. Lectura directa de network_links --
+    misma máquina, solo lectura, mismo patrón que get_switch_port_errors().
+    Devuelve {ip: {parent_ip, parent_name, parent_port}} solo para las IPs con
+    enlace conocido. Usado por brain.py (6 sep 2026) para convertir 'cayeron
+    juntos, probablemente el mismo switch' (coincidencia de tiempo) en
+    'confirmado: mismo switch X' (hecho verificado) cuando el enlace existe."""
+    import sqlite3 as _sqlite3
+    DB = "/storage/db/network_monitor.db"
+    ips = [ip for ip in (ips or []) if ip]
+    if not ips:
+        return {}
+    result: dict = {}
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        placeholders = ",".join("?" * len(ips))
+        rows = conn.execute(
+            f"SELECT child_ip, parent_ip, parent_name, parent_port "
+            f"FROM network_links WHERE child_ip IN ({placeholders})",
+            ips,
+        ).fetchall()
+        conn.close()
+        for r in rows:
+            result[r["child_ip"]] = {
+                "parent_ip": r["parent_ip"],
+                "parent_name": r["parent_name"] or r["parent_ip"],
+                "parent_port": r["parent_port"] or "",
+            }
+    except Exception as e:
+        log.debug("get_topology_parents error: %s", e)
+    return result
+
+
 def get_switch_port_errors() -> list:
     """
     Lee contadores de errores SNMP por puerto de todos los switches/routers
