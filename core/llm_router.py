@@ -263,6 +263,18 @@ def active_provider() -> str:
     return f"groq ({_gh.GROQ_MODEL})"
 
 
+def _gh_model() -> str:
+    """Nombre real del modelo Groq configurado -- antes esto estaba fijo
+    como texto ('Llama 3.3 70B') en status_lines() y quedó desactualizado
+    respecto al modelo real (openai/gpt-oss-20b), encontrado al revisar
+    límites de IA con Juan Pablo (7 sep 2026)."""
+    try:
+        from core import groq_helper as _gh
+        return _gh.GROQ_MODEL
+    except Exception:
+        return "?"
+
+
 def status_lines(*, html: bool = True) -> list[str]:
     """Estado de OpenAI + Groq para /salud, resúmenes y contexto LLM."""
     from core import maintenance as _mnt
@@ -280,7 +292,7 @@ def status_lines(*, html: bool = True) -> list[str]:
         f"{_mnt.paused_until_str() if _mnt.is_paused() else 'activo'}",
         f"  📊 Tokens hoy — Groq: {groq_t:,} · OpenAI: {openai_t:,}",
         f"  {budget_icon} Presupuesto global tokens: {budget}",
-        f"  ℹ️ Resúmenes automáticos: Groq (Llama 3.3 70B)",
+        f"  ℹ️ Resúmenes automáticos: Groq ({_gh_model()})",
     ]
 
     if _openai_enabled():

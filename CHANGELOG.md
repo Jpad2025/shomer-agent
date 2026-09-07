@@ -4,6 +4,14 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.26.2 — 2026-09-07
+
+- **Fix: `/salud` mostraba "Groq (Llama 3.3 70B)" fijo en el código, pero el modelo real
+  configurado es `openai/gpt-oss-20b`.** Encontrado al revisar límites diarios de IA con
+  Juan Pablo -- el texto nunca se actualizó cuando cambió `GROQ_MODEL`. Ahora `status_lines()`
+  lee el nombre real vía `groq_helper.GROQ_MODEL` en vez de un string fijo, así nunca vuelve
+  a quedar desactualizado.
+
 ## 1.26.1 — 2026-09-07
 
 - **Fix de costo real en la integración de KB del chat (v1.26.0), encontrado por pregunta
