@@ -4,6 +4,27 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.29.0 — 2026-09-07
+
+- **Fase 8 del cerebro: contexto real de Guardian (mantenimiento, razón exacta del estado,
+  resultado del último auto-reinicio).** Directo de la investigación de hoy sobre por qué
+  fallan los reinicios automáticos (sin ruta de red, no credenciales) -- si no le llega esto
+  a cerebro, puede tratar un equipo en mantenimiento como urgente, o sugerir "reintentar el
+  reinicio" a un equipo del que Guardian ya sabe con certeza que no tiene ninguna ruta de
+  red. `get_node_failures()` extendida con `en_mantenimiento` y `offline_streak`; dos
+  funciones nuevas -- `get_last_status_reason()` (motivo real de `classify_health()`, ej.
+  "ping 8.8.8.8 falla") y `get_last_reboot_attempt()` (éxito/fallo del último AUTO-REBOOT
+  real, con `sin_ruta_de_red` cuando aplica). Probadas contra AP HAB 103 (en mantenimiento
+  real, 580k+ ciclos offline) y AP CONTABILIDAD (intento real fallido de hoy) antes de
+  desplegar -- ambas devolvieron los datos reales correctos.
+- **Guardian: reinicio preventivo en degradado sostenido + aviso diferenciado sin ruta de
+  red** (network_monitor, no shomer-agent) -- ver commit `3ba3ac9`: nuevo umbral
+  `guardian.degraded_preventive_reboot_ticks` (default 60 ticks ≈ 10 min) intenta reiniciar
+  mientras un equipo aún tiene conectividad parcial, antes de llegar a `offline` (donde SSH
+  ya no puede llegarle); mensaje de Telegram distinto cuando el fallo es por falta total de
+  ruta de red ("requiere atención física") vs otro tipo de error. Documentado como pendiente
+  en `CLAUDE.md` §D.3 el power-cycle remoto por PoE/SNMP -- requiere validación en campo.
+
 ## 1.28.0 — 2026-09-07
 
 - **Fix: reinicio manual vía Telegram ya no congela el bot para todos los usuarios.**

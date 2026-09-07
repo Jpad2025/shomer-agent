@@ -314,7 +314,17 @@ _SYSTEM_PROMPT = (
     "como un incidente separado) y 'fallas_y_reboots_recientes_por_nodo' (si "
     "un equipo reinicio hace poco o acumula fallas, un evento de 'offline' "
     "puede ser solo ese reinicio, no algo nuevo -- no lo trates como ataque o "
-    "falla critica sin decir que hay un reboot reciente de por medio). "
+    "falla critica sin decir que hay un reboot reciente de por medio; si "
+    "'en_mantenimiento' es true, ese equipo esta apagado del monitoreo a "
+    "proposito -- NUNCA lo trates como urgente ni sugieras reiniciarlo). "
+    "Tambien recibis 'razon_calculada_por_guardian' (el motivo EXACTO que "
+    "Guardian ya calculo para el estado actual -- ej. 'ping 8.8.8.8 falla', "
+    "'DNS no resuelve' -- usalo en vez de adivinar la causa desde el evento "
+    "crudo) y 'ultimo_intento_reinicio_automatico' (si 'sin_ruta_de_red' es "
+    "true, Guardian ya intento reiniciar por SSH y fallo porque el equipo no "
+    "tiene NINGUNA ruta de red -- en ese caso tu recomendacion debe ser "
+    "atencion fisica en sitio, NUNCA sugerir reintentar el reinicio por "
+    "software, porque ya sabemos que no puede funcionar). "
     "Todas estas son hechos ya verificados por otro sistema -- si dicen "
     "'ninguno', no inventes que si hay. Tu trabajo: dar UNA "
     "hipotesis de causa raiz que "
@@ -586,6 +596,8 @@ def run_cycle() -> list[dict]:
         # ataque nuevo.
         estado_wan = "desconocido"
         fallas_nodo: list[dict] = []
+        razones_guardian: list[dict] = []
+        intentos_reinicio: list[dict] = []
         try:
             from core import shomer_api
             wan = shomer_api.get_wan_status()
@@ -596,14 +608,39 @@ def run_cycle() -> list[dict]:
                 if not ent.get("ip"):
                     continue
                 f = shomer_api.get_node_failures(ent["ip"])
-                if f.get("failures") or (f.get("last_reboot_ago") is not None and f["last_reboot_ago"] < 86400):
+                if (
+                    f.get("failures")
+                    or f.get("en_mantenimiento")
+                    or (f.get("last_reboot_ago") is not None and f["last_reboot_ago"] < 86400)
+                ):
                     fallas_nodo.append({
                         "equipo": ent["name"],
                         "fallas_acumuladas": f.get("failures") or 0,
                         "ultimo_reboot_hace_seg": f.get("last_reboot_ago"),
+                        "en_mantenimiento": f.get("en_mantenimiento") or False,
+                        "ciclos_offline_seguidos": f.get("offline_streak") or 0,
+                    })
+
+                # Fase 8 (7 sep 2026): razon real ya calculada por Guardian
+                # (classify_health) y resultado del ultimo intento de
+                # reinicio automatico -- ver investigacion 7 sep sobre por
+                # que la mayoria de los AUTO-REBOOT fallan (sin ruta de red,
+                # no es bug de credenciales).
+                razon = shomer_api.get_last_status_reason(ent["ip"])
+                if razon.get("reason"):
+                    razones_guardian.append({
+                        "equipo": ent["name"], "estado": razon.get("status"),
+                        "razon": razon["reason"],
+                    })
+                intento = shomer_api.get_last_reboot_attempt(ent["ip"])
+                if intento:
+                    intentos_reinicio.append({
+                        "equipo": ent["name"], "exito": intento.get("ok"),
+                        "sin_ruta_de_red": intento.get("sin_ruta_de_red"),
+                        "mensaje": intento.get("msg"),
                     })
         except Exception as e:
-            log.debug("brain: contexto adicional (Fase 7) no disponible: %s", e)
+            log.debug("brain: contexto adicional (Fase 7/8) no disponible: %s", e)
 
         payload = {
             "eventos": [
@@ -624,6 +661,8 @@ def run_cycle() -> list[dict]:
             "errores_de_puerto_switches": errores_puerto or "ninguno",
             "estado_wan": estado_wan,
             "fallas_y_reboots_recientes_por_nodo": fallas_nodo or "ninguno -- no asumir reinicio reciente",
+            "razon_calculada_por_guardian": razones_guardian or "sin datos",
+            "ultimo_intento_reinicio_automatico": intentos_reinicio or "ninguno",
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/

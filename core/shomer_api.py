@@ -551,7 +551,15 @@ def get_snmp_uptime(ip: str, community: str = "shomer2026") -> str | None:
 
 
 def get_node_failures(ip: str) -> dict:
-    """Retorna failures acumulados y último reboot de un nodo Guardian."""
+    """Retorna failures acumulados, último reboot, mantenimiento y racha offline
+    de un nodo Guardian.
+
+    Extendido 7 sep 2026 (integración Guardian → cerebro): además de failures/
+    last_reboot ya usados en Fase 7, ahora incluye `en_mantenimiento`
+    (global o por-nodo -- si está activo, cerebro NO debe tratar un offline
+    como urgente, es intencional) y `offline_streak` (cuántos ciclos de
+    poll lleva sin responder -- distingue una caída recién ocurrida de una
+    crónica de semanas, algo que cerebro hoy no puede ver)."""
     r = _redis()
     if not r:
         return {}
@@ -560,7 +568,77 @@ def get_node_failures(ip: str) -> dict:
     last_raw = r.get(f"last_reboot:{ip}")
     last_reboot = int(last_raw) if last_raw else None
     last_reboot_ago = int(time.time()) - last_reboot if last_reboot else None
-    return {"failures": failures, "last_reboot": last_reboot, "last_reboot_ago": last_reboot_ago}
+    en_mantenimiento = (
+        r.get("shomer_maintenance") == "1" or r.get(f"node_maintenance:{ip}") == "1"
+    )
+    offline_streak = int(r.get(f"offline_streak:{ip}") or 0)
+    return {
+        "failures": failures,
+        "last_reboot": last_reboot,
+        "last_reboot_ago": last_reboot_ago,
+        "en_mantenimiento": en_mantenimiento,
+        "offline_streak": offline_streak,
+    }
+
+
+def get_last_status_reason(ip: str) -> dict:
+    """Última razón real que Guardian calculó para el estado actual de un
+    equipo (ver classify_health() en network_monitor) -- ej. 'ping 8.8.8.8
+    falla', 'DNS no resuelve', 'rtt LAN 450ms'. Sin esto cerebro solo ve el
+    evento crudo 'offline'/'degraded', no el motivo específico ya calculado
+    por Guardian. Lectura directa de status_events, solo lectura."""
+    import sqlite3 as _sqlite3
+    DB = "/storage/db/network_monitor.db"
+    try:
+        conn = _sqlite3.connect(DB)
+        conn.row_factory = _sqlite3.Row
+        row = conn.execute(
+            "SELECT status, reason, ts FROM status_events "
+            "WHERE ip=? AND source='guardian' ORDER BY id DESC LIMIT 1",
+            (ip,),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return {}
+        return {"status": row["status"], "reason": row["reason"], "ts": row["ts"]}
+    except Exception:
+        return {}
+
+
+def get_last_reboot_attempt(ip: str) -> dict:
+    """Resultado del intento de reinicio automático más reciente para esta IP
+    (éxito/fallo, mensaje) -- lee la cola de eventos en vivo de Guardian
+    (shomer_events en Redis, la misma que alimenta el panel de logs). Si el
+    último intento falló por falta total de ruta de red, cerebro debería
+    recomendar atención física en vez de sugerir reintentar por software --
+    ver is_network_unreachable_error() en network_monitor."""
+    r = _redis()
+    if not r:
+        return {}
+    import json as _json
+    try:
+        raw_events = r.lrange("shomer_events", 0, 200)
+    except Exception:
+        return {}
+    for raw in raw_events:
+        try:
+            ev = _json.loads(raw)
+        except Exception:
+            continue
+        if ev.get("source") != "AUTO-REBOOT" or ip not in (ev.get("msg") or ""):
+            continue
+        msg = ev.get("msg") or ""
+        sin_ruta = any(
+            m in msg.lower()
+            for m in ("no route to host", "connection timed out", "network is unreachable")
+        )
+        return {
+            "ok": ev.get("level") != "error",
+            "msg": msg,
+            "ts": ev.get("ts"),
+            "sin_ruta_de_red": sin_ruta,
+        }
+    return {}
 
 
 # ── Config BD (system_state) ─────────────────────────────────────────────────
