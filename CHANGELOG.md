@@ -4,6 +4,35 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.21.0 — 2026-09-06
+
+- **Primera suite de pruebas automatizadas de shomer-agent — hasta ahora tenía CERO pruebas.**
+  Surgió de la auditoría de estabilidad para despliegue multi-cliente: se encontraron 3 bugs
+  reales ese mismo día (memoria de shomer-tools, discover_macs.py roto, cálculo uptime_24h)
+  sin que ninguna prueba automatizada los detectara -- solo auditoría manual. Se prioriza
+  empezar por los dos módulos más autocontenidos y de mayor impacto (sin dependencias externas,
+  puro stdlib): `conocimiento_general.py` (la base de 436 entradas que alimenta el prompt del
+  cerebro) y `chronic_tickets.py` (evita duplicar/perder tickets de alertas hacia Telegram).
+  - `tests/conftest.py`: fixture que aísla cada test contra su propia `knowledge.db` temporal
+    (nunca toca `/app/data/knowledge.db` real) vía `KNOWLEDGE_DB_PATH` + `importlib.reload`.
+  - `tests/test_conocimiento_general.py` (17 pruebas): seed idempotente y con conteo correcto,
+    integridad de campos (ningún campo vacío en las 436 entradas), dominios en snake_case,
+    matching de dominios por marca (Bixolon/MikroTik/servidor), **prueba de regresión directa
+    del bug real de "pc" haciendo falso positivo dentro de "recepcion"** (encontrado y corregido
+    en v1.16.0), format_for_prompt no revienta sin seed y no fuerza contenido irrelevante,
+    ciclo de aprendizaje confirmación/refutación incrementa el contador correcto.
+  - `tests/test_chronic_tickets.py` (14 pruebas): no duplica tickets para la misma IP+fuente
+    mientras siga abierto, sí distingue tickets de fuentes distintas para el mismo equipo,
+    reabre un ticket nuevo si el anterior ya se cerró, cerrar dos veces el mismo ticket no
+    revienta, list_open excluye cerrados y respeta orden de apertura.
+  - **31/31 pruebas pasan** en la primera corrida -- validan que las correcciones aplicadas
+    durante la auditoría del mismo día quedaron bien.
+  - `pytest.ini`, `requirements-dev.txt` (pytest como dependencia SOLO de desarrollo, la imagen
+    Docker de producción no la instala), `.gitignore` actualizado con `.venv-test/`.
+  - Pendiente explícito, no resuelto hoy: cobertura de `brain.py` (requiere mockear OpenAI/Groq
+    y las llamadas de verificación en vivo) y del resto de los ~35 módulos restantes de `core/`.
+    Este commit es el punto de partida, no la cobertura completa.
+
 ## 1.20.1 — 2026-09-06
 
 - **Unificación de la metodología de troubleshooting, pedida por Juan Pablo tras la auditoría**:
