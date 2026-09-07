@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.25.0 — 2026-09-07
+
+- **Fase 7 del cerebro: estado real del WAN + fallas/reboots por nodo.** Al revisar qué más
+  faltaba conectar a cerebro (pregunta directa de Juan Pablo), dos fuentes reales ya existían
+  en `shomer_api.py` pero nunca se habían conectado al ciclo de razonamiento:
+  `get_wan_status()` (estado del quorum de internet vía Redis, ver
+  `shomer_guardian_server_health.py`) y `get_node_failures(ip)` (fallas acumuladas + último
+  reboot por nodo Guardian, también vía Redis). Sin esto cerebro podía tratar una caída masiva
+  causada por el WAN como N incidentes independientes, o un reinicio reciente de un equipo
+  como si fuera un ataque nuevo. Ahora `run_cycle()` incluye `estado_wan` y
+  `fallas_y_reboots_recientes_por_nodo` en el payload, con instrucciones explícitas en
+  `_SYSTEM_PROMPT` sobre cómo pesarlos. Probado contra datos reales antes de desplegar (WAN
+  `ok`, 0 nodos con fallas activas en este momento — comportamiento correcto, no hay nada que
+  reportar ahora mismo).
+- **Verificado que no se duplicó el reporte de Hunter por mes/trimestre/año** que Juan Pablo
+  pidió: ya existe completo en network_monitor (`shomer_reports.py`, PDF automático día 1 de
+  cada mes + rango custom vía `/reports/generate`, 4 meses reales archivados en
+  `/srv/shomer_reports/`) y en vivo en el NOC (`shomer_noc.py::_hunter_stats()`). No se
+  construyó nada nuevo para esto — hubiera sido una segunda fuente de verdad divergente.
+
 ## 1.24.0 — 2026-09-07
 
 - **Cierre automático de ruido de Hunter confirmado (+14 días), con aviso por Telegram.** Nace

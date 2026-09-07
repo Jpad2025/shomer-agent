@@ -308,6 +308,13 @@ _SYSTEM_PROMPT = (
     "'errores_de_puerto_switches' (contadores SNMP reales de errores de "
     "puerto -- un puerto con miles de errores es evidencia fuerte de cable o "
     "puerto fisico dañado, mas fuerte que 'sospechar del cable' sin datos). "
+    "Tambien recibis 'estado_wan' (estado real del quorum de internet en "
+    "este instante -- si NO dice 'ok', es la causa raiz mas probable de "
+    "cualquier caida masiva simultanea de varios equipos, no trates cada uno "
+    "como un incidente separado) y 'fallas_y_reboots_recientes_por_nodo' (si "
+    "un equipo reinicio hace poco o acumula fallas, un evento de 'offline' "
+    "puede ser solo ese reinicio, no algo nuevo -- no lo trates como ataque o "
+    "falla critica sin decir que hay un reboot reciente de por medio). "
     "Todas estas son hechos ya verificados por otro sistema -- si dicen "
     "'ninguno', no inventes que si hay. Tu trabajo: dar UNA "
     "hipotesis de causa raiz que "
@@ -571,6 +578,33 @@ def run_cycle() -> list[dict]:
         except Exception as e:
             log.debug("brain: contexto adicional (Fase 6) no disponible: %s", e)
 
+        # Fase 7 (7 sep 2026): estado real del WAN (quorum en Redis, ver
+        # shomer_guardian_server_health.py) y fallas/reboots acumulados por
+        # nodo (Redis failures:{ip}/last_reboot:{ip}) -- sin esto el modelo
+        # puede confundir "medio sitio cayó porque se cayó el WAN" con N
+        # incidentes independientes, o "nodo reinició hace 5 min" con un
+        # ataque nuevo.
+        estado_wan = "desconocido"
+        fallas_nodo: list[dict] = []
+        try:
+            from core import shomer_api
+            wan = shomer_api.get_wan_status()
+            if wan.get("success"):
+                estado_wan = wan.get("status") or "desconocido"
+
+            for ent in entities_for_context:
+                if not ent.get("ip"):
+                    continue
+                f = shomer_api.get_node_failures(ent["ip"])
+                if f.get("failures") or (f.get("last_reboot_ago") is not None and f["last_reboot_ago"] < 86400):
+                    fallas_nodo.append({
+                        "equipo": ent["name"],
+                        "fallas_acumuladas": f.get("failures") or 0,
+                        "ultimo_reboot_hace_seg": f.get("last_reboot_ago"),
+                    })
+        except Exception as e:
+            log.debug("brain: contexto adicional (Fase 7) no disponible: %s", e)
+
         payload = {
             "eventos": [
                 {
@@ -588,6 +622,8 @@ def run_cycle() -> list[dict]:
             "incidentes_seguridad_activos": incidentes_seguridad or "ninguno",
             "riesgos_de_auditoria_pendientes": riesgos_pendientes or "ninguno",
             "errores_de_puerto_switches": errores_puerto or "ninguno",
+            "estado_wan": estado_wan,
+            "fallas_y_reboots_recientes_por_nodo": fallas_nodo or "ninguno -- no asumir reinicio reciente",
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/
