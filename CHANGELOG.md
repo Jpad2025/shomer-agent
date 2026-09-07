@@ -4,6 +4,20 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.26.0 — 2026-09-07
+
+- **KB CompTIA conectada al chat interactivo del técnico.** Auditoría pedida por Juan Pablo
+  sobre las dos IAs (OpenAI gpt-4o-mini para chat, Groq Llama 3.3 70B para monitores/fallback)
+  + cerebro (gpt-4o) + la base de 436 reglas/conceptos técnicos validados encontró que la KB
+  solo llegaba al análisis automático de fondo (cerebro, Fase 2) y al comando manual
+  `/conocimiento` -- el chat natural del técnico (`llm_router.py`) respondía sin verla nunca.
+  `conocimiento_general.format_for_prompt()` ya hacía matching por palabra clave sobre texto
+  libre (no exige nombres de equipo), así que la pregunta del técnico funciona igual de bien
+  que un nombre de entidad -- cero lógica de matching nueva. Ahora `_inject_snapshot()` agrega
+  el bloque de conocimiento relevante a la última pregunta del usuario, igual que ya hace con
+  skills/patrones. Probado con una pregunta real ("¿por qué el switch de piso 3 se cae tanto?")
+  antes de desplegar -- hizo match correcto con reglas de cableado/switching.
+
 ## 1.25.0 — 2026-09-07
 
 - **Fase 7 del cerebro: estado real del WAN + fallas/reboots por nodo.** Al revisar qué más

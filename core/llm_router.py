@@ -154,6 +154,25 @@ def _inject_snapshot(history: list[dict]) -> list[dict]:
             parts.append(patterns)
     except Exception as e:
         log.debug("pattern context: %s", e)
+    # KB CompTIA (7 sep 2026): antes solo cerebro (analisis automatico de
+    # fondo) recibia las 436 reglas/teoria validadas -- el chat natural del
+    # tecnico respondia sin verlas. find_relevant() hace matching por
+    # palabra clave sobre texto libre (no exige nombres de equipo), asi que
+    # la pregunta del tecnico sirve igual de bien que un nombre de entidad.
+    try:
+        from core import conocimiento_general as _cg
+
+        pregunta = ""
+        for m in reversed(history):
+            if m.get("role") == "user":
+                pregunta = str(m.get("content", "")).strip()
+                break
+        if pregunta:
+            kb = _cg.format_for_prompt([pregunta])
+            if kb:
+                parts.append(kb)
+    except Exception as e:
+        log.debug("knowledge context: %s", e)
     if not parts:
         return history
     injected = {"role": "system", "content": "\n\n".join(parts)}
