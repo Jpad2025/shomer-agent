@@ -4,6 +4,18 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.30.1 — 2026-09-07
+
+- **`get_tracker_summary()` leía la columna equivocada de SO.** Encontrado validando en vivo
+  el fix del escaneo profundo (Juan Pablo corrió un escaneo real completo, 5 min, 69 equipos):
+  el escaneo SÍ detectó el SO real de muchos equipos (Windows 10, Windows Server 2012 R2,
+  Linux, FreeBSD, Android, DD-WRT) en la columna `os_detected` -- pero el resumen seguía
+  mostrando "Desconocido" para todos porque solo leía `os_family` (campo manual/editable, casi
+  siempre vacío). El panel web (`inventory.html`) ya priorizaba correctamente
+  `os_name||os_detected||os_family` -- este resumen del lado del bot no. Corregido con la
+  misma prioridad. Verificado en vivo: de 69 equipos, ahora muestra datos reales distintos en
+  vez de "Desconocido" para todos.
+
 ## 1.30.0 — 2026-09-07
 
 - **Auditoría de código de Tracker (2 fixes de este lado, el resto en network_monitor).**

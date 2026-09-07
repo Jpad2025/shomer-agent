@@ -295,17 +295,24 @@ def get_tracker_summary() -> dict:
         con = _sq.connect(DB, timeout=5, uri=True)
         try:
             total = con.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+            # 7 sep 2026: el escaneo profundo llena os_detected (autodetectado
+            # por nmap), no os_family (campo manual/editable, casi siempre
+            # vacío en la práctica) -- el panel web ya prioriza
+            # os_name||os_detected||os_family correctamente (inventory.html),
+            # pero este resumen solo leía os_family y por eso siempre
+            # mostraba "Desconocido" aunque el scan sí hubiera detectado el
+            # SO real de la mayoría de los equipos.
+            os_col = "COALESCE(NULLIF(os_name, ''), NULLIF(os_detected, ''), NULLIF(os_family, ''))"
             recent = con.execute(
-                "SELECT ip, hostname, vendor, os_family, last_seen "
+                f"SELECT ip, hostname, vendor, {os_col} AS os_real, last_seen "
                 "FROM assets ORDER BY last_seen DESC LIMIT 5"
             ).fetchall()
-            # Distribución por tipo de OS
-            # 7 sep 2026: NULL y '' son grupos SQL distintos -- sin el
-            # COALESCE, "Desconocido" aparecia duplicado con conteos
-            # separados (71 y 1 reales, visto en produccion) en vez de
-            # sumarse en una sola fila.
+            # Distribución por tipo de OS. NULL y '' son grupos SQL distintos
+            # -- sin el COALESCE, "Desconocido" aparecía duplicado con
+            # conteos separados (71 y 1 reales, visto en producción) en vez
+            # de sumarse en una sola fila.
             os_dist = con.execute(
-                "SELECT COALESCE(NULLIF(os_family, ''), 'Desconocido') AS os_group, COUNT(*) "
+                f"SELECT COALESCE({os_col}, 'Desconocido') AS os_group, COUNT(*) "
                 "FROM assets GROUP BY os_group ORDER BY COUNT(*) DESC LIMIT 5"
             ).fetchall()
             return {
