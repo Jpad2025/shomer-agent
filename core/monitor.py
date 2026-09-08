@@ -603,8 +603,15 @@ async def watch_hunter(bot: Bot) -> None:
 
                     _tick("watch_hunter", alerted=True)
 
+                    # callback_data DEBE ser "unblock_confirm:<ip>": es el único
+                    # formato que atiende cb_unblock (pattern ^unblock_(confirm:.+|cancel)$).
+                    # Estaba como "block_unblock_<ip>", que no casa con ningún
+                    # handler registrado: el botón "Desbloquear" de las alertas de
+                    # Hunter no hacía absolutamente nada al pulsarlo. Se notó el
+                    # 8 sep 2026, cuando Hunter bloqueó los DNS de Google y el
+                    # técnico no tuvo forma de liberarlos desde Telegram.
                     keyboard = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔓 Desbloquear", callback_data=f"block_unblock_{ip}"),
+                        InlineKeyboardButton("🔓 Desbloquear", callback_data=f"unblock_confirm:{ip}"),
                     ]])
                     from core.hunter_labels import humanize_hunter_signature
                     h = humanize_hunter_signature(sig)
