@@ -642,6 +642,54 @@ def run_cycle() -> list[dict]:
         except Exception as e:
             log.debug("brain: contexto adicional (Fase 7/8) no disponible: %s", e)
 
+        # Fase 9 (7 sep 2026): contexto del CICLO del poller de Inframonitor.
+        # El poller ya decide, con el gateway en la mano, si una tanda de
+        # caidas fue una oleada del propio sitio (host_network_blip / caida
+        # masiva) y cuantas transiciones suprimio -- pero eso no le llegaba al
+        # cerebro, que veia N eventos sueltos y podia concluir "fallo el switch
+        # X" cuando en realidad cayeron 20 equipos a la vez con el gateway
+        # sano. Ese dato existia en el codigo pero NUNCA se escribia en Redis
+        # (NameError silencioso en cada ciclo, corregido en esta misma
+        # auditoria), asi que esta es la primera vez que el cerebro puede
+        # usarlo. Relevante para la causa raiz aun abierta de las caidas
+        # sincronizadas (Sesiones 70-72).
+        contexto_ciclo_infra: dict | str = "sin datos del poller"
+        try:
+            from core import pulse_correlate as _pulse
+            from core import shomer_api
+
+            snap = shomer_api.get_infra_snapshot()
+            pctx = snap.get("poll_context") or {}
+            lblip = snap.get("last_blip") or {}
+            if pctx:
+                total = pctx.get("total_devices") or 0
+                caidos = pctx.get("offline_count") or 0
+                es_blip = _pulse.is_blip_poll(pctx)
+                blip_cerca = _pulse.blip_recent(pctx, lblip)
+                contexto_ciclo_infra = {
+                    "equipos_caidos_en_el_mismo_ciclo": caidos,
+                    "equipos_monitoreados": total,
+                    "gateway": pctx.get("gateway_ip") or "",
+                    "estado_gateway_en_ese_momento": pctx.get("gateway_status") or "desconocido",
+                    "clasificado_como_corte_transitorio_del_sitio": es_blip,
+                    "transiciones_suprimidas_por_esa_regla": pctx.get("blip_skip_count") or 0,
+                    "hubo_corte_transitorio_hace_poco": blip_cerca,
+                }
+                if caidos >= max(2, int(pctx.get("wave_threshold") or 3)):
+                    contexto_ciclo_infra["lectura"] = (
+                        f"{caidos} de {total} equipos cayeron en el mismo ciclo con el "
+                        f"gateway {pctx.get('gateway_status') or 'desconocido'} -- evaluar causa "
+                        "compartida (energia, switch troncal, oleada del sitio) antes que "
+                        "N fallas independientes"
+                    )
+                elif es_blip:
+                    contexto_ciclo_infra["lectura"] = (
+                        "el poller clasifico este ciclo como corte transitorio de red del "
+                        "propio Shomer -- NO atribuir la caida al equipo"
+                    )
+        except Exception as e:
+            log.debug("brain: contexto de ciclo Infra (Fase 9) no disponible: %s", e)
+
         payload = {
             "eventos": [
                 {
@@ -663,6 +711,7 @@ def run_cycle() -> list[dict]:
             "fallas_y_reboots_recientes_por_nodo": fallas_nodo or "ninguno -- no asumir reinicio reciente",
             "razon_calculada_por_guardian": razones_guardian or "sin datos",
             "ultimo_intento_reinicio_automatico": intentos_reinicio or "ninguno",
+            "contexto_del_ciclo_de_inframonitor": contexto_ciclo_infra,
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/
