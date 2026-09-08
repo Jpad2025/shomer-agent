@@ -496,7 +496,31 @@ def run_cycle() -> list[dict]:
     except Exception as e:
         log.debug("brain: no se pudo cargar conocimiento del sitio: %s", e)
     con = sqlite3.connect(KNOWLEDGE_DB)
+    # El cursor (last_incident_id) se avanza SIEMPRE al terminar, incluso si un
+    # cluster revienta: antes, cualquier excepcion no capturada dejaba el cursor
+    # sin mover y la conexion sqlite abierta, asi que el ciclo siguiente volvia a
+    # leer los MISMOS eventos y a pagar las MISMAS llamadas al modelo, en bucle,
+    # mientras el evento problematico siguiera ahi. Un solo cluster malo podia
+    # dejar al cerebro atascado indefinidamente sin que se notara.
+    try:
+        _procesar_clusters(
+            clusters, con, site_context, conclusiones,
+        )
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+        _set_state("last_incident_id", str(max_id))
+    return conclusiones
+
+
+def _procesar_clusters(
+    clusters: list, con, site_context: str, conclusiones: list,
+) -> None:
+    """Cuerpo del ciclo, por cluster. Un cluster que falla no tumba a los demas."""
     for cluster in clusters:
+      try:
         entities = _cluster_entities(cluster)
         if not _should_escalate_to_llm(cluster, entities):
             continue
@@ -789,9 +813,12 @@ def run_cycle() -> list[dict]:
             "_engine": result.get("_engine"),
             "ticket_id": ticket_id,
         })
-    con.close()
-    _set_state("last_incident_id", str(max_id))
-    return conclusiones
+      except Exception as e:
+        # Un cluster que falla se registra y se sigue con el resto: antes,
+        # cualquier error aca abortaba el ciclo entero y dejaba sin evaluar
+        # los clusters siguientes, ademas de atascar el cursor.
+        log.warning("brain: cluster descartado por error: %s", e, exc_info=True)
+        continue
 
 
 def format_telegram(c: dict) -> str:

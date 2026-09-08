@@ -13,11 +13,13 @@ from unittest.mock import patch
 
 class TestFase9EnElPayload(unittest.TestCase):
     def test_clave_presente_en_el_payload(self):
+        """El armado del payload vive en _procesar_clusters (run_cycle quedó
+        como envoltorio con el finally que asegura el avance del cursor)."""
         import inspect
 
         from core import brain
 
-        src = inspect.getsource(brain.run_cycle)
+        src = inspect.getsource(brain._procesar_clusters)
         self.assertIn("contexto_del_ciclo_de_inframonitor", src)
         self.assertIn("contexto_ciclo_infra", src)
 
