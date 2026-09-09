@@ -4,6 +4,44 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.32.0 — 2026-09-09 — Integración cerebro ↔ módulos: Protector entra a la bitácora
+
+Auditoría de la interacción entre el cerebro y el resto de Shomer.
+
+**El cerebro veía 3 de los 5 módulos.** Se apoya en `memoria_incidentes` como
+bitácora unificada, pero solo se sincronizaban Guardian, Inframonitor, Hunter y
+auto_task (este último lo excluye a propósito). **Protector nunca entraba** —
+exactamente lo que le pasaba a Hunter antes de `_sync_hunter_blocks`.
+
+Importa porque los equipos se solapan: en Ópera el `192.168.0.5` es "SRV Zeus
+PMS" en Protector y "SRVZEUS" en Inframonitor — el servidor del PMS del hotel.
+Si la copia falla la misma madrugada en que Infra vio caer ese equipo, la causa
+es una sola, pero el técnico recibía dos avisos sueltos sin relación.
+
+Verificado con el escenario real: los dos eventos se agrupan en **una** entidad
+(misma IP, dos módulos), caen en la misma ventana temporal y escalan al modelo
+con severidad critical. El prompt explica cómo leerlo — `backup_error` sobre una
+IP caída es una causa única; sin caída alrededor apunta al origen (credenciales,
+permisos, disco), no a la red.
+
+Detalles: `backup_devices` guarda solo el último resultado por equipo, así que
+el checkpoint va en epoch sobre `last_backup_at` (la tabla de checkpoints es
+INTEGER, se evita migrar esquema). Probado idempotente — 3 syncs seguidos, 0
+duplicados. Sin índice UNIQUE en `memoria_incidentes` el `INSERT OR IGNORE` no
+deduplica: la protección real es el checkpoint, y queda cubierta por test.
+
+**Tracker queda fuera a propósito:** sus escaneos son manuales (pueden pasar
+semanas) y lo útil para correlacionar — cambios de IP por MAC — ya entra por la
+Fase 6 (`get_recent_ip_change`).
+
+**Verificado sano:** las 11 fuentes de contexto (Fases 3 y 5-9) responden con
+datos reales del sitio y ninguna falla en silencio; probadas contra un servidor
+(Infra) y contra un AP (Guardian), porque cada tipo activa fases distintas — los
+"vacíos" del servidor eran correctos, no errores. El cerebro tampoco inunda:
+1-12 avisos/día contra 10-89 de los monitores, con deduplicación propia de 2 h.
+
+54/54 pruebas del agente.
+
 ## 1.31.0 — 2026-09-09 — Auditoría del bot y del cerebro
 
 Misma metodología que las auditorías de Guardian/Tracker/Hunter/Inframonitor/
