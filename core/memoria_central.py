@@ -254,6 +254,64 @@ def _sync_hunter_blocks(mem_con: sqlite3.Connection) -> int:
     return len(rows)
 
 
+def _sync_protector_backups(mem_con: sqlite3.Connection) -> int:
+    """backup_devices (Protector) -- resultado de cada copia como evento unificado.
+
+    Misma razon que _sync_hunter_blocks: Protector corria por su cuenta y nunca
+    entraba a la bitacora comun, asi que el cerebro veia 3 de los 5 modulos de
+    Shomer. Importa porque los equipos se solapan: en Opera el 192.168.0.5 es
+    "SRV Zeus PMS" en Protector y "SRVZEUS" en Inframonitor -- el servidor del
+    PMS del hotel. Si la copia falla la misma madrugada en que Infra vio caer
+    ese equipo, la causa es una sola, pero el tecnico recibia dos avisos sueltos
+    sin relacion. Ahora el cerebro puede correlacionarlos por IP.
+
+    backup_devices guarda solo el ULTIMO resultado por equipo (no hay tabla de
+    historico), asi que el checkpoint es la marca de tiempo mas reciente ya
+    sincronizada y se toman las filas con last_backup_at posterior.
+    """
+    try:
+        src = _open_source_ro(NETWORK_MONITOR_DB)
+    except Exception as e:
+        log.debug("memoria sync: backup_devices no disponible: %s", e)
+        return 0
+    try:
+        # El checkpoint es INTEGER, asi que se compara en epoch: evita migrar el
+        # esquema y no depende del formato de texto de last_backup_at.
+        ultimo = _get_checkpoint(mem_con, "protector_backups")
+        rows = src.execute(
+            "SELECT name, ip, last_backup_at, last_status, last_size_mb, "
+            "last_files_count, CAST(strftime('%s', last_backup_at) AS INTEGER) epoch "
+            "FROM backup_devices "
+            "WHERE last_backup_at IS NOT NULL "
+            "AND CAST(strftime('%s', last_backup_at) AS INTEGER) > ? "
+            "ORDER BY epoch ASC LIMIT 200",
+            (ultimo,),
+        ).fetchall()
+    except Exception as e:
+        log.debug("memoria sync: backup_devices query: %s", e)
+        return 0
+    finally:
+        src.close()
+
+    for name, ip, ts, status, size_mb, files, _epoch in rows:
+        estado = (status or "").strip()
+        fallo = estado.lower().startswith("error")
+        detalle = estado[:300] if fallo else (
+            f"{files or 0} archivo(s)"
+            + (f", {size_mb:.1f} MB" if isinstance(size_mb, (int, float)) else "")
+        )
+        mem_con.execute(
+            "INSERT OR IGNORE INTO memoria_incidentes "
+            "(ts, source, entity_ip, entity_name, device_type, event, detail, severity) "
+            "VALUES (?, 'protector', ?, ?, 'backup', ?, ?, ?)",
+            (ts, ip or "", name or ip or "", "backup_error" if fallo else "backup_ok",
+             detalle, "critical" if fallo else "info"),
+        )
+    if rows:
+        _set_checkpoint(mem_con, "protector_backups", rows[-1][6])
+    return len(rows)
+
+
 def _sync_auto_task_runs(mem_con: sqlite3.Connection) -> int:
     try:
         src = _open_source_ro(KNOWLEDGE_DB)
@@ -413,6 +471,7 @@ def run_sync_once() -> Dict[str, int]:
             counts["infra_legacy"] = 0
         counts["auto_task"] = _sync_auto_task_runs(mem_con)
         counts["hunter_blocks"] = _sync_hunter_blocks(mem_con)
+        counts["protector_backups"] = _sync_protector_backups(mem_con)
         _prune(mem_con)
         mem_con.commit()
     finally:
