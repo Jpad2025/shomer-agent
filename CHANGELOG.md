@@ -4,6 +4,47 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.31.0 — 2026-09-09 — Auditoría del bot y del cerebro
+
+Misma metodología que las auditorías de Guardian/Tracker/Hunter/Inframonitor/
+Protector: código + "botones" + contrato contra el backend + prueba en vivo.
+En el bot los botones son los comandos y los callbacks inline.
+
+**3 bugs reales, todos del tipo que no da error — solo silencio:**
+
+- **El botón "🔓 Desbloquear" de las alertas de Hunter nunca funcionó.** Mandaba
+  `callback_data="block_unblock_<ip>"`, pero el único handler de desbloqueo
+  espera `^unblock_(confirm:.+|cancel)$`. No casaba con ningún patrón: Telegram
+  entregaba el callback y nadie lo atendía. Pulsarlo no producía ningún efecto,
+  sin error visible. Se notó el 8 sep, cuando Hunter bloqueó los DNS de Google
+  y el técnico no pudo liberarlos desde Telegram — hubo que entrar al router.
+- **Un cluster con error atascaba el cerebro y repetía el gasto del modelo.**
+  `run_cycle()` avanzaba el cursor (`last_incident_id`) DESPUÉS del bucle, y la
+  conexión sqlite se cerraba también al final. Cualquier excepción no capturada
+  dejaba el cursor sin mover: el ciclo siguiente releía los mismos eventos y
+  volvía a pagar las mismas llamadas al modelo, en bucle, mientras el evento
+  problemático siguiera ahí. Ahora hay `try/except` por cluster y el cursor
+  avanza en un `finally`.
+- **`/monitores` mostraba 37 de los 39 monitores reales.** `watch_brain` y
+  `watch_poller_heartbeat` corren desde siempre y registran `_tick()`, pero
+  faltaban en `MONITOR_GROUPS`. El ausente `watch_poller_heartbeat` es el que
+  detecta "Guardian congelado": su falta daba a entender que nadie vigila eso.
+
+**Cuatro herramientas para los contratos que se desincronizan solos:**
+`auditar_callbacks.py` (39 botones vs 18 handlers), `auditar_comandos.py`
+(42 registrados vs función vs menú publicado), `auditar_monitores.py`
+(definidos vs lanzados vs mostrados) y `auditar_endpoints.py` (25 rutas
+invocadas vs las 190 que expone el backend, leídas de la app FastAPI real).
+
+**Verificado sano:** los 42 comandos tienen función y los 37 publicados están
+registrados; las 25 rutas que invoca el agente existen. Un primer cruce de
+endpoints marcó 8 faltantes — eran falsos positivos del parser por texto: los
+routers se componen anidados con prefijo (`casador.py` agrupa bajo
+`/remedies`). Queda anotado porque el reflejo correcto fue verificarlo contra
+la app real antes de reportarlo.
+
+47/47 pruebas del agente.
+
 ## 1.30.1 — 2026-09-07
 
 - **`get_tracker_summary()` leía la columna equivocada de SO.** Encontrado validando en vivo
