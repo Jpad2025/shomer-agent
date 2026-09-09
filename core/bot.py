@@ -86,6 +86,8 @@ MONITOR_LABELS = {
     "watch_pending_guardian":  "Relevo de alertas de Guardian al bot",
     "watch_memoria_sync":      "Sync memoria unificada (solo lectura)",
     "watch_pattern_analysis":  "Análisis de patrones (sin Telegram propio)",
+    "watch_brain":             "Cerebro — correlación de eventos entre sistemas",
+    "watch_poller_heartbeat":  "Latido de Guardian (detecta poller congelado)",
 }
 
 MONITOR_GROUPS = [
@@ -108,6 +110,13 @@ MONITOR_GROUPS = [
     ("🤖 Bot / IA", [
         "watch_docker", "watch_openai", "watch_groq", "daily_summary", "evening_summary",
         "watch_pending_guardian", "watch_memoria_sync", "watch_pattern_analysis",
+        # Corren desde siempre y registran _tick, pero faltaban en esta lista:
+        # /monitores mostraba 37 de los 39 reales. watch_poller_heartbeat es
+        # justamente el que detecta "Guardian congelado", así que su ausencia
+        # daba a entender que nadie vigila eso. Esta lista se edita a mano y se
+        # desincroniza sola: tools/auditar_monitores.py la cruza contra los
+        # _tick() reales.
+        "watch_brain", "watch_poller_heartbeat",
     ]),
 ]
 
