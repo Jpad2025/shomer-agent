@@ -1201,6 +1201,60 @@ def get_switch_port_errors() -> list:
     return results
 
 
+def get_suppressed_events(ips: list, days: int = 30) -> dict:
+    """Eventos que Shomer DECIDIÓ NO avisar para esas IPs (eventos_filtrados).
+
+    Las reglas de ruido (blip de gateway, caída masiva -- ver shomer_network_blip.py
+    en network_monitor) suprimen a propósito transiciones que casi siempre son del
+    propio sitio y no del equipo. Eso está bien para no inundar Telegram, pero deja
+    al cerebro razonando sobre una parte muy chica de lo que realmente pasó: en
+    Ópera, 30 días = 854 eventos avisados contra 7.592 suprimidos.
+
+    Sin esto, un equipo al que se le callaron 200 caídas en el mes se ve idéntico a
+    uno sano, y la conclusión sale mal por falta de contexto, no por mal criterio.
+
+    Se devuelve AGREGADO y no evento por evento a propósito: inyectar 7.592 eventos
+    en la bitácora ahogaría al cerebro y lo haría escalar por puro volumen -- justo
+    el problema de costo/ruido que evita _should_escalate_to_llm().
+
+    Lectura directa, solo lectura, misma máquina: mismo patrón que
+    get_switch_port_errors() y get_topology_parents().
+
+    Devuelve {ip: {"total": N, "por_motivo": {motivo: N}, "ultimo": ts}} solo para
+    las IPs que tengan algo suprimido.
+    """
+    import sqlite3 as _sqlite3
+
+    lista = [str(i).strip() for i in (ips or []) if str(i).strip()]
+    if not lista:
+        return {}
+    DB = "/storage/db/network_monitor.db"
+    out: Dict[str, dict] = {}
+    try:
+        conn = _sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=3)
+        conn.row_factory = _sqlite3.Row
+        marcas = ",".join("?" * len(lista))
+        rows = conn.execute(
+            f"""SELECT ip, motivo, COUNT(*) AS n, MAX(ts) AS ultimo
+                FROM eventos_filtrados
+                WHERE ip IN ({marcas}) AND ts > datetime('now', ?)
+                GROUP BY ip, motivo""",
+            (*lista, f"-{int(days)} days"),
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        log.debug("get_suppressed_events: %s", e)
+        return {}
+
+    for r in rows:
+        reg = out.setdefault(r["ip"], {"total": 0, "por_motivo": {}, "ultimo": ""})
+        reg["total"] += int(r["n"] or 0)
+        reg["por_motivo"][r["motivo"] or "?"] = int(r["n"] or 0)
+        if (r["ultimo"] or "") > reg["ultimo"]:
+            reg["ultimo"] = r["ultimo"] or ""
+    return out
+
+
 def knowledge_hint(ip: str, max_len: int = 55) -> str:
     """Texto corto de la última solución guardada para esa IP (alertas / IA)."""
     dec = knowledge_decision(ip)

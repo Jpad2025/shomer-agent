@@ -277,7 +277,18 @@ _SYSTEM_PROMPT = (
     "redes de hoteles. Recibis un grupo de eventos REALES que ocurrieron cerca "
     "en el tiempo, posiblemente de sistemas distintos (Guardian=WiFi/APs, "
     "Infra=switches/camaras/impresoras/servidores, Hunter=seguridad perimetral "
-    "de red, Protector=copias de seguridad). Un evento 'backup_error' de "
+    "de red, Protector=copias de seguridad). Recibis tambien "
+    "'eventos_que_shomer_no_aviso': transiciones que las reglas de ruido "
+    "suprimieron a proposito (blip de gateway, caida masiva del sitio). NO son "
+    "fallas ocultas ni un error del sistema: se callaron porque casi siempre son "
+    "del propio sitio y no del equipo. Sirven para dimensionar: un equipo con "
+    "200 supresiones en 30 dias esta en una red que se cae seguido en conjunto, "
+    "asi que una caida suya mas probablemente sea parte de ese patron compartido "
+    "que una falla propia -- y si el numero es alto en MUCHOS equipos a la vez, "
+    "la causa a investigar es comun (energia, enlace, equipo troncal), no cada "
+    "equipo por separado. Al reves: un equipo SIN supresiones que cae es mas "
+    "sospechoso de problema propio. No cuentes estos numeros como caidas "
+    "reportadas ni los sumes a los eventos del incidente. Un evento 'backup_error' de "
     "Protector sobre la MISMA IP que un equipo que Infra vio caer no son dos "
     "problemas: la copia fallo PORQUE el equipo no estaba disponible, y eso se "
     "dice como una sola causa. Al reves tambien importa: un backup_error sin "
@@ -683,6 +694,32 @@ def _procesar_clusters(
         # auditoria), asi que esta es la primera vez que el cerebro puede
         # usarlo. Relevante para la causa raiz aun abierta de las caidas
         # sincronizadas (Sesiones 70-72).
+        # Fase 10 (11 sep 2026): lo que Shomer DECIDIO NO avisar de estos equipos.
+        # Las reglas de ruido suprimen transiciones que casi siempre son del sitio
+        # y no del equipo, lo cual esta bien para no inundar Telegram -- pero dejaba
+        # al cerebro razonando sobre una fraccion de lo ocurrido: en Opera, 30 dias
+        # = 854 eventos avisados contra 7.592 suprimidos. Sin esto un equipo al que
+        # se le callaron 200 caidas se ve igual que uno sano. Va AGREGADO por equipo,
+        # no evento por evento: inyectar 7.592 eventos lo haria escalar por volumen.
+        eventos_suprimidos: dict | str = "sin datos"
+        try:
+            from core import shomer_api
+
+            sup = shomer_api.get_suppressed_events(
+                [e["ip"] for e in entities_for_context if e.get("ip")], days=30
+            )
+            if sup:
+                eventos_suprimidos = {
+                    next((e["name"] for e in entities_for_context if e.get("ip") == ip), ip): {
+                        "suprimidos_30d": d["total"],
+                        "por_motivo": d["por_motivo"],
+                        "ultimo": d["ultimo"],
+                    }
+                    for ip, d in sup.items()
+                }
+        except Exception as e:
+            log.debug("brain: eventos suprimidos (Fase 10) no disponible: %s", e)
+
         contexto_ciclo_infra: dict | str = "sin datos del poller"
         try:
             from core import pulse_correlate as _pulse
@@ -742,6 +779,7 @@ def _procesar_clusters(
             "razon_calculada_por_guardian": razones_guardian or "sin datos",
             "ultimo_intento_reinicio_automatico": intentos_reinicio or "ninguno",
             "contexto_del_ciclo_de_inframonitor": contexto_ciclo_infra,
+            "eventos_que_shomer_no_aviso": eventos_suprimidos,
         }
         user_prompt = "Datos reales del incidente:\n" + json.dumps(payload, ensure_ascii=False)
         # Fase 2 (6 sep 2026): conocimiento técnico validado (redes/hardware/
