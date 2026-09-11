@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sqlite3
 from typing import Any, Optional
 
@@ -113,6 +114,72 @@ def mark_reminded(ticket_id: int) -> None:
         con.commit()
     finally:
         con.close()
+
+
+NETWORK_MONITOR_DB = "/storage/db/network_monitor.db"
+
+
+def _ips_del_ticket(t: dict[str, Any]) -> list[str]:
+    """IPs involucradas: la del ticket más las que el cerebro puso en el nombre.
+
+    Los tickets que abre el cerebro llevan en entity_name la lista de equipos
+    del cluster (ej. "🧠 23.218.213.23, 192.73.243.141"), así que el problema
+    sigue vivo solo si ALGUNA de ellas sigue bloqueada.
+    """
+    ips = {(t.get("ip") or "").strip()}
+    ips |= set(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", t.get("entity_name") or ""))
+    return [ip for ip in ips if ip]
+
+
+def _sigue_bloqueada(ips: list[str]) -> Optional[bool]:
+    """True si alguna sigue bloqueada, False si todas fueron liberadas.
+
+    None = no aplica (ninguna de esas IPs pasó nunca por Hunter). En ese caso no
+    se toca el ticket: la ausencia de registro no es evidencia de que se resolvió.
+    """
+    if not ips:
+        return None
+    try:
+        con = sqlite3.connect(f"file:{NETWORK_MONITOR_DB}?mode=ro", uri=True, timeout=3)
+    except Exception:
+        return None
+    try:
+        marcas = ",".join("?" * len(ips))
+        filas = con.execute(
+            f"SELECT ip, unblocked_at FROM blocked_ips WHERE ip IN ({marcas})", ips
+        ).fetchall()
+    except Exception:
+        return None
+    finally:
+        con.close()
+    if not filas:
+        return None
+    return any(f[1] is None for f in filas)
+
+
+def cerrar_resueltos_por_evidencia() -> list[dict[str, Any]]:
+    """Cierra los pendientes cuyo motivo ya no existe. Devuelve los cerrados.
+
+    Un pendiente que nadie cierra se recuerda para siempre, y si nació de un
+    falso positivo el sistema se auto-contamina: el 8 sep 2026 el cerebro abrió
+    tickets por IPs que Hunter había bloqueado mal (Akamai, tráfico de
+    videollamadas). Esas IPs se liberaron el mismo día, pero los tickets
+    siguieron recordándose 3 veces al día durante 3 días por algo que ya no
+    existía. Depender de que el técnico los cierre no alcanza: de 9 tickets, 7
+    seguían abiertos.
+    """
+    cerrados: list[dict[str, Any]] = []
+    for t in list_open():
+        if _sigue_bloqueada(_ips_del_ticket(t)) is False:
+            if close_ticket(int(t["id"])):
+                t["motivo_cierre"] = (
+                    "las IPs que lo originaron fueron liberadas: el bloqueo era "
+                    "un falso positivo ya corregido"
+                )
+                cerrados.append(t)
+                log.info("chronic_tickets: #%s cerrado solo — %s",
+                         t["id"], t["motivo_cierre"])
+    return cerrados
 
 
 def get_ticket(ticket_id: int) -> Optional[dict[str, Any]]:

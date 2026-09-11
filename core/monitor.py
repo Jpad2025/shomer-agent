@@ -1061,6 +1061,21 @@ async def chronic_tickets_reminder(bot: Bot) -> None:
                 and _last_ticket_reminder != checkpoint
             ):
                 from core import chronic_tickets
+                # Antes de recordar, cerrar los que ya no tienen motivo: un
+                # pendiente nacido de un falso positivo se recordaba 3 veces al
+                # día indefinidamente aunque el bloqueo que lo originó ya se
+                # hubiera liberado (pasó 3 días seguidos tras el incidente del
+                # 8 sep). No tiene sentido pedirle al técnico que cierre algo
+                # que el propio sistema puede comprobar que está resuelto.
+                try:
+                    for t in chronic_tickets.cerrar_resueltos_por_evidencia():
+                        log.info(
+                            "ticket #%s cerrado solo (%s): %s",
+                            t["id"], t.get("entity_name", "")[:40], t["motivo_cierre"],
+                        )
+                except Exception as e:
+                    log.debug("cierre automático de pendientes: %s", e)
+
                 abiertos = [
                     t for t in chronic_tickets.list_open()
                     if not _is_suppressed(t["ip"])
