@@ -115,6 +115,15 @@ def get_server_metrics():
 def get_wan_status():
     return _get("/api/wan-status")
 
+def get_wan_hotel():
+    """Internet REAL del hotel, medido desde el gateway (no desde el servidor).
+
+    Que el servidor Shomer navegue no prueba que el hotel navegue: los huéspedes
+    salen por otras VLAN y por el hotspot, y la regla de bloqueo de Hunter actúa
+    sobre el tráfico que atraviesa el router, o sea el de ellos.
+    """
+    return _get("/api/wan-hotel") or {}
+
 def get_hunter_alerts(limit: int = 10):
     """Combina stats + historial reciente de Hunter (no hay endpoint /alerts dedicado)."""
     stats = _get("/remedies/stats") or {}

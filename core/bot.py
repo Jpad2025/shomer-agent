@@ -86,6 +86,7 @@ MONITOR_LABELS = {
     "watch_pending_guardian":  "Relevo de alertas de Guardian al bot",
     "watch_memoria_sync":      "Sync memoria unificada (solo lectura)",
     "watch_pattern_analysis":  "Análisis de patrones (sin Telegram propio)",
+    "watch_internet_hotel":    "Internet del hotel (el de los huéspedes, desde el gateway)",
     "watch_brain":             "Cerebro — correlación de eventos entre sistemas",
     "watch_poller_heartbeat":  "Latido de Guardian (detecta poller congelado)",
 }
@@ -105,7 +106,7 @@ MONITOR_GROUPS = [
     ]),
     ("🖥️ Servidor", [
         "watch_services", "watch_disk", "watch_resources", "watch_wan_outage",
-        "watch_connectivity", "watch_log_truncate",
+        "watch_connectivity", "watch_log_truncate", "watch_internet_hotel",
     ]),
     ("🤖 Bot / IA", [
         "watch_docker", "watch_openai", "watch_groq", "daily_summary", "evening_summary",

@@ -2520,6 +2520,70 @@ _docker_restart_count_prev: Optional[int] = None
 _docker_alerted = False
 _AGENT_RESTART_MARKER = os.environ.get("AGENT_RESTART_MARKER", "/app/data/.agent_last_start")
 
+_WATCH_INTERNET_HOTEL_SEC = max(300, int(os.environ.get("WATCH_INTERNET_HOTEL_SEC", "3600")))
+_internet_hotel_alertado = False
+
+
+async def watch_internet_hotel(bot: Bot) -> None:
+    """Vigila el internet que usan los HUÉSPEDES, no el del servidor.
+
+    Nació tras el incidente del 8 sep 2026: Hunter bloqueó tráfico legítimo y el
+    hotel se quedó sin internet, pero el servidor Shomer seguía navegando bien —
+    Shomer vive en la LAN de gestión y los huéspedes salen por otras VLAN y por
+    el hotspot, además de que la regla de bloqueo actúa sobre el tráfico que
+    atraviesa el router, o sea el de ellos. Nadie se enteró hasta que el
+    proveedor apagó la protección entera para recuperar el servicio.
+
+    Mide desde el gateway: WAN arriba y con IP, pérdida real hacia internet, y
+    sobre todo el USO (sesiones de tráfico y huéspedes conectados). Un desplome
+    del uso es la señal más honesta de que la gente se quedó sin servicio,
+    incluso cuando todo lo demás "responde".
+
+    Avisa una vez al detectar el problema y otra al recuperarse — no repite cada
+    ciclo mientras el problema siga igual.
+    """
+    global _internet_hotel_alertado
+    await asyncio.sleep(90)
+    while True:
+        try:
+            estado = shomer_api.get_wan_hotel()
+            problemas = estado.get("problemas") or []
+            if problemas and not _internet_hotel_alertado:
+                _internet_hotel_alertado = True
+                detalle = "\n".join(f"• {p}" for p in problemas)
+                await _send(
+                    bot,
+                    _a("🔴", "Internet del hotel — revisar",
+                       f"{detalle}\n\n"
+                       f"WAN {estado.get('interfaz','?')}: "
+                       f"{'arriba' if estado.get('wan_arriba') else 'CAÍDA'} · "
+                       f"pérdida máx {estado.get('perdida_max','?')}% · "
+                       f"sesiones {estado.get('sesiones','?')} · "
+                       f"huéspedes {estado.get('hotspot','?')}",
+                       raw=True),
+                    monitor="watch_internet_hotel",
+                )
+                _tick("watch_internet_hotel", alerted=True)
+            elif not problemas:
+                if _internet_hotel_alertado:
+                    _internet_hotel_alertado = False
+                    await _send(
+                        bot,
+                        _a("🟢", "Internet del hotel restablecido",
+                           f"WAN arriba, sin pérdida, {estado.get('sesiones','?')} sesiones "
+                           f"y {estado.get('hotspot','?')} huéspedes conectados.",
+                           raw=True),
+                        monitor="watch_internet_hotel",
+                    )
+                    _tick("watch_internet_hotel", alerted=True)
+                else:
+                    _tick("watch_internet_hotel")
+        except Exception as e:
+            log.warning("watch_internet_hotel: %s", e)
+            _tick("watch_internet_hotel", error=str(e))
+        await asyncio.sleep(_WATCH_INTERNET_HOTEL_SEC)
+
+
 async def watch_docker(bot: Bot) -> None:
     """
     Detecta reinicios del propio agente comparando un marcador de arranque
@@ -3051,6 +3115,8 @@ def _vpn_user_from_iface(port: str) -> str:
 
 
 _VPN_KNOWLEDGE_DB = os.environ.get("KNOWLEDGE_DB_PATH", "/app/data/knowledge.db")
+# Días que una instalación nueva observa sin alertar, hasta conocer a su gente.
+_VPN_APRENDIZAJE_DIAS = float(os.environ.get("VPN_APRENDIZAJE_DIAS", "14"))
 
 
 def _vpn_usuario_conocido(user: str) -> bool:
@@ -3061,6 +3127,15 @@ def _vpn_usuario_conocido(user: str) -> bool:
     que "angy.monroy" entre es rutina; que entre un usuario nunca visto, no.
 
     Por sitio, no global: cada cliente tiene su propia gente (norma B.1).
+
+    **Ventana de aprendizaje:** una instalación nueva no conoce a nadie, así que
+    durante los primeros VPN_APRENDIZAJE_DIAS registra a todo el que entra SIN
+    alertar. Recién pasada esa ventana un usuario nuevo se considera digno de
+    aviso. Sin esto, un Shomer recién instalado dispararía un aviso por cada
+    empleado del hotel la primera semana — y el técnico aprendería a ignorarlos,
+    que es justo lo contrario de lo que buscamos.
+
+    Así funciona igual en cualquier cliente sin que nadie precargue nada.
     """
     user = (user or "").strip().lower()
     if not user or user == "desconocido":
@@ -3082,10 +3157,24 @@ def _vpn_usuario_conocido(user: str) -> bool:
             con.commit()
             con.close()
             return True
+
+        # Usuario nuevo: ¿ya terminó la ventana de aprendizaje de este sitio?
+        primera = con.execute(
+            "SELECT MIN(primera_vez) FROM vpn_usuarios_conocidos"
+        ).fetchone()
         con.execute("INSERT INTO vpn_usuarios_conocidos (usuario) VALUES (?)", (user,))
         con.commit()
         con.close()
-        return False
+
+        if not primera or not primera[0]:
+            return True  # es el primer usuario que se ve: nada que comparar aún
+        try:
+            inicio = datetime.fromisoformat(str(primera[0]))
+            dias = (datetime.now() - inicio).total_seconds() / 86400
+        except Exception:
+            return True
+        # Dentro de la ventana se aprende en silencio; fuera, se avisa.
+        return dias < _VPN_APRENDIZAJE_DIAS
     except Exception as e:
         log.debug("vpn usuario conocido: %s", e)
         return True  # ante la duda, no interrumpir
@@ -4267,6 +4356,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_protector_retry(bot))
     loop.create_task(watch_hunter_verify(bot))
     loop.create_task(watch_docker(bot))
+    loop.create_task(watch_internet_hotel(bot))
     loop.create_task(watch_connectivity(bot))
     loop.create_task(watch_groq(bot))
     loop.create_task(watch_openai(bot))
