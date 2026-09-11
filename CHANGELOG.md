@@ -4,6 +4,33 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.33.0 — 2026-09-11 — Fase 10: el cerebro ve lo que Shomer calla
+
+Respuesta a "¿con qué más podemos relacionar al cerebro?". Se inventariaron las
+fuentes reales del sistema y se **descartaron tres con datos** antes de conectar
+nada: CPU/RAM del servidor (sin correlación con las caídas masivas — 2-26%
+durante ellas contra 9,2% normal), contadores de la NIC (sin pico de drops y
+muestreo insuficiente) y `audit_log` (son llamadas automáticas del propio
+sistema, no cambios humanos).
+
+**La que sí valía: `eventos_filtrados`.** El cerebro razonaba sobre una fracción
+de lo ocurrido — en Ópera, 30 días = **854 eventos avisados contra 7.592
+suprimidos** por las reglas de ruido (blip de gateway, caída masiva). Un equipo
+al que se le callaron 202 caídas en el mes se veía idéntico a uno sano, así que
+la conclusión salía mal por falta de contexto, no por mal criterio. Datos
+reales: AP CONTABILIDAD 202, AP HAB 215-216 210, y hasta el servidor del PMS 89.
+
+Va **agregado por equipo** y no evento por evento a propósito: inyectar 7.592
+eventos ahogaría al cerebro y lo haría escalar por puro volumen, justo el
+problema de costo/ruido que evita `_should_escalate_to_llm()`.
+
+El prompt explica los dos sentidos y evita la mala lectura: muchas supresiones =
+red que se cae en conjunto, la causa a investigar es común y no cada equipo por
+separado; ninguna supresión + caída = más sospechoso de problema propio; y no se
+cuentan como caídas reportadas.
+
+62/62 pruebas del agente.
+
 ## 1.32.0 — 2026-09-09 — Integración cerebro ↔ módulos: Protector entra a la bitácora
 
 Auditoría de la interacción entre el cerebro y el resto de Shomer.
