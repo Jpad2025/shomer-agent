@@ -3021,7 +3021,10 @@ _INFRA_VPN_ALERT_DISCONNECT = os.environ.get("INFRA_VPN_ALERT_DISCONNECT", "0").
     "1", "true", "yes", "on",
 )
 # Ventana de agrupación del digest VPN (Sesión 69) — default 30 min.
-_VPN_DIGEST_INTERVAL_SEC = max(60, int(os.environ.get("VPN_DIGEST_INTERVAL_SEC", "1800")))
+# Resumen diario: agrupar cada 30 min casi nunca agrupaba nada (de 217 mensajes,
+# solo 14 juntaron mas de un usuario) porque las conexiones llegan dispersas.
+# Un usuario NUEVO sigue avisando al instante -- ver _vpn_usuario_conocido().
+_VPN_DIGEST_INTERVAL_SEC = max(60, int(os.environ.get("VPN_DIGEST_INTERVAL_SEC", "86400")))
 
 
 def _is_vpn_iface(port: str) -> bool:
@@ -3045,6 +3048,47 @@ def _vpn_user_from_iface(port: str) -> str:
         if n.startswith(prefix):
             return n[len(prefix):] or n
     return n or "desconocido"
+
+
+_VPN_KNOWLEDGE_DB = os.environ.get("KNOWLEDGE_DB_PATH", "/app/data/knowledge.db")
+
+
+def _vpn_usuario_conocido(user: str) -> bool:
+    """¿Este usuario de VPN ya entró antes en este sitio?
+
+    Shomer aprende solo quiénes son los usuarios normales: nadie configura la
+    lista. Sirve para separar lo informativo de lo que sí merece interrumpir —
+    que "angy.monroy" entre es rutina; que entre un usuario nunca visto, no.
+
+    Por sitio, no global: cada cliente tiene su propia gente (norma B.1).
+    """
+    user = (user or "").strip().lower()
+    if not user or user == "desconocido":
+        return True  # sin nombre no se puede afirmar que sea nuevo: no alarmar
+    try:
+        con = sqlite3.connect(_VPN_KNOWLEDGE_DB, timeout=3)
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS vpn_usuarios_conocidos ("
+            "usuario TEXT PRIMARY KEY, primera_vez TEXT DEFAULT (datetime('now')), "
+            "veces INTEGER DEFAULT 1)"
+        )
+        row = con.execute(
+            "SELECT veces FROM vpn_usuarios_conocidos WHERE usuario=?", (user,)
+        ).fetchone()
+        if row:
+            con.execute(
+                "UPDATE vpn_usuarios_conocidos SET veces=veces+1 WHERE usuario=?", (user,)
+            )
+            con.commit()
+            con.close()
+            return True
+        con.execute("INSERT INTO vpn_usuarios_conocidos (usuario) VALUES (?)", (user,))
+        con.commit()
+        con.close()
+        return False
+    except Exception as e:
+        log.debug("vpn usuario conocido: %s", e)
+        return True  # ante la duda, no interrumpir
 
 
 async def _flush_vpn_digest(bot: Bot) -> bool:
@@ -3719,6 +3763,18 @@ async def watch_infra(bot: Bot) -> None:
                     prev_vpn = _snmp_vpn_ports(_infra_vpn_ports_up.get(ip, set()))
                     for port in current_vpn - prev_vpn:
                         user = _vpn_user_from_iface(port)
+                        # Usuario nunca visto en este sitio: eso sí merece
+                        # interrumpir. Los conocidos van al resumen y no
+                        # generan 217 mensajes al mes por gente trabajando.
+                        if not _vpn_usuario_conocido(user):
+                            await _send(
+                                bot,
+                                _a("🔐", "VPN — usuario nuevo",
+                                   f"<b>{_html.escape(user)}</b> se conectó por primera vez "
+                                   f"a la VPN de este sitio. Si no lo reconocés, revisalo.",
+                                   raw=True),
+                                monitor="watch_infra_vpn",
+                            )
                         _vpn_digest_events.append((str(name), user, "conectado"))
                     for port in prev_vpn - current_vpn:
                         if not _INFRA_VPN_ALERT_DISCONNECT:
