@@ -2584,6 +2584,46 @@ _WATCH_INTERNET_HOTEL_SEC = max(300, int(os.environ.get("WATCH_INTERNET_HOTEL_SE
 _internet_hotel_alertado = False
 
 
+async def enviar_informe_coordinador(bot: Bot) -> None:
+    """El informe periódico al coordinador de soporte, por correo.
+
+    12 sep 2026. Separa dos trabajos que hoy comparten canal: el técnico actúa
+    con las alertas de Telegram, el coordinador supervisa lo que lleva días sin
+    resolverse. Mandarle al coordinador las mismas alertas no lo informa, lo
+    entierra.
+
+    Se comprueba cada 20 minutos y se envía una sola vez por período, marcando
+    el envío: así un reinicio del agente no dispara un informe repetido ni se
+    salta el de la semana. Sin SMTP configurado no hace nada y lo dice en el log
+    —el sitio decide si quiere esto—, sin ensuciar Telegram con el aviso.
+    """
+    from core import informe_coordinador as _informe
+
+    await asyncio.sleep(120)
+    while True:
+        try:
+            if _informe.configurado():
+                ultimo = _bot_state_get("informe_coordinador_ultimo") or ""
+                if _informe.toca_ahora(ultimo_envio=ultimo):
+                    horas = 24 if _informe.cada() == "diario" else 168
+                    sitio = os.environ.get("SITE_NAME", "") or ""
+                    ok = await asyncio.to_thread(_informe.enviar, sitio, horas)
+                    if ok:
+                        _bot_state_set("informe_coordinador_ultimo",
+                                       _informe.clave_periodo())
+                        _tick("informe_coordinador", alerted=True)
+                    else:
+                        _tick("informe_coordinador", error="envio fallido")
+                else:
+                    _tick("informe_coordinador")
+            else:
+                _tick("informe_coordinador")
+        except Exception as e:
+            log.warning("informe_coordinador: %s", e)
+            _tick("informe_coordinador", error=str(e))
+        await asyncio.sleep(1200)
+
+
 async def watch_internet_hotel(bot: Bot) -> None:
     """Vigila el internet que usan los HUÉSPEDES, no el del servidor.
 
@@ -4397,6 +4437,7 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_hunter_verify(bot))
     loop.create_task(watch_docker(bot))
     loop.create_task(watch_internet_hotel(bot))
+    loop.create_task(enviar_informe_coordinador(bot))
     loop.create_task(watch_connectivity(bot))
     loop.create_task(watch_groq(bot))
     loop.create_task(watch_openai(bot))

@@ -4,6 +4,27 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.39.0 — 2026-09-12 — Informe de pendientes al coordinador, por correo
+
+Separa dos trabajos que compartían canal: el técnico actúa con las alertas de
+Telegram; el coordinador supervisa lo que lleva días sin resolverse. Mandarle
+al coordinador las mismas alertas no lo informa, lo entierra.
+
+El informe no repite el día: se arma con lo que ya quedó registrado —asuntos
+crónicos abiertos con su antigüedad, respaldos atrasados, comprobaciones del
+internet de los huéspedes, direcciones bloqueadas— y responde a una sola
+pregunta: qué sigue pendiente. Los hallazgos del cerebro se resumen por lo que
+son ("causa común entre 5 equipos") en vez de una lista cortada a la mitad,
+que hace parecer que el problema es del primero.
+
+Si un dato no se pudo consultar lo dice; y "sin lecturas" nunca se presenta
+como "todo bien". Se decide sobre este texto.
+
+Periodicidad, hora y destinatario se configuran por sitio. Sin SMTP no hace
+nada y lo registra en el log, sin ensuciar Telegram.
+
+129/129 pruebas del agente.
+
 ## 1.38.0 — 2026-09-12 — Diez equipos lentos a la vez son un hecho, no veinte avisos
 
 Caso real medido en Ópera: a las 21:09 diez equipos —dos servidores, cinco

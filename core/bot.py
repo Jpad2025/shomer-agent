@@ -51,6 +51,7 @@ MONITOR_LABELS = {
     "watch_hunter":            "Hunter — amenazas contenidas (bloqueo)",
     "watch_devices":           "Equipos registrados en el agente",
     "daily_summary":           "Resumen diario (7:00 AM)",
+    "informe_coordinador":     "Informe de pendientes al coordinador (correo)",
     "watch_resources":         "CPU y RAM del servidor",
     "watch_backups":           "Backups atrasados",
     "watch_wan_outage":        "Caída de internet (WAN)",
@@ -118,6 +119,9 @@ MONITOR_GROUPS = [
         # desincroniza sola: tools/auditar_monitores.py la cruza contra los
         # _tick() reales.
         "watch_brain", "watch_poller_heartbeat",
+        # El informe por correo al coordinador: si deja de salir, el coordinador
+        # no se entera de nada y nadie lo notaría sin verlo acá.
+        "informe_coordinador",
     ]),
 ]
 
