@@ -4233,9 +4233,18 @@ async def watch_pending_guardian(bot: Bot) -> None:
                     # para que watch_hunter no mande el mismo aviso de nuevo
                     # cuando lo detecte por su cuenta unos segundos después.
                     if "BLOQUEO" in row["mensaje"]:
-                        m = re.search(r"IP:\s*(\d{1,3}(?:\.\d{1,3}){3})", row["mensaje"])
-                        if m:
-                            _direct_relayed_ips[m.group(1)] = time.time()
+                        # La IP viaja dentro de <code>…</code> (ver
+                        # format_hunter_telegram_block en network_monitor), así
+                        # que la regex original -- que exigía un dígito justo
+                        # después de "IP:" -- NUNCA matcheaba, y la supresión de
+                        # duplicados de la Sesión 80 jamás llegó a funcionar: el
+                        # 8 sep 2026 el mismo bloqueo se avisó dos veces con 64
+                        # segundos de diferencia. Ahora se toman todas las IPs
+                        # del mensaje, sin depender de cómo esté maquetado.
+                        for encontrada in re.findall(
+                            r"\b(?:\d{1,3}\.){3}\d{1,3}\b", row["mensaje"]
+                        ):
+                            _direct_relayed_ips[encontrada] = time.time()
                     # Marcar DESPUÉS de enviar -- si el envío se cae a mitad de
                     # camino, la fila se queda "pendiente" y el respaldo de
                     # Guardian (60s) la agarra igual. Marcar antes arriesgaría
