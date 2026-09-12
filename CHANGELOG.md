@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.35.0 — 2026-09-12 — Fase 2: recomendaciones de sitio, no de manual
+
+El contexto de aprendizaje del cerebro dependía de que el técnico guardara
+soluciones a mano, y eso casi no ocurre — medido en Ópera: 6 acciones en 3 meses
+y solo 2 de cada 4 equipos con algún dato. Por eso sus recomendaciones salían
+genéricas ("inspeccionar el cableado y verificar la configuración VLAN"), que es
+lo que cualquier técnico ya sabe.
+
+`get_perfil_equipo()` arma el comportamiento real desde hechos **ya
+registrados**, sin que nadie enseñe nada: cuántas veces cayó en el último mes, en
+cuánto suele volver y si vuelve solo (mediana, para que un caso raro no tuerza el
+perfil). Datos reales al conectarlo: Terminal Ingenico .136 → 41 caídas/30d y
+vuelve en ~30 s; AP OFC-COCINA → 33 y ~1,7 min.
+
+El prompt explica cómo leerlo y sobre todo qué **no** hacer: no mandar al técnico
+a revisar un cable cuando el equipo vuelve solo en segundos — eso le hace perder
+un viaje. Y si varios equipos distintos se comportan igual, la causa es
+compartida y hay que decirlo así en vez de repartir la culpa entre cada uno.
+
+Sin hechos no se afirma nada: sin historial devuelve vacío.
+
+99/99 pruebas del agente.
+
 ## 1.34.0 — 2026-09-11/12 — Menos ruido, sin perder nada: Fase 0 y Fase 1
 
 Trabajo sobre el problema de fondo: el técnico recibía **32,5 mensajes al día**
