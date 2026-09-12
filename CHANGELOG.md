@@ -4,6 +4,64 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.34.0 — 2026-09-11/12 — Menos ruido, sin perder nada: Fase 0 y Fase 1
+
+Trabajo sobre el problema de fondo: el técnico recibía **32,5 mensajes al día**
+(picos de 92) y más de la mitad no requerían acción. Con 2-3 hoteles por
+técnico, eso no se lee.
+
+**Fase 0 — dejar de contaminar**
+
+- **Los pendientes cuyo motivo ya no existe se cierran solos.** El cerebro había
+  abierto tickets por IPs que Hunter bloqueó mal; esas IPs se liberaron el mismo
+  día pero los tickets siguieron recordándose 3 veces al día durante 3 días.
+  Probado contra los reales: cerró los 2 falsos y dejó abiertos los 5
+  problemas verdaderos. Si alguna IP del grupo sigue bloqueada, o el equipo
+  nunca pasó por Hunter, o hay error de base de datos → **no cierra**: en la
+  duda, el pendiente queda abierto.
+- **VPN: de 217 mensajes al mes a uno diario.** El agrupador existía desde junio
+  y no agrupaba nada (14 de 217). Pero subir la ventana sin más habría
+  significado enterarse al día siguiente de que alguien desconocido entró de
+  madrugada, así que **un usuario nunca visto sigue avisando al instante**.
+- **El latido de "todo OK": de 3 veces al día a 1.** No se elimina — es la única
+  señal de que Guardian sigue vivo.
+
+**Fase 1 — un hecho, un solo aviso**
+
+Un bloqueo de Hunter generaba tres mensajes en tres minutos: el backend al
+bloquear, `watch_hunter` 64 s después, y el cerebro 3 min más tarde.
+
+- **La supresión de duplicados existía desde la Sesión 80 y nunca funcionó.**
+  Extraía la IP con una regex que exigía un dígito tras `"IP:"`, cuando el
+  formato real la envuelve en `<code>…</code>`. Comprobado: nunca matcheó.
+- **El cerebro habla cuando correlaciona, no cuando repite.** Medido sobre sus
+  50 conclusiones reales: 32 (64%) eran de un solo equipo y 11 (22%) concluían
+  que no había relación. Con el criterio: se enviarían 11 y se guardarían 39 sin
+  interrumpir. Verificado en ambos sentidos — se conservan las correlaciones de
+  verdad ("fallo de alimentación en los switches SW Piso 3 y SW Amalfi") y se
+  callan las repeticiones y los no-hallazgos. **Nada se pierde**: siguen en el
+  resumen nocturno y consultables.
+
+**Un patrón que apareció tres veces**
+
+El digest de VPN existía y no agrupaba; el botón "Desbloquear" existía y no
+enrutaba; la supresión de duplicados existía y no suprimía. Tres mecanismos
+correctos que **nunca llegaron a ejecutarse**, y ninguno daba error: el síntoma
+era "se manda de más" o "el botón no hace nada". Cada arreglo queda con un test
+que falla si vuelve la versión frágil.
+
+**Otros**
+
+- Nuevo monitor `watch_internet_hotel`: vigila el internet de los **huéspedes**
+  desde el gateway (WAN, pérdida, sesiones NAT y clientes de hotspot), no el del
+  servidor — que navega bien aunque el hotel esté caído.
+- El parte diario se vigila a sí mismo: el resumen nocturno avisa si el de la
+  mañana no salió.
+- La detección de usuario VPN nuevo funciona **sin sembrar datos**: ventana de
+  aprendizaje de 14 días por sitio.
+
+91/91 pruebas del agente.
+
 ## 1.33.0 — 2026-09-11 — Fase 10: el cerebro ve lo que Shomer calla
 
 Respuesta a "¿con qué más podemos relacionar al cerebro?". Se inventariaron las
