@@ -4455,8 +4455,17 @@ def start_all(bot: Bot) -> None:
     loop.create_task(watch_brain(bot))
     loop.create_task(watch_poller_heartbeat(bot))
     tasks_cfg = auto_tasks.get_tasks_config()
+    # 12 sep 2026: este número estaba escrito a mano y llevaba tiempo mintiendo
+    # —decía 32 cuando corrían 41—, así que no servía para notar que un monitor
+    # dejó de arrancar, que es justo para lo que se mira una línea así. Se
+    # cuentan las tareas vivas de verdad.
+    try:
+        _vivas = len([x for x in asyncio.all_tasks(loop) if not x.done()])
+    except Exception:
+        _vivas = -1
     log.info(
-        "Monitores iniciados (32 tasks) — triage=%s auto_tasks=%s escalation=%s",
+        "Monitores iniciados (%s tareas) — triage=%s auto_tasks=%s escalation=%s",
+        _vivas if _vivas >= 0 else "?",
         triage.is_enabled(),
         tasks_cfg or "{}",
         incident_escalation.is_enabled(),
