@@ -1264,6 +1264,82 @@ def get_suppressed_events(ips: list, days: int = 30) -> dict:
     return out
 
 
+def get_perfil_equipo(ip: str, days: int = 30) -> dict:
+    """Cómo se comporta REALMENTE este equipo, según los hechos registrados.
+
+    Es la diferencia entre una recomendación de manual y una de sitio:
+
+        de manual: "inspeccionar el cableado y verificar la configuración VLAN"
+        de sitio:  "este equipo cayó 41 veces en 30 días y vuelve solo en ~2
+                    minutos: es intermitencia, no una caída puntual; el cable ya
+                    se descarta y conviene revisar alimentación o el puerto"
+
+    Nada de esto lo tiene que enseñar nadie: sale de lo que Shomer ya registró.
+    Se construyó porque el contexto de aprendizaje que había dependía de que el
+    técnico guardara soluciones a mano, y eso casi no ocurre — medido, 6 acciones
+    en 3 meses y solo 2 de 4 equipos con algún dato.
+
+    Devuelve {} si el equipo no tiene historial: sin hechos no se afirma nada.
+    """
+    import sqlite3 as _sqlite3
+
+    ip = (ip or "").strip()
+    if not ip:
+        return {}
+    DB = "/storage/db/network_monitor.db"
+    try:
+        conn = _sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=5)
+        conn.row_factory = _sqlite3.Row
+        filas = conn.execute(
+            "SELECT ts, status FROM status_events "
+            "WHERE ip = ? AND ts > datetime('now', ?) ORDER BY ts ASC",
+            (ip, f"-{int(days)} days"),
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        log.debug("perfil de equipo %s: %s", ip, e)
+        return {}
+
+    if not filas:
+        return {}
+
+    from datetime import datetime as _dt
+
+    caidas = 0
+    recuperaciones: list = []
+    ultimo_offline = None
+    for f in filas:
+        estado = (f["status"] or "").lower()
+        try:
+            momento = _dt.strptime((f["ts"] or "")[:19], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
+        if estado in ("offline", "no-internet"):
+            caidas += 1
+            ultimo_offline = momento
+        elif estado == "online" and ultimo_offline:
+            minutos = (momento - ultimo_offline).total_seconds() / 60
+            if 0 < minutos < 1440:  # descarta cruces de día sin par real
+                recuperaciones.append(minutos)
+            ultimo_offline = None
+
+    perfil: dict = {"caidas": caidas, "dias": int(days)}
+    if recuperaciones:
+        ordenadas = sorted(recuperaciones)
+        mediana = ordenadas[len(ordenadas) // 2]
+        perfil["recuperaciones"] = len(recuperaciones)
+        perfil["recuperacion_tipica_min"] = round(mediana, 1)
+        # Vuelve solo: se recupera rápido y de forma consistente, sin que nadie
+        # haga nada. Eso descarta el cable suelto y apunta a intermitencia.
+        perfil["vuelve_solo"] = mediana <= 10
+    if caidas >= 10:
+        perfil["lectura"] = (
+            f"cae seguido ({caidas} veces en {days} días): es un patrón, no un "
+            "incidente aislado"
+        )
+    return perfil
+
+
 def knowledge_hint(ip: str, max_len: int = 55) -> str:
     """Texto corto de la última solución guardada para esa IP (alertas / IA)."""
     dec = knowledge_decision(ip)

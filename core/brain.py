@@ -188,6 +188,19 @@ def _entity_learning_context(ip: str) -> dict:
     out: dict = {"skills": [], "chronic": None, "ticket_open": False}
     if not ip:
         return out
+    # Cómo se comporta de verdad este equipo, según los hechos ya registrados.
+    # Es lo que separa una recomendación de manual ("inspeccionar el cableado")
+    # de una de sitio ("cae 41 veces al mes y vuelve solo en 30 segundos: es
+    # intermitencia, el cable ya se descarta"). No depende de que nadie lo
+    # enseñe: las skills de abajo vienen del aporte humano, que casi no ocurre
+    # -- 6 acciones en 3 meses, y solo 2 de cada 4 equipos con algún dato.
+    try:
+        from core import shomer_api as _api
+        perfil = _api.get_perfil_equipo(ip)
+        if perfil:
+            out["comportamiento_real"] = perfil
+    except Exception as e:
+        log.debug("perfil de equipo en contexto: %s", e)
     try:
         from core import agente_skills
         for s in agente_skills.list_skills(device_ip=ip, limit=5):
@@ -277,7 +290,16 @@ _SYSTEM_PROMPT = (
     "redes de hoteles. Recibis un grupo de eventos REALES que ocurrieron cerca "
     "en el tiempo, posiblemente de sistemas distintos (Guardian=WiFi/APs, "
     "Infra=switches/camaras/impresoras/servidores, Hunter=seguridad perimetral "
-    "de red, Protector=copias de seguridad). Recibis tambien "
+    "de red, Protector=copias de seguridad). En 'aprendizaje_por_entidad' cada "
+    "equipo puede traer 'comportamiento_real': cuantas veces cayo en el ultimo "
+    "mes, en cuanto tiempo suele volver y si vuelve solo. USALO para no dar "
+    "recomendaciones de manual. Si un equipo cae seguido y vuelve solo en pocos "
+    "minutos, eso NO es un cable suelto ni una falla puntual: es intermitencia, "
+    "y decirle al tecnico que revise el cable le hace perder un viaje. Si ademas "
+    "varios equipos DISTINTOS del sitio se comportan igual, la causa es "
+    "compartida (energia, enlace, equipo troncal) y hay que decirlo asi, no "
+    "repartir la culpa entre cada equipo. Al reves, un equipo que casi nunca "
+    "falla y hoy no vuelve es el que si merece revision fisica. Recibis tambien "
     "'eventos_que_shomer_no_aviso': transiciones que las reglas de ruido "
     "suprimieron a proposito (blip de gateway, caida masiva del sitio). NO son "
     "fallas ocultas ni un error del sistema: se callaron porque casi siempre son "
