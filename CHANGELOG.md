@@ -4,6 +4,22 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.37.0 — 2026-09-12 — La evidencia del internet de los huéspedes sale sola
+
+El internet que usan los huéspedes se vigila cada hora, pero la única señal
+era la alerta cuando fallaba. "No llegó nada" no distingue un hotel navegando
+bien de un monitor atascado — y ese fallo ya apareció tres veces acá.
+
+El resumen diario publica ahora cuántas comprobaciones hubo y cuántas
+salieron limpias, más el rango de uso real (sesiones de tráfico), que es lo
+que permite ver un hotel perdiendo huéspedes de a poco sin cruzar ningún
+umbral.
+
+Si no hubo lecturas lo dice así — "no es que esté bien, es que no se midió" —
+en vez de pintar un visto verde.
+
+99/99 pruebas del agente.
+
 ## 1.36.0 — 2026-09-12 — El estado de la WAN baja al resumen diario
 
 El latido "todos los sistemas OK" que salía tres veces al día dejó de

@@ -818,6 +818,37 @@ async def daily_summary(bot: Bot) -> None:
                         lines_g.append(f"  …y {len(problemas_g) - 8} más")
                     secciones.append("\n".join(lines_g))
 
+                # 12 sep 2026: el internet de los HUÉSPEDES se vigila cada hora,
+                # pero hasta ahora la única señal era la alerta cuando fallaba.
+                # "No llegó nada" no distingue entre un hotel navegando bien y un
+                # monitor atascado -- el fallo que ya apareció tres veces acá. La
+                # evidencia sale una vez al día, con el número de lecturas.
+                try:
+                    hist = shomer_api.get_wan_hotel_historial(24) or {}
+                    n = int(hist.get("lecturas") or 0)
+                    if n == 0:
+                        secciones.append(
+                            "🟡 <b>Internet de los huéspedes</b>: sin lecturas en 24h — "
+                            "no es que esté bien, es que no se midió"
+                        )
+                    else:
+                        malas = int(hist.get("con_problemas") or 0)
+                        icono = "🟢" if malas == 0 else "🔴"
+                        lines_wh = [
+                            f"{icono} <b>Internet de los huéspedes</b>: "
+                            f"{n - malas}/{n} comprobaciones sin problema en 24h"
+                        ]
+                        smin, smax = hist.get("sesiones_min"), hist.get("sesiones_max")
+                        if smin is not None and smax is not None:
+                            lines_wh.append(
+                                f"  📶 Uso: entre {smin} y {smax} sesiones de tráfico"
+                            )
+                        for motivo in (hist.get("problemas") or [])[:3]:
+                            lines_wh.append(f"  🔴 {motivo}")
+                        secciones.append("\n".join(lines_wh))
+                except Exception as e:
+                    log.debug("resumen internet huespedes: %s", e)
+
                 infra = shomer_api.get_infra_summary()
                 if infra.get("total"):
                     # Los AP quedan en infra_devices solo como inventario -- ya

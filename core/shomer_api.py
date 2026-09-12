@@ -115,6 +115,14 @@ def get_server_metrics():
 def get_wan_status():
     return _get("/api/wan-status")
 
+def get_wan_hotel_historial(horas: int = 24):
+    """Resumen de las lecturas registradas del internet de los huéspedes.
+
+    `lecturas: 0` significa que NADIE midió, no que todo estuviera bien:
+    quien lo lea tiene que decirlo así en vez de dar por bueno el silencio.
+    """
+    return _get("/api/wan-hotel/historial?horas=%d" % int(horas))
+
 def get_wan_hotel():
     """Internet REAL del hotel, medido desde el gateway (no desde el servidor).
 
