@@ -1011,6 +1011,23 @@ async def evening_summary(bot: Bot) -> None:
                 notas = _leer_y_vaciar_notas_reporte()
                 notas_block = "\n\n" + "\n\n".join(notas) if notas else "\n\nSin novedades desde la mañana."
 
+                # El parte diario es la señal de que Shomer sigue vivo: su
+                # ausencia debería ser la alarma. Pero nadie vigilaba que
+                # llegara, y un técnico que atiende varios hoteles no va a notar
+                # que le faltó uno. Acá se verifica cruzado: si el resumen de la
+                # mañana no salió, este lo dice en vez de dejarlo pasar.
+                aviso_parte = ""
+                if _last_summary_day != now.date().isoformat():
+                    aviso_parte = (
+                        "\n\n⚠️ <b>El resumen de la mañana no salió hoy.</b> "
+                        "Shomer siguió vigilando, pero conviene revisar por qué "
+                        "faltó ese aviso."
+                    )
+                    log.warning(
+                        "evening_summary: el resumen de la mañana no se envió hoy "
+                        "(último: %s)", _last_summary_day or "nunca",
+                    )
+
                 try:
                     from core import brain
                     hoy_iso = now.strftime("%Y-%m-%d")
@@ -1027,7 +1044,7 @@ async def evening_summary(bot: Bot) -> None:
 
                 await _send(
                     bot,
-                    f"🌙 <b>Cierre del día</b>{server_line}{notas_block}{cerebro_block}",
+                    f"🌙 <b>Cierre del día</b>{server_line}{notas_block}{cerebro_block}{aviso_parte}",
                     monitor="evening_summary",
                 )
                 # Marcar como enviado solo tras el _send real -- mismo criterio
