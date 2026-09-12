@@ -18,6 +18,7 @@ from telegram.error import TelegramError
 
 from core import device_manager as dm
 from core import shomer_api
+from core import vpn_usuarios
 from core.groq_helper import explain
 from core import access as acc
 from core.identity import alert_prefix
@@ -3114,72 +3115,6 @@ def _vpn_user_from_iface(port: str) -> str:
     return n or "desconocido"
 
 
-_VPN_KNOWLEDGE_DB = os.environ.get("KNOWLEDGE_DB_PATH", "/app/data/knowledge.db")
-# Días que una instalación nueva observa sin alertar, hasta conocer a su gente.
-_VPN_APRENDIZAJE_DIAS = float(os.environ.get("VPN_APRENDIZAJE_DIAS", "14"))
-
-
-def _vpn_usuario_conocido(user: str) -> bool:
-    """¿Este usuario de VPN ya entró antes en este sitio?
-
-    Shomer aprende solo quiénes son los usuarios normales: nadie configura la
-    lista. Sirve para separar lo informativo de lo que sí merece interrumpir —
-    que "angy.monroy" entre es rutina; que entre un usuario nunca visto, no.
-
-    Por sitio, no global: cada cliente tiene su propia gente (norma B.1).
-
-    **Ventana de aprendizaje:** una instalación nueva no conoce a nadie, así que
-    durante los primeros VPN_APRENDIZAJE_DIAS registra a todo el que entra SIN
-    alertar. Recién pasada esa ventana un usuario nuevo se considera digno de
-    aviso. Sin esto, un Shomer recién instalado dispararía un aviso por cada
-    empleado del hotel la primera semana — y el técnico aprendería a ignorarlos,
-    que es justo lo contrario de lo que buscamos.
-
-    Así funciona igual en cualquier cliente sin que nadie precargue nada.
-    """
-    user = (user or "").strip().lower()
-    if not user or user == "desconocido":
-        return True  # sin nombre no se puede afirmar que sea nuevo: no alarmar
-    try:
-        con = sqlite3.connect(_VPN_KNOWLEDGE_DB, timeout=3)
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS vpn_usuarios_conocidos ("
-            "usuario TEXT PRIMARY KEY, primera_vez TEXT DEFAULT (datetime('now')), "
-            "veces INTEGER DEFAULT 1)"
-        )
-        row = con.execute(
-            "SELECT veces FROM vpn_usuarios_conocidos WHERE usuario=?", (user,)
-        ).fetchone()
-        if row:
-            con.execute(
-                "UPDATE vpn_usuarios_conocidos SET veces=veces+1 WHERE usuario=?", (user,)
-            )
-            con.commit()
-            con.close()
-            return True
-
-        # Usuario nuevo: ¿ya terminó la ventana de aprendizaje de este sitio?
-        primera = con.execute(
-            "SELECT MIN(primera_vez) FROM vpn_usuarios_conocidos"
-        ).fetchone()
-        con.execute("INSERT INTO vpn_usuarios_conocidos (usuario) VALUES (?)", (user,))
-        con.commit()
-        con.close()
-
-        if not primera or not primera[0]:
-            return True  # es el primer usuario que se ve: nada que comparar aún
-        try:
-            inicio = datetime.fromisoformat(str(primera[0]))
-            dias = (datetime.now() - inicio).total_seconds() / 86400
-        except Exception:
-            return True
-        # Dentro de la ventana se aprende en silencio; fuera, se avisa.
-        return dias < _VPN_APRENDIZAJE_DIAS
-    except Exception as e:
-        log.debug("vpn usuario conocido: %s", e)
-        return True  # ante la duda, no interrumpir
-
-
 async def _flush_vpn_digest(bot: Bot) -> bool:
     """Envía un único mensaje agrupando las conexiones/desconexiones VPN
     acumuladas desde el último flush (ventana _VPN_DIGEST_INTERVAL_SEC).
@@ -3855,7 +3790,7 @@ async def watch_infra(bot: Bot) -> None:
                         # Usuario nunca visto en este sitio: eso sí merece
                         # interrumpir. Los conocidos van al resumen y no
                         # generan 217 mensajes al mes por gente trabajando.
-                        if not _vpn_usuario_conocido(user):
+                        if not vpn_usuarios.es_conocido(user):
                             await _send(
                                 bot,
                                 _a("🔐", "VPN — usuario nuevo",
