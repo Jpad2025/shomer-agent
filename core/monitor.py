@@ -3231,6 +3231,15 @@ async def _process_pulse_ewma_events(bot: Bot, poll_ctx: dict) -> bool:
         return False
     seen = _infra_pulse_batches_seen.setdefault(batch_id, set())
     alerted = False
+
+    # 12 sep 2026: acá salía un mensaje POR EQUIPO. Caso real medido: 10 equipos
+    # —servidores, switches, una impresora y el propio router— avisaron
+    # "degradando" en 40 segundos, todos con 534-538 ms contra su normal de
+    # ~349, y volvieron solos 3 minutos después: 20 mensajes para UN hecho. Y el
+    # router estaba en la lista, o sea que la causa era compartida y evidente.
+    # Se juntan primero y se decide después: varios equipos a la vez son una
+    # oleada, no varias noticias.
+    entrando, saliendo = [], []
     for ev in poll_ctx.get("pulse_events") or []:
         ip = ev.get("ip") or ""
         trans = ev.get("transition") or ""
@@ -3243,22 +3252,38 @@ async def _process_pulse_ewma_events(bot: Bot, poll_ctx: dict) -> bool:
         if trans == "enter_degrading":
             if not _pulse.ewma_alert_allowed(ip):
                 continue
-            await _send(
-                bot,
-                _pulse.format_ewma_degrading(ev),
-                monitor="equipos_red",
-            )
-            try:
-                shomer_api.pulse_alert_ack(ip)
-            except Exception as e:
-                log.debug("pulse_alert_ack %s: %s", ip, e)
-            alerted = True
+            entrando.append(ev)
         elif trans == "exit_degrading":
-            await _send(
-                bot,
-                _pulse.format_ewma_recovered(ev),
-                monitor="equipos_red",
-            )
+            saliendo.append(ev)
+
+    umbral = max(2, _pulse.wave_threshold(poll_ctx))
+
+    async def _ack(evs):
+        for ev in evs:
+            try:
+                shomer_api.pulse_alert_ack(ev.get("ip") or "")
+            except Exception as e:
+                log.debug("pulse_alert_ack %s: %s", ev.get("ip"), e)
+
+    if len(entrando) >= umbral:
+        await _send(bot, _pulse.format_ewma_wave_degrading(entrando, poll_ctx),
+                    monitor="equipos_red")
+        await _ack(entrando)
+        alerted = True
+        log.info("oleada de degradacion: %d equipos en 1 mensaje", len(entrando))
+    else:
+        for ev in entrando:
+            await _send(bot, _pulse.format_ewma_degrading(ev), monitor="equipos_red")
+            await _ack([ev])
+            alerted = True
+
+    if len(saliendo) >= umbral:
+        await _send(bot, _pulse.format_ewma_wave_recovered(saliendo),
+                    monitor="equipos_red")
+        alerted = True
+    else:
+        for ev in saliendo:
+            await _send(bot, _pulse.format_ewma_recovered(ev), monitor="equipos_red")
             alerted = True
     if len(_infra_pulse_batches_seen) > 30:
         oldest = next(iter(_infra_pulse_batches_seen))

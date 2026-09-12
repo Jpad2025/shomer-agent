@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.38.0 — 2026-09-12 — Diez equipos lentos a la vez son un hecho, no veinte avisos
+
+Caso real medido en Ópera: a las 21:09 diez equipos —dos servidores, cinco
+switches, una impresora y el propio router— avisaron "Pulse — degradando" en
+40 segundos, todos con 534-538 ms contra su normal de ~349. Tres minutos
+después los mismos diez avisaron "estable". Veinte mensajes para un solo
+evento de red.
+
+El delator estaba en la lista: el gateway. Si sube la latencia del router,
+sube la de todo lo que pasa por él — mandar al técnico a revisar diez equipos
+es mandarlo al lugar equivocado diez veces.
+
+Ahora los eventos del ciclo se juntan antes de decidir: a partir del umbral
+del sitio sale un mensaje que dice cuántos son, la medida común y, cuando el
+router aparece, que hay que empezar por él. Por debajo del umbral cada equipo
+conserva su aviso detallado — un equipo con un problema propio no puede
+perderse dentro de una agrupación.
+
+111/111 pruebas del agente.
+
 ## 1.37.0 — 2026-09-12 — La evidencia del internet de los huéspedes sale sola
 
 El internet que usan los huéspedes se vigila cada hora, pero la única señal
