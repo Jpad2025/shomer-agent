@@ -865,6 +865,53 @@ def _procesar_clusters(
         continue
 
 
+# Frases con las que el modelo indica que NO encontró una causa común. Son
+# conclusiones válidas y se guardan, pero no justifican interrumpir: avisar
+# "no encontré nada" es ruido puro para alguien que atiende tres hoteles.
+_SIN_HALLAZGO = (
+    "no comparten",
+    "no hay evidencia",
+    "no hay indicios",
+    "sin relacion",
+    "sin relación",
+    "no existe una causa",
+    "no se observa una causa",
+    "eventos independientes",
+    "son independientes",
+    "no estan relacionados",
+    "no están relacionados",
+)
+
+
+def aporta_algo(c: dict) -> tuple[bool, str]:
+    """¿Esta conclusión merece interrumpir al técnico, o solo repite?
+
+    El cerebro existe para CORRELACIONAR: explicar que varios hechos sueltos son
+    uno solo. Cuando no hace eso, su mensaje llega después de que el monitor del
+    equipo ya avisó, diciendo lo mismo con otras palabras — y el técnico recibe
+    el mismo hecho dos veces.
+
+    Medido sobre las 50 conclusiones reales de Ópera: 32 eran de un solo equipo
+    (64%, o sea sin correlación alguna) y 11 concluían que no había relación
+    entre los eventos (22%). Eso es la mayor parte de su ruido.
+
+    Se guarda igual en brain_conclusions y sigue consultable; lo único que
+    cambia es si interrumpe.
+    """
+    causa = (c.get("root_cause") or "").strip().lower()
+    if any(f in causa for f in _SIN_HALLAZGO):
+        return False, "el propio análisis concluye que no hay causa común"
+
+    entidades = [e for e in (c.get("entities") or "").split(",") if e.strip()]
+    if len(entidades) < 2:
+        return False, (
+            "es un solo equipo: el monitor que lo vigila ya avisó, "
+            "acá no hay correlación que aportar"
+        )
+
+    return True, ""
+
+
 def format_telegram(c: dict) -> str:
     icon = {"alta": "🔴", "media": "🟡", "baja": "🟢"}.get(c["urgency"], "🧠")
     lines = [

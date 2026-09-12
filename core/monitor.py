@@ -4188,6 +4188,18 @@ async def watch_brain(bot: Bot) -> None:
             conclusiones = await asyncio.to_thread(brain.run_cycle)
             for c in conclusiones:
                 if c["urgency"] in ("alta", "media") and not c.get("_dup"):
+                    # El cerebro habla cuando CORRELACIONA, no cuando repite.
+                    # Una conclusión sobre un solo equipo llega después de que
+                    # su monitor ya avisó, y una que concluye "no hay relación"
+                    # es avisar que no hay nada que avisar. Ambas se guardan y
+                    # quedan consultables; simplemente no interrumpen.
+                    vale, motivo = brain.aporta_algo(c)
+                    if not vale:
+                        log.info(
+                            "brain: conclusión #%s guardada sin avisar — %s",
+                            c.get("id"), motivo,
+                        )
+                        continue
                     text = brain.format_telegram(c)
                     sev = "critical" if c["urgency"] == "alta" else "warning"
                     await _send(bot, text, monitor="brain", severity=sev)
