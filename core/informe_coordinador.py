@@ -111,6 +111,36 @@ def _pendientes_cronicos() -> List[Dict[str, Any]]:
     return salida
 
 
+def _senas_del_equipo() -> Dict[str, Dict[str, str]]:
+    """Ubicación y MAC por IP, para los equipos que hay que ir a buscar.
+
+    12 sep 2026: dos datáfonos figuraban como "ubicación por confirmar" y el
+    técnico iba a tener que buscarlos a ojo por el hotel. Shomer ya tenía sus
+    MAC —50 de 51 equipos las tienen, las recoge el propio sondeo— pero el dato
+    no aparecía en ningún lado donde alguien fuera a mirarlo. Con la MAC se
+    identifica el aparato físico por la etiqueta de su parte de atrás, que es
+    la diferencia entre una visita útil y una de reconocimiento.
+    """
+    try:
+        from core import shomer_api
+        equipos = shomer_api.get_infra_devices() or []
+    except Exception as e:
+        log.debug("informe: señas: %s", e)
+        return {}
+    salida = {}
+    for d in equipos:
+        ip = str(d.get("ip") or "")
+        if not ip:
+            continue
+        ubic = str(d.get("location") or "").strip()
+        salida[ip] = {
+            "ubicacion": ubic,
+            "mac": str(d.get("mac") or "").strip(),
+            "sin_ubicacion": (not ubic) or ubic.lower().startswith("por confirmar"),
+        }
+    return salida
+
+
 def _respaldos() -> Dict[str, Any]:
     try:
         from core import shomer_api
@@ -162,6 +192,7 @@ def _linea_dias(dias: Optional[int]) -> str:
 def construir(sitio: str = "", periodo_horas: int = 168) -> str:
     """El informe en texto plano — se lee igual en cualquier cliente de correo."""
     cronicos = _pendientes_cronicos()
+    senas = _senas_del_equipo()
     resp = _respaldos()
     net = _internet_huespedes(periodo_horas)
     seg = _seguridad()
@@ -187,6 +218,13 @@ def construir(sitio: str = "", periodo_horas: int = 168) -> str:
         for c in cronicos:
             ip = f" ({c['ip']})" if c["ip"] else ""
             partes.append(f"   • {c['nombre']}{ip} — {_linea_dias(c['dias'])}")
+            s = senas.get(c["ip"]) or {}
+            if s.get("ubicacion") and not s.get("sin_ubicacion"):
+                partes.append(f"     Ubicación: {s['ubicacion']}")
+            elif s.get("mac"):
+                partes.append(
+                    f"     Sin ubicación registrada. Identificarlo por su MAC: {s['mac']}"
+                )
         partes.append("")
         partes.append("   Estos no se resuelven solos: requieren revisión en sitio.")
     partes.append("")

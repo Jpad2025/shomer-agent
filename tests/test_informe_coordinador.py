@@ -125,6 +125,47 @@ class TestElInformeNoInventa(unittest.TestCase):
         self.assertIn("es lo que sigue pendiente", texto)
 
 
+class TestElTecnicoPuedeEncontrarElEquipo(unittest.TestCase):
+    """Dos datáfonos figuraban como "ubicación por confirmar" y el técnico
+    tendría que buscarlos a ojo. Shomer ya tenía sus MAC —50 de 51 equipos las
+    tienen— pero el dato no salía en ningún lado donde alguien fuera a mirarlo."""
+
+    def _texto(self, senas):
+        cron = [{"nombre": "Impresora POS", "ip": "192.168.0.243",
+                 "fuente": "watch_infra", "dias": 8}]
+        with patch.object(ic, "_pendientes_cronicos", return_value=cron), \
+             patch.object(ic, "_senas_del_equipo", return_value=senas), \
+             patch.object(ic, "_respaldos", return_value={}), \
+             patch.object(ic, "_internet_huespedes", return_value={}), \
+             patch.object(ic, "_seguridad", return_value={}):
+            return ic.construir("Hotel X", 168)
+
+    def test_con_ubicacion_se_dice_donde_esta(self):
+        texto = self._texto({"192.168.0.243": {
+            "ubicacion": "Recepción", "mac": "00:15:94:C0:EB:10", "sin_ubicacion": False}})
+        self.assertIn("Ubicación: Recepción", texto)
+
+    def test_sin_ubicacion_se_da_la_mac_para_identificarlo(self):
+        texto = self._texto({"192.168.0.243": {
+            "ubicacion": "Por confirmar ubicación", "mac": "00:15:94:C0:EB:10",
+            "sin_ubicacion": True}})
+        self.assertIn("00:15:94:C0:EB:10", texto)
+        self.assertIn("Identificarlo por su MAC", texto)
+
+    def test_sin_ubicacion_y_sin_mac_no_se_inventa_nada(self):
+        texto = self._texto({"192.168.0.243": {
+            "ubicacion": "", "mac": "", "sin_ubicacion": True}})
+        self.assertNotIn("Identificarlo por su MAC", texto)
+        self.assertNotIn("Ubicación:", texto)
+
+    def test_por_confirmar_no_se_presenta_como_ubicacion(self):
+        """Mandar al técnico a 'Por confirmar ubicación' es mandarlo a ninguna parte."""
+        texto = self._texto({"192.168.0.243": {
+            "ubicacion": "Por confirmar ubicación", "mac": "aa:bb:cc:dd:ee:ff",
+            "sin_ubicacion": True}})
+        self.assertNotIn("Ubicación: Por confirmar", texto)
+
+
 class TestHallazgosDelCerebroLegibles(unittest.TestCase):
     def test_una_lista_larga_se_resume_por_lo_que_es(self):
         """Recortada a la mitad engaña: parece que el problema es del primero."""

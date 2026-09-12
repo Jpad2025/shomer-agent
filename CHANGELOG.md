@@ -4,6 +4,20 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.40.0 — 2026-09-12 — El informe dice dónde ir, y si no se sabe, cómo reconocerlo
+
+Dos datáfonos figuraban como "ubicación por confirmar" y el técnico tendría
+que buscarlos a ojo por el hotel. Shomer ya tenía sus direcciones MAC —las
+recoge el propio sondeo, 50 de 51 equipos las tienen— pero el dato no aparecía
+en ningún lado donde alguien fuera a mirarlo.
+
+Cada pendiente del informe trae ahora su ubicación; y cuando no hay ubicación
+registrada, la MAC, que permite identificar el aparato por la etiqueta de su
+parte de atrás. "Por confirmar ubicación" no se presenta como ubicación:
+mandar al técnico ahí es mandarlo a ninguna parte.
+
+133/133 pruebas del agente.
+
 ## 1.39.0 — 2026-09-12 — Informe de pendientes al coordinador, por correo
 
 Separa dos trabajos que compartían canal: el técnico actúa con las alertas de
