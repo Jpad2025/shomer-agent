@@ -4,6 +4,16 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.36.0 — 2026-09-12 — El estado de la WAN baja al resumen diario
+
+El latido "todos los sistemas OK" que salía tres veces al día dejó de
+enviarse (55 mensajes en 30 días medidos en Ópera para decir que no pasaba
+nada). El resumen diario ya publicaba CPU, RAM, disco y servicios con más
+detalle, así que no se pierde nada — salvo el estado de la WAN, que era lo
+único que traía el latido y no estaba ya en el resumen. Ahora va ahí.
+
+99/99 pruebas del agente.
+
 ## 1.35.0 — 2026-09-12 — Fase 2: recomendaciones de sitio, no de manual
 
 El contexto de aprendizaje del cerebro dependía de que el técnico guardara

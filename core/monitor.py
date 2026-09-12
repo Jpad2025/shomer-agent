@@ -734,6 +734,17 @@ def _build_server_line() -> str:
         if svc:
             caidos = [_repair.SERVICES[k]["label"] for k, s in svc.items() if s != "active"]
             parts.append("Servicios ✅" if not caidos else f"⚠️ caídos: {', '.join(caidos)}")
+        # 12 sep 2026: el estado de la WAN lo traía el latido "todos los sistemas
+        # OK" que salía 3 veces al día. Ese latido se dejó de enviar (55 mensajes
+        # en 30 días para decir que no pasaba nada) y esto es lo único que traía
+        # y no estaba ya acá, así que baja al resumen diario en vez de perderse.
+        try:
+            wan = shomer_api.get_wan_status() or {}
+            estado = str(wan.get("status") or wan.get("wan_status") or "").strip()
+            if estado:
+                parts.append("WAN ✅" if estado == "ok" else f"⚠️ WAN {estado}")
+        except Exception as e:
+            log.debug("_build_server_line wan: %s", e)
         return "\n🖥️ " + " · ".join(parts) if parts else ""
     except Exception as e:
         log.debug("_build_server_line error: %s", e)
