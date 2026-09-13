@@ -52,6 +52,14 @@ fi
 
 RSYNC_EXCLUDES=(
   --exclude='.env' --exclude='.env.bak*'
+  # 12 sep 2026: core/data/ es CONTENIDO del producto (conocimiento validado,
+  # generico) versionado en git -- no datos de un sitio como el resto de
+  # data/ (devices.json, knowledge.db, descargas). El --exclude='data/' de
+  # abajo bloqueaba tambien esto: un despliegue real dejo silenciosamente sin
+  # conocimiento a los 3 labs (0 conceptos cargados) hasta que se detecto a
+  # mano. Los include tienen que ir ANTES del exclude -- rsync aplica el
+  # primer filtro que matchea, en orden.
+  --include='core/data/' --include='core/data/*.json'
   --exclude='data/'
   --exclude='*.db' --exclude='*.db-*' --exclude='*.sqlite*'
   --exclude='__pycache__/' --exclude='*.pyc' --exclude='*.pyo'
