@@ -934,15 +934,37 @@ def aporta_algo(c: dict) -> tuple[bool, str]:
     return True, ""
 
 
+# 13 sep 2026: Juan Pablo señaló que los mensajes del cerebro, aunque
+# técnicos, no siempre usan el lenguaje más claro posible. Un caso concreto,
+# encontrado al revisar mensajes reales enviados: la línea "Sistemas:"
+# mostraba el valor interno tal cual quedó en la BD ("infra", "hunter",
+# "guardian, infra") -- un nombre de variable, no una palabra pensada para
+# que la lea un técnico. El resto de Shomer (el resumen diario, por
+# ejemplo) ya nombra estos mismos módulos en lenguaje natural ("Guardian —
+# WiFi del hotel", "Infra — equipos del hotel"); el cerebro debe usar el
+# mismo vocabulario, no inventar uno propio.
+_NOMBRE_SISTEMA = {
+    "guardian": "Guardian (WiFi)",
+    "infra": "Infra (equipos del hotel)",
+    "hunter": "Hunter (seguridad)",
+}
+
+
+def _sistemas_en_lenguaje_natural(sources: str) -> str:
+    partes = [s.strip() for s in (sources or "").split(",") if s.strip()]
+    return ", ".join(_NOMBRE_SISTEMA.get(p, p) for p in partes) or "—"
+
+
 def format_telegram(c: dict) -> str:
     icon = {"alta": "🔴", "media": "🟡", "baja": "🟢"}.get(c["urgency"], "🧠")
+    n = int(c.get("evidence_count") or 0)
     lines = [
-        f"🧠 <b>Cerebro Shomer</b> {icon} — hallazgo correlacionado",
+        f"🧠 <b>Cerebro Shomer</b> {icon} — mismo problema en varios equipos",
         f"<b>Equipos:</b> {c['entities']}",
-        f"<b>Sistemas:</b> {c['sources']}",
+        f"<b>Dónde:</b> {_sistemas_en_lenguaje_natural(c['sources'])}",
         f"<b>Causa probable:</b> {c['root_cause']}",
         f"<b>Recomendación:</b> {c['recommendation']}",
-        f"<i>Basado en {c['evidence_count']} evento(s) correlacionados</i>",
+        f"<i>Basado en {n} evento{'s' if n != 1 else ''} relacionados entre sí</i>",
     ]
     if c.get("ticket_id"):
         lines.append(f"🎫 Abierto como pendiente #{c['ticket_id']} — ver /pendientes")

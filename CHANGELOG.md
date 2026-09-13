@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.42.0 — 2026-09-13 — El cerebro habla en el idioma que el técnico ya conoce
+
+Juan Pablo señaló que los mensajes de Telegram, aunque técnicos, no siempre
+usan el lenguaje más claro posible. Revisando mensajes REALES ya enviados
+(no hipotéticos) se encontró un caso concreto: la línea "Sistemas:" del
+cerebro mostraba el valor tal cual vive en la base de datos ("infra",
+"hunter", "guardian, infra") — un nombre de variable, no una palabra pensada
+para leerse. El resumen diario ya nombra estos mismos módulos en lenguaje
+natural ("Guardian — WiFi del hotel", "Infra — equipos del hotel"); el
+cerebro ahora usa exactamente ese mismo vocabulario en vez de inventar uno
+propio.
+
+De paso: "hallazgo correlacionado" (jerga) pasa a "mismo problema en varios
+equipos" (dice qué pasa, no cómo se llama técnicamente), y el "evento(s)" —
+un placeholder de código sin resolver — ya pluraliza de verdad.
+
+12 pruebas nuevas.
+
+153/153 pruebas del agente.
+
 ## 1.41.0 — 2026-09-13 — El conocimiento validado pasa a datos, sin cambiar una coma
 
 `conocimiento_general.py` tenía 5.330 líneas, 45% literales de texto: 263
