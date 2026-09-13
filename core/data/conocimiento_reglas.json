@@ -1,0 +1,1213 @@
+[
+ {
+  "dominio": "cableado",
+  "patron": "Puerto con errores CRC/FCS creciendo",
+  "causa_probable": "Cable dañado, mal ponchado o conector sucio -- no es falla del switch",
+  "recomendacion": "Cambiar el cable/patch cord primero, antes de sospechar del equipo",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Cable UTP tendido a más de 100 metros",
+  "causa_probable": "Pérdida de señal por exceder el límite del estándar de cableado",
+  "recomendacion": "Verificar longitud real; usar repetidor, switch intermedio o fibra si excede 100m",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Enlace nuevo funciona pero muy por debajo de la velocidad esperada",
+  "causa_probable": "Cable de categoría insuficiente para la velocidad (ej. Cat5 para Gigabit)",
+  "recomendacion": "Verificar categoría real del cable instalado, no asumir por la etiqueta",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Errores intermitentes sin patrón horario claro, cable cerca de motores o luces fluorescentes",
+  "causa_probable": "Interferencia electromagnética sobre cable UTP sin blindaje",
+  "recomendacion": "Usar cable blindado (STP) o reubicar el tendido lejos de la fuente de interferencia",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Desconexiones intermitentes al mover el cable o el equipo",
+  "causa_probable": "Conector RJ45 flojo o mal prensado",
+  "recomendacion": "Reponchar el conector antes de reemplazar el equipo",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "AP o cámara PoE no enciende pero el cable y el puerto están bien",
+  "causa_probable": "El switch no entrega el estándar PoE requerido (802.3af/at/bt) o está saturado en potencia total",
+  "recomendacion": "Verificar el presupuesto de energía PoE del switch, no solo la conectividad",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Varios equipos PoE fallan a la vez justo después de agregar uno nuevo",
+  "causa_probable": "El switch superó su presupuesto total de energía PoE",
+  "recomendacion": "Redistribuir equipos entre switches o usar inyector PoE dedicado",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Toda la red se pone lenta de golpe sin ningún equipo reportado como caído",
+  "causa_probable": "Loop de red (bucle) por un cable mal conectado creando un ciclo",
+  "recomendacion": "Revisar spanning tree y conexiones redundantes accidentales antes que equipos individuales",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Errores de colisión en un puerto (no CRC)",
+  "causa_probable": "Discordancia de dúplex (duplex mismatch) entre switch y equipo conectado",
+  "recomendacion": "Igualar la configuración de dúplex en ambos extremos (o autonegociación en ambos)",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Tráfico de difusión (broadcast) anormalmente alto en toda la red",
+  "causa_probable": "Loop de red o un dispositivo defectuoso inundando la red de broadcasts",
+  "recomendacion": "Aislar la red segmento por segmento hasta ubicar el origen",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "VLAN configurada en un switch pero el tráfico no llega a otro switch de otra marca",
+  "causa_probable": "Etiquetado 802.1Q mal configurado en el enlace troncal -- común al mezclar marcas distintas",
+  "recomendacion": "Verificar que ambos extremos del trunk permitan exactamente las mismas VLANs",
+  "fuente": "CompTIA Network+ N10-009 + comunidad técnica (interoperabilidad entre marcas)"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Switch pierde su configuración tras un corte de energía",
+  "causa_probable": "La configuración no se guardó de forma persistente tras el último cambio",
+  "recomendacion": "Confirmar guardado de configuración inmediatamente después de cualquier cambio",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Pérdida de paquetes solo en ciertas horas del día (horas pico)",
+  "causa_probable": "Saturación del enlace a internet contratado, no una falla del equipo",
+  "recomendacion": "Confirmar con el proveedor el ancho de banda contratado vs. consumo real medido",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Servicios internos no responden desde afuera aunque el router esté online",
+  "causa_probable": "Doble NAT o direccionamiento duplicado entre router y firewall",
+  "recomendacion": "Revisar la topología de enrutamiento completa, evitar NAT anidado innecesario",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "El failover a un segundo proveedor de internet no ocurre automáticamente",
+  "causa_probable": "Rutas estáticas o métricas de prioridad mal definidas",
+  "recomendacion": "Verificar métricas de ruta y probar el failover real, no solo la configuración teórica",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Aplicaciones críticas lentas mientras hay tráfico de WiFi de invitados/huéspedes",
+  "causa_probable": "Falta de priorización de tráfico (QoS) entre tráfico crítico y tráfico de invitados",
+  "recomendacion": "Separar y priorizar el tráfico crítico (pagos, voz) sobre el de invitados",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "WiFi lento en zonas con muchos dispositivos conectados a la vez",
+  "causa_probable": "Densidad de dispositivos supera la capacidad del canal, no un fallo del AP",
+  "recomendacion": "Agregar APs o reducir potencia de transmisión para células más pequeñas",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Un dispositivo permanece conectado a un AP lejano en vez de uno más cercano (sticky client)",
+  "causa_probable": "Falta de roaming asistido (band steering, 802.11k/v/r)",
+  "recomendacion": "Habilitar roaming asistido si el hardware lo soporta",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Interferencia intermitente en la banda 2.4GHz",
+  "causa_probable": "Microondas, teléfonos inalámbricos u otros APs cercanos en el mismo canal",
+  "recomendacion": "Cambiar de canal y preferir 5GHz para los dispositivos compatibles",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "APs de una marca pierden conexión al usar un router/gateway de otra marca",
+  "causa_probable": "Incompatibilidad de configuración VLAN/trunk entre marcas distintas -- documentado en comunidad técnica (ej. MikroTik + UniFi)",
+  "recomendacion": "Verificar configuración exacta de trunk en ambos extremos antes de sospechar de hardware defectuoso",
+  "fuente": "Comunidad técnica (foros oficiales de fabricantes)"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Cobertura débil en un salón con mucha gente reunida temporalmente",
+  "causa_probable": "Un solo AP no alcanza para la densidad temporal de dispositivos",
+  "recomendacion": "Dimensionar APs adicionales o temporales para eventos, no depender de la cobertura normal",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "UPS reporta estado normal pero no sostiene la carga en un corte real",
+  "causa_probable": "Batería degradada (vida útil típica 2-4 años, aunque el estado se vea 'OK')",
+  "recomendacion": "Probar la autonomía real periódicamente, no confiar solo en el estado superficial",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Servidor con temperatura alta y reinicios inesperados",
+  "causa_probable": "Ventilación insuficiente del rack o filtros de polvo obstruidos",
+  "recomendacion": "Revisar temperatura ambiente y limpieza física antes de sospechar de la placa",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Disco con errores SMART crecientes pero aún operativo",
+  "causa_probable": "Señal temprana de falla de disco inminente",
+  "recomendacion": "Reemplazar preventivamente, no esperar a que falle por completo",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Servidor responde ping perfecto pero la aplicación principal no funciona",
+  "causa_probable": "El servicio/aplicación específica está caído aunque el sistema operativo esté vivo",
+  "recomendacion": "Verificar el estado del servicio puntual, no solo la conectividad de red",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Impresora responde ping pero no imprime",
+  "causa_probable": "Cola de impresión (spooler) colgada -- no es problema de red",
+  "recomendacion": "Reiniciar el servicio de impresión antes de revisar cualquier cable",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Impresora térmica con impresión débil, cortada o ilegible",
+  "causa_probable": "Cabezal térmico sucio o rodillo desgastado",
+  "recomendacion": "Limpiar el cabezal térmico antes de asumir una falla eléctrica",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Impresora láser con manchas repetitivas en el mismo lugar de cada página",
+  "causa_probable": "Tóner o unidad de fusión defectuosa",
+  "recomendacion": "Identificar el patrón/distancia de la mancha para aislar la pieza responsable",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Un pedido de punto de venta (POS) no llega a la impresora de cocina/bar aunque el POS reporte 'enviado'",
+  "causa_probable": "Falla de configuración lógica POS→impresora dentro del propio software, no de la red física",
+  "recomendacion": "Verificar la configuración de impresión dentro del software POS antes de revisar cableado",
+  "fuente": "Industria de hospitalidad (patrón documentado de integración POS)"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Un terminal de pago queda sin conexión mientras otros equipos de la misma zona están bien",
+  "causa_probable": "Problema puntual de ese punto de red específico (cable/puerto), no algo compartido",
+  "recomendacion": "Diagnosticar ese punto específico sin escalarlo como incidente de zona completa",
+  "fuente": "Metodología general de diagnóstico por capas"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Tráfico anómalo desde la red de huéspedes/invitados hacia equipos administrativos",
+  "causa_probable": "Falta de segmentación (VLANs) entre la red pública y la red interna",
+  "recomendacion": "Aislar completamente ambas redes con VLANs separadas",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Terminal de pago en la misma red lógica que el WiFi público",
+  "causa_probable": "Incumplimiento de buenas prácticas de seguridad de datos de pago (segmentación PCI)",
+  "recomendacion": "Segmentar el tráfico de pagos en una VLAN dedicada y restringida",
+  "fuente": "Buenas prácticas de seguridad de pagos (PCI-DSS, aplicable a cualquier negocio con datáfonos)"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Múltiples intentos de inicio de sesión fallidos seguidos de uno exitoso",
+  "causa_probable": "Posible ataque de fuerza bruta que tuvo éxito",
+  "recomendacion": "Forzar cambio de contraseña y revisar accesos recientes de esa cuenta",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Dispositivo desconocido detectado en la red administrativa",
+  "causa_probable": "Conexión no autorizada a un puerto o VLAN interna",
+  "recomendacion": "Aislar el puerto/VLAN afectado y verificar físicamente antes de reconectar",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "windows_ad",
+  "patron": "Un equipo no puede iniciar sesión con cuenta de dominio aunque la red funcione bien",
+  "causa_probable": "Pérdida de la relación de confianza (trust) del equipo con el dominio",
+  "recomendacion": "Volver a unir el equipo al dominio en vez de sospechar de la red",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "windows_ad",
+  "patron": "Una cuenta de usuario se bloquea repetidamente",
+  "causa_probable": "Política de bloqueo tras intentos fallidos, a menudo por un dispositivo con la contraseña vieja guardada",
+  "recomendacion": "Revisar dispositivos (móviles, impresoras, servicios) con la contraseña anterior almacenada",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "windows_ad",
+  "patron": "Un controlador de dominio no replica cambios a otro controlador",
+  "causa_probable": "Problema de conectividad o de DNS interno entre controladores de dominio",
+  "recomendacion": "Verificar conectividad y configuración DNS entre los controladores antes de sospechar de AD en sí",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "windows_ad",
+  "patron": "Una impresora de red deja de funcionar solo para un usuario, no para todos",
+  "causa_probable": "Problema del perfil o configuración de ESE usuario/estación específica",
+  "recomendacion": "Descartar la red inmediatamente y enfocar el diagnóstico en el equipo/perfil de ese usuario",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "El PMS y el POS muestran 'conectado' pero los consumos no se cargan correctamente",
+  "causa_probable": "La integración puede estar técnicamente 'conectada' sin que el flujo de datos real esté funcionando",
+  "recomendacion": "Probar con una transacción real de prueba -- nunca confiar solo en el estado que muestra la pantalla",
+  "fuente": "Industria hotelera (Shiji Insights, BringIT Professional Services -- hallazgo validado con fuentes externas)"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "El reporte de cierre nocturno (night audit) del PMS falla sin ninguna alerta visible",
+  "causa_probable": "Proceso batch nocturno con error silencioso, no notificado",
+  "recomendacion": "Verificar los logs del proceso a la mañana siguiente, no asumir éxito solo por ausencia de alerta",
+  "fuente": "Industria hotelera -- patrón operativo documentado"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "Las estaciones de recepción/POS no logran conectarse a la base de datos central en horas pico",
+  "causa_probable": "Límite de conexiones concurrentes de la base de datos alcanzado",
+  "recomendacion": "Revisar y ajustar la configuración de conexiones máximas de la base de datos",
+  "fuente": "Buenas prácticas de administración de bases de datos (genérico, aplica a cualquier sistema cliente-servidor)"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "Un sistema secundario (llaves, control de acceso) no sincroniza tras una operación en el sistema principal",
+  "causa_probable": "Falla puntual de esa integración específica, no un problema de red general",
+  "recomendacion": "Aislar y diagnosticar ese flujo de integración por separado, sin mezclarlo con incidentes de red",
+  "fuente": "Industria hotelera -- patrón de integración documentado"
+ },
+ {
+  "dominio": "metodologia",
+  "patron": "Cualquier falla nueva sin diagnóstico previo",
+  "causa_probable": "—",
+  "recomendacion": "Descartar primero la capa física (cable, puerto, energía) antes de sospechar de software o aplicaciones -- es la causa más común y la más rápida de verificar",
+  "fuente": "Metodología de troubleshooting de 7 pasos (estándar unificado de Shomer: identificar → teorizar → probar → plan de acción → implementar o escalar → verificar → documentar; CompTIA Network+ N10-009 — 5.1)"
+ },
+ {
+  "dominio": "metodologia",
+  "patron": "Un problema afecta a un solo usuario o equipo",
+  "causa_probable": "—",
+  "recomendacion": "Casi nunca es de red compartida -- enfocar el diagnóstico en ese punto específico primero",
+  "fuente": "Metodología general de diagnóstico por capas"
+ },
+ {
+  "dominio": "metodologia",
+  "patron": "Un problema afecta a varios equipos a la vez, en la misma zona física",
+  "causa_probable": "—",
+  "recomendacion": "Casi siempre comparte una causa común (switch, energía, uplink) -- no tratar cada equipo por separado",
+  "fuente": "Metodología general de diagnóstico por capas"
+ },
+ {
+  "dominio": "metodologia",
+  "patron": "Un sistema muestra estado 'conectado' o 'en línea'",
+  "causa_probable": "—",
+  "recomendacion": "No asumir que el flujo de datos real funciona -- verificar con una prueba funcional real cuando sea posible",
+  "fuente": "Industria hotelera + metodología CompTIA (paso 3: probar la teoría)"
+ },
+ {
+  "dominio": "metodologia",
+  "patron": "Un equipo que fallaba parece haberse resuelto solo, sin ninguna acción tomada",
+  "causa_probable": "—",
+  "recomendacion": "Dar seguimiento igual -- puede repetirse y la causa real seguir sin resolverse",
+  "fuente": "Metodología general de diagnóstico"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Enlace certificado Cat6a con errores solo bajo alta temperatura ambiente",
+  "causa_probable": "Degradación de las propiedades eléctricas del cable por calor excesivo en la ruta del tendido",
+  "recomendacion": "Revisar si el cable pasa cerca de fuentes de calor (techos sin aislar, ductos) antes de sospechar del equipo",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Switch PoE reinicia solo al conectar varios equipos de golpe",
+  "causa_probable": "Pico de demanda de energía (inrush current) al energizar varios puertos PoE simultáneamente supera la fuente",
+  "recomendacion": "Conectar los equipos de forma escalonada y verificar la capacidad real de la fuente del switch",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Un solo hilo de un cable multipar (ej. telefonía) con ruido, el resto bien",
+  "causa_probable": "Daño físico puntual o empalme defectuoso en ese par específico",
+  "recomendacion": "Aislar y probar par por par antes de descartar todo el cable",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Un puerto trunk deja de pasar UNA VLAN específica, las demás funcionan bien",
+  "causa_probable": "Esa VLAN fue removida de la lista permitida en el trunk en uno de los dos extremos",
+  "recomendacion": "Comparar la lista de VLANs permitidas en ambos extremos del trunk, no revisar solo uno",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Switch con uso de CPU alto sostenido sin tráfico aparentemente alto",
+  "causa_probable": "Tormenta de broadcast/multicast de bajo volumen pero constante, o un proceso de control (STP recalculando) en loop",
+  "recomendacion": "Revisar el detalle de qué proceso consume CPU en el switch, no solo el tráfico de datos",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Dispositivos con IP fija dejan de comunicarse tras cambiar un switch por otro de otra marca",
+  "causa_probable": "Configuración de VLAN/trunk no migrada correctamente al nuevo equipo",
+  "recomendacion": "Verificar configuración de VLANs y trunk del switch nuevo contra el que reemplazó, no asumir plug-and-play",
+  "fuente": "Comunidad técnica -- interoperabilidad entre marcas"
+ },
+ {
+  "dominio": "wan",
+  "patron": "VPN se conecta pero las aplicaciones internas no cargan datos grandes",
+  "causa_probable": "Problema de MTU/fragmentación por el overhead de encapsulado VPN",
+  "recomendacion": "Ajustar el MTU del túnel VPN antes de sospechar de las aplicaciones o el firewall",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Servicio expuesto a internet no es alcanzable pese a tener el puerto abierto en el router",
+  "causa_probable": "El ISP entrega una IP de CGNAT, no una IP pública real",
+  "recomendacion": "Confirmar con el ISP si la IP asignada es pública real antes de seguir revisando configuración local",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Llamadas de voz entrecortadas con velocidad de internet medida como 'buena'",
+  "causa_probable": "Jitter alto o falta de QoS priorizando el tráfico de voz, no falta de ancho de banda",
+  "recomendacion": "Medir jitter específicamente y revisar configuración de QoS antes de pedir más ancho de banda al proveedor",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Portal cautivo no aparece en un dispositivo específico, en otros sí",
+  "causa_probable": "Ese sistema operativo/navegador usa DNS-over-HTTPS o falla su detección de red con portal",
+  "recomendacion": "Abrir manualmente un sitio HTTP simple para forzar la redirección, no asumir que el portal está roto",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Dispositivos viejos no se conectan a una red configurada recientemente",
+  "causa_probable": "La red quedó configurada solo en WPA3, incompatible con hardware antiguo",
+  "recomendacion": "Usar modo mixto WPA2/WPA3 si hay dispositivos antiguos que deben coexistir",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Cobertura débil en un pasillo largo pese a tener un AP potente en el centro",
+  "causa_probable": "Un AP omnidireccional no es la mejor opción geométrica para espacios alargados",
+  "recomendacion": "Evaluar antenas sectoriales orientadas o APs adicionales a lo largo del pasillo, no solo subir potencia",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "wifi",
+  "patron": "Enlace inalámbrico punto a punto exterior se degrada progresivamente durante meses",
+  "causa_probable": "Crecimiento vegetal o construcción nueva invadiendo la zona de Fresnel del enlace",
+  "recomendacion": "Inspeccionar físicamente la línea entre ambos puntos, no solo revisar configuración",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Servidor con RAID 5 lento tras la falla y reemplazo de un disco",
+  "causa_probable": "El proceso de reconstrucción (rebuild) de paridad consume recursos intensivamente mientras dura",
+  "recomendacion": "Es esperado durante la reconstrucción; monitorear que termine y no ocurra una segunda falla en ese periodo",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "backup",
+  "patron": "Backup incremental de varios días falla al intentar restaurar",
+  "causa_probable": "Uno de los incrementales intermedios de la cadena está corrupto o incompleto",
+  "recomendacion": "Verificar la integridad de toda la cadena periódicamente, no solo del backup más reciente",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "backup",
+  "patron": "Nadie puede confirmar si el backup realmente sirve para restaurar",
+  "causa_probable": "Nunca se ha hecho una prueba de restauración real, solo se confía en que 'el proceso terminó sin error'",
+  "recomendacion": "Programar pruebas de restauración periódicas, no solo monitorear que el backup corra",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "voz_ip",
+  "patron": "Llamada conecta y timbra pero no hay audio en ningún sentido",
+  "causa_probable": "Tráfico RTP bloqueado por firewall o mal manejado por NAT, mientras SIP sí pasa",
+  "recomendacion": "Revisar reglas de firewall/NAT específicas para el rango de puertos RTP, no solo el puerto SIP",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "voz_ip",
+  "patron": "Mala calidad de llamadas solo cuando hay varias simultáneas",
+  "causa_probable": "El códec de voz en uso (ej. G.711 sin comprimir) satura el enlace disponible con varias llamadas a la vez",
+  "recomendacion": "Evaluar cambiar a un códec más eficiente (ej. G.729) para el enlace WAN disponible",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "camaras_cctv",
+  "patron": "Grabación con cuadros perdidos en el NVR pese a que cada cámara responde bien individualmente",
+  "causa_probable": "Saturación del ancho de banda agregado hacia el NVR por la suma de todas las cámaras",
+  "recomendacion": "Revisar el consumo total de banda del sistema completo, no cámara por cámara",
+  "fuente": "Conocimiento técnico de sistemas CCTV/vigilancia IP"
+ },
+ {
+  "dominio": "camaras_cctv",
+  "patron": "Cámara nueva de otra marca conectada al NVR pero le faltan funciones avanzadas",
+  "causa_probable": "Incompatibilidad de perfil ONVIF entre la cámara y el NVR (ambos 'ONVIF' pero de distinto nivel)",
+  "recomendacion": "Verificar qué perfil ONVIF soporta cada equipo antes de asumir compatibilidad total",
+  "fuente": "Conocimiento técnico de sistemas CCTV/vigilancia IP"
+ },
+ {
+  "dominio": "control_acceso",
+  "patron": "Un usuario dado de baja en el sistema central todavía puede acceder por un lector específico",
+  "causa_probable": "Ese lector opera en modo standalone y no ha sincronizado el cambio de permisos",
+  "recomendacion": "Forzar sincronización de ese lector de inmediato -- es un riesgo de seguridad, tratarlo con prioridad",
+  "fuente": "Conocimiento técnico de sistemas de control de acceso"
+ },
+ {
+  "dominio": "control_acceso",
+  "patron": "El biométrico rechaza frecuentemente a personal autorizado",
+  "causa_probable": "Sensibilidad configurada muy estricta (baja tasa de falso acepto a costa de más falsos rechazos)",
+  "recomendacion": "Ajustar sensibilidad con conocimiento del trade-off de seguridad, no solo por comodidad",
+  "fuente": "Conocimiento técnico de sistemas de control de acceso"
+ },
+ {
+  "dominio": "bases_datos",
+  "patron": "Varias estaciones distintas se congelan a la vez usando la misma aplicación",
+  "causa_probable": "Bloqueo (lock) de base de datos sostenido por una transacción lenta o mal cerrada",
+  "recomendacion": "Revisar transacciones activas y bloqueos en la base de datos antes de sospechar de la red",
+  "fuente": "Buenas prácticas de administración de bases de datos, genérico"
+ },
+ {
+  "dominio": "bases_datos",
+  "patron": "Sistema que antes era rápido se ha ido poniendo lento con los meses",
+  "causa_probable": "Crecimiento de datos sin mantenimiento de índices en la base de datos",
+  "recomendacion": "Evaluar mantenimiento/reindexado de la base de datos antes de recomendar hardware nuevo",
+  "fuente": "Buenas prácticas de administración de bases de datos, genérico"
+ },
+ {
+  "dominio": "linux",
+  "patron": "Un servicio que funcionaba bien no vuelve a arrancar tras un reinicio o corte de energía",
+  "causa_probable": "El servicio nunca fue habilitado (enabled) para arranque automático, solo se inició manualmente antes",
+  "recomendacion": "Verificar el estado de habilitación del servicio en el gestor de arranque, no solo su configuración",
+  "fuente": "CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"
+ },
+ {
+  "dominio": "linux",
+  "patron": "Un proceso funciona al probarlo manualmente pero falla al ejecutarse automáticamente",
+  "causa_probable": "Diferencia de permisos entre la prueba manual (con privilegios elevados) y la ejecución automática real",
+  "recomendacion": "Revisar con qué usuario/permisos corre el proceso automático, no repetir la prueba manual como diagnóstico",
+  "fuente": "CompTIA A+ Core 2 220-1202 / administración de sistemas Linux"
+ },
+ {
+  "dominio": "cloud",
+  "patron": "Aplicación en la nube se siente lenta pese a tener buen ancho de banda medido",
+  "causa_probable": "Latencia base hacia el servicio (distancia geográfica), no falta de capacidad",
+  "recomendacion": "Medir latencia (RTT) hacia el servicio específico antes de invertir en más ancho de banda",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "cloud",
+  "patron": "No se puede resolver un problema de un servicio en la nube desde el lado del cliente",
+  "causa_probable": "El modelo de servicio (SaaS/PaaS) delega esa responsabilidad completamente al proveedor",
+  "recomendacion": "Identificar el modelo de servicio antes de seguir invirtiendo tiempo local -- puede requerir ticket al proveedor",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "monitoreo",
+  "patron": "Equipo de red configurado con comunidad SNMP 'public' en producción",
+  "causa_probable": "Configuración de fábrica nunca cambiada",
+  "recomendacion": "Cambiar a una comunidad SNMP propia y restringir el acceso solo al servidor de monitoreo -- es un hallazgo de seguridad real",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "monitoreo",
+  "patron": "Se silenciaron varias alertas por ser 'ruido' y luego pasó desapercibido un problema real",
+  "causa_probable": "Ajuste de umbrales que redujo falsos positivos pero aumentó el riesgo de falsos negativos",
+  "recomendacion": "Revisar cada umbral silenciado evaluando qué tan grave sería no enterarse del problema real, no solo la molestia del ruido",
+  "fuente": "Metodología general de observabilidad de sistemas"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Software de EDR/antivirus nuevo bloquea una aplicación de negocio legítima",
+  "causa_probable": "Falso positivo por comportamiento no reconocido de una aplicación poco común",
+  "recomendacion": "Crear una excepción específica para esa aplicación en vez de deshabilitar la protección por completo",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Los backups están siempre accesibles desde cualquier equipo de la red corporativa",
+  "causa_probable": "Falta de aislamiento real entre backups y la red de producción",
+  "recomendacion": "Evaluar backups offline/inmutables como protección ante ransomware, no solo backups conectados permanentemente",
+  "fuente": "CompTIA A+ Core 2 220-1202"
+ },
+ {
+  "dominio": "redes_ip",
+  "patron": "Dos equipos con IPs numéricamente parecidas no logran comunicarse directamente",
+  "causa_probable": "Están en subredes distintas según la máscara configurada, aunque las IPs 'se vean cerca'",
+  "recomendacion": "Verificar la máscara de subred de ambos antes de asumir un problema de cableado o switch",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "redes_ip",
+  "patron": "Un dispositivo con IP privada no tiene salida a internet mientras otros similares sí",
+  "causa_probable": "Configuración incorrecta de gateway/NAT en ese dispositivo específico",
+  "recomendacion": "Revisar la configuración de gateway de ese equipo puntual antes de sospechar de la red completa",
+  "fuente": "CompTIA Network+ N10-009"
+ },
+ {
+  "dominio": "energia",
+  "patron": "Servidor crítico con reinicios inexplicables coincidiendo con variaciones menores de voltaje",
+  "causa_probable": "UPS tipo standby que no reacciona ante variaciones de voltaje, solo ante cortes totales",
+  "recomendacion": "Evaluar un UPS online de doble conversión para equipos que no toleran ninguna variación",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "energia",
+  "patron": "UPS que se apaga bajo una carga que en teoría debería soportar según su capacidad nominal",
+  "causa_probable": "La capacidad nominal está en VA, no en watts reales -- la carga real puede exceder lo calculado",
+  "recomendacion": "Recalcular la carga real en watts considerando el factor de potencia de los equipos conectados",
+  "fuente": "CompTIA A+ Core 1 220-1201"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "Sobreventas o disponibilidad desactualizada en plataformas externas de reserva",
+  "causa_probable": "Falla silenciosa del channel manager, no del PMS principal",
+  "recomendacion": "Diagnosticar el channel manager como sospechoso primario antes que el PMS",
+  "fuente": "Industria hotelera -- patrón de integración documentado"
+ },
+ {
+  "dominio": "pms_integracion",
+  "patron": "La tarjeta de un huésped que ya hizo check-out todavía abre su habitación",
+  "causa_probable": "Ventana normal de sincronización entre el PMS y el sistema de llaves electrónicas",
+  "recomendacion": "Verificar el intervalo de sincronización configurado antes de tratarlo como falla de seguridad grave",
+  "fuente": "Industria hotelera -- patrón de integración documentado"
+ },
+ {
+  "dominio": "unifi",
+  "patron": "AP o switch UniFi recién instalado no aparece en el panel de gestión",
+  "causa_probable": "El equipo está encendido y conectado pero no ha sido adoptado por el Controller",
+  "recomendacion": "Verificar el estado de adopción en el Controller antes de sospechar de un defecto de fábrica",
+  "fuente": "Documentación oficial de Ubiquiti/UniFi"
+ },
+ {
+  "dominio": "unifi",
+  "patron": "AP UniFi da WiFi normal a los huéspedes pero aparece offline/desactualizado en el panel",
+  "causa_probable": "El equipo no puede alcanzar la inform URL del Controller, aunque sigue operando con su última configuración",
+  "recomendacion": "Revisar conectividad hacia el Controller, no reiniciar el AP asumiendo que falló",
+  "fuente": "Documentación oficial de Ubiquiti/UniFi"
+ },
+ {
+  "dominio": "unifi",
+  "patron": "Un switch de otra marca (ej. Cisco) no aparece en la topología visual de UniFi",
+  "causa_probable": "Es esperado -- UniFi solo gestiona/visualiza sus propios equipos, no switches de terceros aunque funcionen correctamente",
+  "recomendacion": "Revisar la salud de ese switch por su propia interfaz de administración, no por el panel UniFi",
+  "fuente": "Comunidad técnica -- interoperabilidad UniFi/Cisco documentada"
+ },
+ {
+  "dominio": "mikrotik",
+  "patron": "Una regla de firewall/NAT en MikroTik parece bien escrita pero no tiene efecto",
+  "causa_probable": "Una regla anterior en el orden de la lista ya está interceptando ese tráfico",
+  "recomendacion": "Revisar el orden completo de reglas, no solo la sintaxis de la regla nueva",
+  "fuente": "Documentación oficial de MikroTik RouterOS"
+ },
+ {
+  "dominio": "mikrotik",
+  "patron": "No se puede entrar al MikroTik por Winbox",
+  "causa_probable": "El servicio Winbox puede estar deshabilitado o bloqueado sin que el resto del equipo esté inaccesible",
+  "recomendacion": "Probar acceso por SSH o interfaz web antes de asumir que el equipo está caído",
+  "fuente": "Documentación oficial de MikroTik RouterOS"
+ },
+ {
+  "dominio": "mikrotik",
+  "patron": "Un bloqueo de IP configurado en MikroTik no impide que esa IP siga pasando tráfico",
+  "causa_probable": "La regla de bloqueo está en la cadena 'input' en vez de 'forward' (o viceversa según el caso)",
+  "recomendacion": "Verificar en qué cadena está la regla -- forward para tráfico que atraviesa la red, input para tráfico dirigido al router mismo",
+  "fuente": "Documentación oficial de MikroTik RouterOS"
+ },
+ {
+  "dominio": "hikvision",
+  "patron": "No se puede ver las cámaras desde fuera del hotel, pero localmente funcionan bien",
+  "causa_probable": "Falla del servicio de nube/P2P (Hik-Connect) o de la salida a internet del NVR, no de las cámaras",
+  "recomendacion": "Verificar el servicio de nube y la conectividad a internet del NVR antes de revisar cada cámara",
+  "fuente": "Documentación técnica de sistemas Hikvision"
+ },
+ {
+  "dominio": "hikvision",
+  "patron": "Grabaciones de días anteriores desaparecen antes del tiempo de retención esperado",
+  "causa_probable": "Una o más cámaras en modo detección de movimiento están grabando de más por falsos positivos (viento, sombras, insectos)",
+  "recomendacion": "Revisar qué cámara consume más espacio de lo esperado antes de asumir falla del NVR o del disco",
+  "fuente": "Documentación técnica de sistemas Hikvision"
+ },
+ {
+  "dominio": "zkteco",
+  "patron": "Varios lectores de control de acceso fallan juntos, sin relación evidente por red",
+  "causa_probable": "Problema físico en un punto compartido de una cadena RS485, afectando a todos los lectores posteriores",
+  "recomendacion": "Tratarlos como un solo incidente de cadena, no como fallas individuales no relacionadas",
+  "fuente": "Documentación técnica de sistemas de control de acceso ZKTeco"
+ },
+ {
+  "dominio": "zkteco",
+  "patron": "Aumento gradual de rechazos de huella a lo largo de varios meses en un lector de alto uso",
+  "causa_probable": "Desgaste físico del sensor óptico por uso intensivo diario",
+  "recomendacion": "Limpiar o reemplazar el sensor antes de recalibrar el software",
+  "fuente": "Documentación técnica de sistemas de control de acceso ZKTeco"
+ },
+ {
+  "dominio": "ingenico",
+  "patron": "Transacciones de tarjeta notablemente más lentas de lo habitual, sin error reportado",
+  "causa_probable": "Fallback silencioso a un canal de respaldo (línea telefónica/GPRS) por un problema de red IP no evidente aún",
+  "recomendacion": "Revisar la conectividad IP del datáfono aunque no reporte ningún error visible",
+  "fuente": "Conocimiento general de terminales de pago electrónico"
+ },
+ {
+  "dominio": "ingenico",
+  "patron": "Datáfono funcionando bien técnicamente pero en la misma VLAN que equipos no relacionados con pagos",
+  "causa_probable": "Falta de segmentación de red para el entorno de datos de tarjetas",
+  "recomendacion": "Segmentar en una VLAN dedicada -- es un hallazgo de cumplimiento real, no depende de que algo falle primero",
+  "fuente": "Normas de seguridad de datos de pago (PCI-DSS)"
+ },
+ {
+  "dominio": "impresoras_inkjet",
+  "patron": "Impresión con rayas o colores faltantes tras varios días sin uso",
+  "causa_probable": "Tinta seca en las boquillas del cabezal por inactividad prolongada",
+  "recomendacion": "Ejecutar limpieza de cabezales antes de asumir una falla de hardware permanente",
+  "fuente": "Documentación de impresoras Epson comerciales"
+ },
+ {
+  "dominio": "impresoras_inkjet",
+  "patron": "Impresora inkjet se niega a imprimir con código de error específico pese a tinta alta",
+  "causa_probable": "Almohadilla/caja de mantenimiento interna saturada",
+  "recomendacion": "Revisar el código de error específico -- casi siempre indica mantenimiento saturado, no falta de tinta",
+  "fuente": "Documentación de impresoras Epson comerciales"
+ },
+ {
+  "dominio": "impresoras_termicas_pos",
+  "patron": "Alertas frecuentes de 'sin papel' con el rollo visiblemente con papel restante",
+  "causa_probable": "Incompatibilidad del sensor óptico con el tipo/marca específica de papel en uso",
+  "recomendacion": "Revisar el tipo de rollo antes de asumir falla del sensor",
+  "fuente": "Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"
+ },
+ {
+  "dominio": "impresoras_termicas_pos",
+  "patron": "Impresión correcta pero falla o atasco justo al cortar el papel",
+  "causa_probable": "Desgaste o residuos acumulados en el mecanismo de corte automático",
+  "recomendacion": "Limpiar/revisar el cortador específicamente, no la impresora completa",
+  "fuente": "Documentación técnica de impresoras térmicas POS (Bixolon y equivalentes)"
+ },
+ {
+  "dominio": "seguridad_arquitectura",
+  "patron": "Se propone quitar o debilitar un control de seguridad porque 'ya hay otro que cubre lo mismo'",
+  "causa_probable": "Pérdida de una capa de defensa en profundidad, no una simplificación segura",
+  "recomendacion": "Mantener capas independientes -- la falla de un control no debe dejar el sistema sin ninguna protección",
+  "fuente": "CompTIA Security+ SY0-701 — Security Architecture"
+ },
+ {
+  "dominio": "seguridad_arquitectura",
+  "patron": "Hallazgo de auditoría muestra un puerto/servicio abierto que nadie recuerda para qué es",
+  "causa_probable": "Servicio olvidado que amplía la superficie de ataque sin ningún uso activo real",
+  "recomendacion": "Cerrar el servicio si no se confirma un uso activo, no dejarlo abierto por costumbre",
+  "fuente": "CompTIA Security+ SY0-701 — Threats, Vulnerabilities and Mitigations"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Hallazgo de auditoría marcado como severidad alta en un equipo aislado sin exposición real",
+  "causa_probable": "El puntaje de severidad técnica no considera el contexto real de exposición del equipo",
+  "recomendacion": "Priorizar combinando severidad Y exposición/criticidad real, no solo la etiqueta de severidad aislada",
+  "fuente": "CompTIA CySA+ CS0-003 — Vulnerability Management"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Escaneo automático marca como vulnerable un equipo de marca con soporte activo y parches recientes",
+  "causa_probable": "Posible falso positivo por versión de banner desactualizada en el reporte, sin reflejar parches de seguridad aplicados",
+  "recomendacion": "Verificar manualmente antes de escalar como crítico en equipos con historial de actualizaciones activas",
+  "fuente": "CompTIA CySA+ CS0-003 — Vulnerability Management"
+ },
+ {
+  "dominio": "siem_analisis",
+  "patron": "Bloqueo de IP externa con firma de escaneo genérico, sin actividad posterior",
+  "causa_probable": "Ruido de fondo normal de internet (bots escaneando masivamente), no un ataque dirigido",
+  "recomendacion": "No escalar como urgente salvo que haya señales de éxito posteriores (tráfico saliente inusual, no solo el intento de entrada)",
+  "fuente": "CompTIA CySA+ CS0-003 — Security Operations"
+ },
+ {
+  "dominio": "siem_analisis",
+  "patron": "Ningún sistema crítico (pagos, dominio) ha sido revisado manualmente en mucho tiempo, sin alertas activas",
+  "causa_probable": "Dependencia exclusiva de alertas automáticas, sin revisión activa (threat hunting) de amenazas sin firma conocida",
+  "recomendacion": "Programar revisión periódica manual de sistemas críticos, no depender solo de que el IDS avise",
+  "fuente": "CompTIA CySA+ CS0-003 — Security Operations"
+ },
+ {
+  "dominio": "respuesta_incidentes",
+  "patron": "Ante un hallazgo de seguridad real, se empieza a investigar la causa antes de aislar el problema",
+  "causa_probable": "Orden invertido del proceso formal de respuesta a incidentes -- se salta la fase de contención",
+  "recomendacion": "Contener/aislar primero (bloquear IP, aislar equipo), investigar la causa raíz después",
+  "fuente": "CompTIA Security+ SY0-701 / CySA+ CS0-003 — Incident Response"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Servidor con storage en SAN/NAS se congela o pierde acceso a datos, el servidor mismo responde bien",
+  "causa_probable": "Problema de conectividad de red hacia el almacenamiento compartido, no del servidor ni del disco",
+  "recomendacion": "Diagnosticar la red hacia el storage por separado del servidor",
+  "fuente": "CompTIA Server+ SK0-005 — Server Hardware Installation and Management"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Cambio de configuración de servidor programado en horario operativo alto (check-in/check-out)",
+  "causa_probable": "Falta de ventana de mantenimiento acordada para el cambio",
+  "recomendacion": "Reprogramar a horario de bajo impacto, aunque el cambio parezca seguro en teoría",
+  "fuente": "CompTIA Server+ SK0-005 — Server Administration"
+ },
+ {
+  "dominio": "servidor_recuperacion_desastres",
+  "patron": "Se define la frecuencia de backup de un sistema sin haber definido antes cuánta pérdida de datos es tolerable",
+  "causa_probable": "Falta de definición de RPO/RTO antes de diseñar la estrategia de respaldo",
+  "recomendacion": "Definir primero cuánta pérdida de datos y cuánto tiempo de caída tolera el negocio para ese sistema específico",
+  "fuente": "CompTIA Server+ SK0-005 — Security and Disaster Recovery"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Pitidos (POST beeps) al encender, antes de que cargue el sistema operativo",
+  "causa_probable": "Falla de hardware detectada por el BIOS antes de iniciar el SO -- RAM, video u otro componente crítico",
+  "recomendacion": "Contar el patrón de pitidos y consultarlo contra el manual del fabricante de la placa -- cada patrón indica un componente distinto",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Equipo no enciende, sin luces ni ventiladores (no power)",
+  "causa_probable": "Fuente de poder, cable de energía, o el propio botón de encendido -- no necesariamente la placa o el CPU",
+  "recomendacion": "Descartar fuente/cable/botón (lo más barato y rápido de probar) antes de sospechar de componentes internos costosos",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Olor a quemado o hinchazón visible en un capacitor de la placa",
+  "causa_probable": "Falla eléctrica real del componente, riesgo de daño mayor o incendio si se sigue usando",
+  "recomendacion": "Apagar y desconectar de inmediato -- no es un síntoma para 'seguir usando hasta que falle del todo'",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Fecha/hora del sistema incorrecta cada vez que se reinicia el equipo",
+  "causa_probable": "Batería CMOS agotada -- no guarda la configuración de reloj sin energía externa",
+  "recomendacion": "Reemplazar la batería CMOS -- es una pieza barata, no un problema de software ni de red (aunque puede causar fallas de autenticación por desincronización horaria)",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.1 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Ruido de clic o rechinido proveniente de un disco duro mecánico",
+  "causa_probable": "Falla mecánica real del disco, posible falla inminente o ya en curso",
+  "recomendacion": "Respaldar los datos de inmediato antes de cualquier otro diagnóstico -- el ruido mecánico es una señal tardía, no temprana",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Un arreglo RAID aparece como incompleto o falta un disco del arreglo",
+  "causa_probable": "Un disco individual falló o se desconectó, el arreglo sigue funcionando en modo degradado (si el nivel de RAID lo permite)",
+  "recomendacion": "Identificar y reemplazar el disco específico fallido cuanto antes -- en modo degradado ya no hay tolerancia a una segunda falla",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Tiempos de lectura/escritura mucho más largos de lo normal, sin error explícito",
+  "causa_probable": "Disco degradándose (posible predecesor de falla) o arreglo RAID reconstruyendo en segundo plano",
+  "recomendacion": "Revisar el estado SMART del disco y si hay una reconstrucción de RAID en curso antes de asumir un problema de software",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.2 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Imagen borrosa o distorsionada en un monitor o proyector",
+  "causa_probable": "Cable de video de mala calidad/dañado, resolución mal configurada, o fuente de entrada incorrecta",
+  "recomendacion": "Verificar primero la fuente de entrada y el cable físico antes de sospechar del panel/proyector en sí",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.3 Troubleshooting"
+ },
+ {
+  "dominio": "hardware",
+  "patron": "Apagado intermitente de un proyector durante el uso",
+  "causa_probable": "Sobrecalentamiento (filtro de aire obstruido) o lámpara llegando al fin de su vida útil",
+  "recomendacion": "Revisar limpieza del filtro de aire y horas de uso de la lámpara antes de asumir falla electrónica",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.3 Troubleshooting"
+ },
+ {
+  "dominio": "dispositivos_moviles",
+  "patron": "Batería de dispositivo móvil visiblemente hinchada",
+  "causa_probable": "Degradación química de la batería -- riesgo real de seguridad, no solo pérdida de autonomía",
+  "recomendacion": "Dejar de usar el dispositivo y reemplazar la batería de inmediato -- no es un problema estético",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.4 Troubleshooting"
+ },
+ {
+  "dominio": "dispositivos_moviles",
+  "patron": "Dispositivo móvil se recarga muy lento o de forma inconsistente",
+  "causa_probable": "Cable/puerto de carga dañado, o el cargador no entrega la potencia que el dispositivo espera",
+  "recomendacion": "Probar con un cable y cargador distintos, conocidos como buenos, antes de sospechar de la batería",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.4 Troubleshooting"
+ },
+ {
+  "dominio": "redes_ip",
+  "patron": "Un puerto de switch sube y baja repetidamente (port flapping)",
+  "causa_probable": "Cable defectuoso, problema de dúplex, o el dispositivo conectado tiene una NIC fallando",
+  "recomendacion": "Revisar el cable físico primero (causa más común y más barata de descartar) antes que configuración",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.5 Troubleshooting"
+ },
+ {
+  "dominio": "redes_ip",
+  "patron": "Fallas de autenticación de red intermitentes sin cambio de credenciales",
+  "causa_probable": "Desincronización de reloj del equipo (afecta protocolos como Kerberos) o certificado próximo a vencer",
+  "recomendacion": "Verificar hora del sistema y vigencia de certificados antes de sospechar de la contraseña o el servidor de autenticación",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.5 Troubleshooting"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Imágenes duplicadas o 'eco' desplazadas en la impresión láser",
+  "causa_probable": "Tambor de imagen (unidad de imagen) desgastado o dañado",
+  "recomendacion": "Reemplazar la unidad de imagen -- no se resuelve con más tóner ni limpieza superficial",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Puntos o manchas (speckling) repetidos en el papel impreso",
+  "causa_probable": "Tóner derramado internamente o unidad de fusión contaminada",
+  "recomendacion": "Revisar/limpiar la unidad de fusión antes de reemplazar el cartucho de tóner completo",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Atasco de grapado o perforado en un finalizador de impresora multifunción",
+  "causa_probable": "Problema específico del módulo de acabado (finisher), no del motor de impresión principal",
+  "recomendacion": "Aislar el diagnóstico al módulo de acabado -- reiniciar la impresora completa no resuelve un atasco mecánico ahí",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"
+ },
+ {
+  "dominio": "impresoras",
+  "patron": "Impresora no reconoce una bandeja de papel específica",
+  "causa_probable": "Sensor de la bandeja sucio/dañado o la bandeja no está completamente asentada",
+  "recomendacion": "Reasentar físicamente la bandeja y limpiar el sensor antes de sospechar de una falla electrónica mayor",
+  "fuente": "CompTIA A+ Core 1 220-1201 — 5.6 Troubleshooting"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Contadores de error CRC crecientes en una interfaz específica",
+  "causa_probable": "Cable dañado, conector mal terminado, o un par dividido (split pair) -- un error de ponchado que pasa la prueba de continuidad básica pero rompe la cancelación de ruido del par trenzado",
+  "recomendacion": "Revisar la terminación del cable con un certificador (no solo un tester de continuidad) para descartar pares divididos, antes de sospechar del equipo",
+  "fuente": "CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"
+ },
+ {
+  "dominio": "cableado",
+  "patron": "Un equipo PoE no enciende y el switch reporta presupuesto de energía excedido",
+  "causa_probable": "El switch ya alcanzó su límite total de potencia PoE con los equipos ya conectados",
+  "recomendacion": "Redistribuir equipos entre switches o verificar si el estándar PoE configurado coincide con lo que requiere el equipo nuevo",
+  "fuente": "CompTIA Network+ N10-009 — 5.2 Network Troubleshooting"
+ },
+ {
+  "dominio": "switching",
+  "patron": "Toda la red se vuelve lenta después de conectar un cable redundante entre dos switches",
+  "causa_probable": "Loop de red -- spanning tree recalculando, o STP deshabilitado en ese segmento",
+  "recomendacion": "Verificar que spanning tree esté activo y funcionando en ambos switches antes de dejar el enlace redundante conectado",
+  "fuente": "CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"
+ },
+ {
+  "dominio": "redes_ip",
+  "patron": "Dispositivo nuevo conectado a la red recibe una IP en el rango 169.254.x.x",
+  "causa_probable": "No pudo contactar a un servidor DHCP (pool agotado, servidor caído, o problema de VLAN)",
+  "recomendacion": "Verificar disponibilidad del servidor DHCP y espacio libre en su ámbito antes de revisar el dispositivo mismo",
+  "fuente": "CompTIA Network+ N10-009 — 5.3 Network Troubleshooting"
+ },
+ {
+  "dominio": "wan",
+  "patron": "Aplicación crítica (voz, video) con cortes mientras la velocidad medida de internet es buena",
+  "causa_probable": "Jitter o pérdida de paquetes puntual, no falta de ancho de banda total",
+  "recomendacion": "Medir jitter y pérdida de paquetes específicamente, no solo velocidad de descarga/subida",
+  "fuente": "CompTIA Network+ N10-009 — 5.4 Network Troubleshooting"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "CPU al 100% de forma constante sin ningún proceso pesado visible en el administrador de tareas",
+  "causa_probable": "Cryptominer o malware sin archivo (fileless) ejecutándose en memoria/PowerShell",
+  "recomendacion": "Usar una herramienta de detección de comportamiento (no solo escaneo de archivos) y revisar procesos de PowerShell/WMI activos",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.4 Security"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "El equipo se reinfecta poco después de haberse limpiado de malware",
+  "causa_probable": "No se deshabilitó System Restore antes de remediar, el malware volvió desde un punto de restauración guardado",
+  "recomendacion": "Deshabilitar System Restore, remediar de nuevo, y solo entonces rehabilitarlo con un punto limpio",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.6 Security"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Archivos con extensión desconocida y una nota de rescate en el escritorio o carpetas",
+  "causa_probable": "Infección de ransomware activa o reciente",
+  "recomendacion": "Aislar el equipo de la red inmediatamente (desconectar cable/WiFi), NO pagar el rescate, restaurar desde el backup más reciente verificado",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.6 Security"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Un usuario no puede escribir en una carpeta compartida aunque el administrador confirma que le dio permiso total",
+  "causa_probable": "Los permisos NTFS de la carpeta son más restrictivos que los del recurso compartido (share), y el más restrictivo gana",
+  "recomendacion": "Revisar ambas capas de permisos (share y NTFS) por separado -- casi siempre una quedó más restrictiva que la otra",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.2 Security"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Archivos cifrados con EFS quedan inaccesibles tras resetear la contraseña o reconstruir el perfil de un usuario",
+  "causa_probable": "El certificado de cifrado EFS no se exportó/respaldó antes del reseteo, y estaba ligado a la cuenta anterior",
+  "recomendacion": "Siempre exportar el certificado EFS del usuario ANTES de resetear su contraseña o reconstruir su perfil",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.2 Security"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Un empleado reporta haber dado una contraseña por teléfono a alguien que sonaba como soporte técnico interno",
+  "causa_probable": "Ataque de vishing/pretexting -- ingeniería social por voz, no una falla técnica",
+  "recomendacion": "Cambiar esa credencial de inmediato y reforzar capacitación -- no hay solución de software que prevenga esto por sí sola",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.5 Security"
+ },
+ {
+  "dominio": "seguridad",
+  "patron": "Un router o AP recién instalado sigue usando el usuario/contraseña de fábrica",
+  "causa_probable": "Paso de endurecimiento básico omitido durante la instalación",
+  "recomendacion": "Cambiar credenciales por defecto de inmediato -- es el hallazgo de seguridad más común y más crítico en instalaciones apuradas",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.10 Security"
+ },
+ {
+  "dominio": "dispositivos_moviles",
+  "patron": "Un dispositivo móvil corporativo se pierde o es robado y no tiene MDM configurado",
+  "causa_probable": "Falta de gestión de dispositivos móviles (MDM) implementada preventivamente",
+  "recomendacion": "Sin MDM no hay borrado remoto posible -- documentar como brecha de datos potencial y priorizar MDM en todos los dispositivos restantes",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.8 Security"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Un equipo Windows no tiene la opción de BitLocker ni de unirse a un dominio en el menú",
+  "causa_probable": "La edición instalada es Windows Home, que no incluye BitLocker, Group Policy Editor ni unión a dominio",
+  "recomendacion": "Verificar la edición de Windows antes de sospechar de una falla de configuración o de red",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 1.3 Operating Systems"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Una política de grupo (GPO) configurada correctamente no se aplica a un equipo específico",
+  "causa_probable": "El equipo no está en la OU correcta de Active Directory, o el GPO está vinculado a la OU equivocada",
+  "recomendacion": "Correr gpresult /r en ese equipo para ver qué políticas llegaron realmente, antes de reconfigurar el GPO de nuevo",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 2.2 Operating Systems"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Una aplicación deja de funcionar sin ningún mensaje de error visible al usuario",
+  "causa_probable": "Fallo registrado a nivel de sistema, no visible en la interfaz de la aplicación",
+  "recomendacion": "Revisar el Visor de Eventos de Windows primero -- casi siempre hay un registro del motivo real antes de reinstalar a ciegas",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 1.4 Operating Systems"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Windows falla repetidamente al instalar una actualización acumulativa",
+  "causa_probable": "Espacio en disco insuficiente o componente WinSxS corrupto",
+  "recomendacion": "Verificar espacio libre en disco y correr sfc /scannow / DISM antes de reintentar la actualización repetidamente sin diagnóstico",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 1.6 Operating Systems"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Windows muestra pantalla azul (BSOD) justo después de instalar una actualización o controlador reciente",
+  "causa_probable": "Incompatibilidad del controlador/actualización reciente con el hardware o software instalado",
+  "recomendacion": "Arrancar en modo seguro y desinstalar el controlador/actualización más reciente antes de investigar otras causas de hardware",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 3.1 Software Troubleshooting"
+ },
+ {
+  "dominio": "sistemas_operativos",
+  "patron": "Un servicio de Windows que funcionaba bien no vuelve a iniciar tras un reinicio o corte de energía",
+  "causa_probable": "El servicio quedó en estado de inicio 'Manual' o 'Deshabilitado' tras el corte, en vez de 'Automático'",
+  "recomendacion": "Verificar el tipo de inicio del servicio en services.msc antes de sospechar de corrupción de archivos del servicio",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 3.1 Software Troubleshooting"
+ },
+ {
+  "dominio": "dispositivos_moviles",
+  "patron": "Un dispositivo móvil no logra autenticarse en una red WiFi corporativa que antes sí funcionaba",
+  "causa_probable": "Certificado de red o perfil WiFi corrupto/vencido en el dispositivo",
+  "recomendacion": "Olvidar y volver a configurar el perfil de red en el dispositivo antes de sospechar del AP o del servidor RADIUS",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 3.2 Software Troubleshooting"
+ },
+ {
+  "dominio": "dispositivos_moviles",
+  "patron": "La batería de un dispositivo móvil corporativo se agota mucho más rápido de lo normal",
+  "causa_probable": "Aplicaciones en segundo plano sin restricción o el GPS/ubicación siempre activo",
+  "recomendacion": "Revisar uso de batería por app antes de asumir que la batería física está degradada",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 3.2 Software Troubleshooting"
+ },
+ {
+  "dominio": "backup",
+  "patron": "Todos los backups de un sitio están guardados en un disco dentro del mismo cuarto que el servidor",
+  "causa_probable": "Violación de la regla 3-2-1 -- falta la copia offsite",
+  "recomendacion": "Configurar al menos una copia de backup fuera del sitio (nube o ubicación física distinta) antes de considerar el esquema completo",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 4.3 Operational Procedures"
+ },
+ {
+  "dominio": "acceso_remoto",
+  "patron": "El puerto de Escritorio Remoto (3389) de un servidor está expuesto directamente a internet",
+  "causa_probable": "Configuración de acceso remoto sin VPN de por medio",
+  "recomendacion": "Cerrar la exposición directa de RDP a internet y requerir VPN antes de permitir el acceso remoto -- es un vector de ataque automatizado constante",
+  "fuente": "CompTIA A+ Core 2 220-1202 — 4.9 Operational Procedures"
+ },
+ {
+  "dominio": "siem_analisis",
+  "patron": "El mismo usuario aparece autenticado desde dos ubicaciones geográficamente imposibles en poco tiempo",
+  "causa_probable": "Credencial comprometida (impossible travel), no un error de geolocalización",
+  "recomendacion": "Revocar todas las sesiones activas de esa cuenta y forzar cambio de credencial de inmediato -- una de las señales más confiables de compromiso",
+  "fuente": "CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"
+ },
+ {
+  "dominio": "siem_analisis",
+  "patron": "Muchas cuentas distintas registran exactamente un intento fallido de inicio de sesión cada una en poco tiempo",
+  "causa_probable": "Ataque de password spraying -- diseñado para evadir el bloqueo por intentos fallidos de cuenta individual",
+  "recomendacion": "Correlacionar intentos fallidos AGREGADOS entre cuentas, no solo por cuenta individual, y forzar cambio de contraseñas comunes/débiles",
+  "fuente": "CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"
+ },
+ {
+  "dominio": "seguridad_endpoint",
+  "patron": "Un malware se propaga a otros equipos de la red sin que ningún usuario haya abierto un archivo o adjunto",
+  "causa_probable": "Worm (gusano) autopropagándose por la red, no un virus que requiere acción del usuario",
+  "recomendacion": "Segmentar/aislar la red inmediatamente -- la respuesta a un worm es contención de red, no solo capacitación de usuarios",
+  "fuente": "CompTIA Security+ SY0-701 — 2.4 Threats, Vulnerabilities, and Mitigations"
+ },
+ {
+  "dominio": "respuesta_incidentes",
+  "patron": "Un incidente de seguridad se cierra y resuelve sin ninguna sesión de revisión posterior",
+  "causa_probable": "Fase de 'lecciones aprendidas' omitida por presión de tiempo",
+  "recomendacion": "Agendar una revisión formal aunque sea breve -- sin esa fase el mismo tipo de incidente tiende a repetirse por la misma causa raíz no corregida",
+  "fuente": "CompTIA Security+ SY0-701 — 4.8 Security Operations"
+ },
+ {
+  "dominio": "control_acceso",
+  "patron": "Una cuenta de administrador de dominio se usa rutinariamente para tareas diarias que no requieren privilegio elevado",
+  "causa_probable": "Falta de esquema PAM/just-in-time -- privilegio permanente en vez de temporal",
+  "recomendacion": "Migrar a permisos just-in-time que expiren automáticamente, reservando la cuenta privilegiada solo para cuando realmente se necesite",
+  "fuente": "CompTIA Security+ SY0-701 — 4.6 Security Operations"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Un sistema ICS/SCADA o controlador biométrico antiguo no puede parcharse sin detener la operación",
+  "causa_probable": "Limitación real del equipo/fabricante, no negligencia de mantenimiento",
+  "recomendacion": "Aplicar un control compensatorio (aislamiento en VLAN dedicada, sin acceso directo a internet ni sistemas administrativos) en vez de dejarlo expuesto sin parche ni mitigación",
+  "fuente": "CompTIA Security+ SY0-701 — 4.1 Security Operations"
+ },
+ {
+  "dominio": "gestion_riesgo",
+  "patron": "Un cliente decide no remediar una vulnerabilidad de bajo impacto real por costo o complejidad",
+  "causa_probable": "Decisión de negocio válida de aceptación de riesgo, no un hallazgo ignorado",
+  "recomendacion": "Documentar formalmente como aceptación de riesgo con exención (dueño, fecha, justificación) -- no dejarlo como un hallazgo abierto sin decisión registrada",
+  "fuente": "CompTIA Security+ SY0-701 — 5.2 Security Program Management and Oversight"
+ },
+ {
+  "dominio": "almacenamiento",
+  "patron": "Un cliente asume que no necesita backups porque tiene RAID 5 configurado",
+  "causa_probable": "Malentendido sobre qué protege RAID -- solo falla física de disco, no borrado/ransomware/corrupción lógica",
+  "recomendacion": "Aclarar la diferencia y establecer un esquema de backup real independiente del RAID antes de que ocurra un incidente",
+  "fuente": "CompTIA Server+ SK0-005 — 1.2 Server Hardware Installation and Management"
+ },
+ {
+  "dominio": "almacenamiento",
+  "patron": "Un disco de más de 2TB no se puede inicializar completamente en un servidor Windows",
+  "causa_probable": "El disco está particionado como MBR, que tiene un límite de 2TB",
+  "recomendacion": "Reconvertir el esquema de partición a GPT -- no es una falla física del disco",
+  "fuente": "CompTIA Server+ SK0-005 — 2.1 Server Administration"
+ },
+ {
+  "dominio": "virtualizacion",
+  "patron": "Una máquina virtual tiene salida a internet pero no es alcanzable desde otros equipos de la red",
+  "causa_probable": "El adaptador de red de la VM está en modo NAT en vez de bridged",
+  "recomendacion": "Cambiar el adaptador de red a modo bridged si la VM necesita ser alcanzable directamente desde la red física",
+  "fuente": "CompTIA Server+ SK0-005 — 2.5 Server Administration"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Un failover de clúster se dispara sin que el nodo activo realmente haya dejado de funcionar",
+  "causa_probable": "El canal de heartbeat entre nodos se interrumpió (problema de red), no una falla real del nodo activo",
+  "recomendacion": "Revisar específicamente la conectividad del enlace de heartbeat antes de asumir que el nodo activo falló",
+  "fuente": "CompTIA Server+ SK0-005 — 2.4 Server Administration"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Escalar núcleos de CPU o instancias virtuales en un servidor con licenciamiento per-core/per-socket",
+  "causa_probable": "Riesgo de incumplimiento de licencia si no se ajusta el licenciamiento al mismo tiempo que el hardware",
+  "recomendacion": "Verificar y ajustar el modelo de licencia ANTES de escalar hardware, no descubrirlo en una auditoría posterior",
+  "fuente": "CompTIA Server+ SK0-005 — 2.8 Server Administration"
+ },
+ {
+  "dominio": "almacenamiento",
+  "patron": "Un arreglo RAID 5 está en proceso de reconstrucción (rebuild) tras reemplazar un disco fallado",
+  "causa_probable": "Estado normal de recuperación, pero el arreglo queda temporalmente SIN redundancia durante el proceso",
+  "recomendacion": "Tratar el sistema como de alto riesgo durante el rebuild -- un segundo fallo de disco en esa ventana pierde el arreglo completo",
+  "fuente": "CompTIA Server+ SK0-005 — 4.3 Troubleshooting"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Fallas de autenticación de dominio intermitentes en un servidor sin cambio de credenciales ni política",
+  "causa_probable": "Desincronización de reloj (clock skew) -- Kerberos rechaza autenticaciones fuera del umbral de tiempo permitido",
+  "recomendacion": "Verificar la hora del sistema contra un servidor NTP confiable antes de investigar causas más complejas",
+  "fuente": "CompTIA Server+ SK0-005 — 4.4 Troubleshooting"
+ },
+ {
+  "dominio": "servidor_administracion",
+  "patron": "Un servidor Windows Core no tiene interfaz gráfica de escritorio disponible",
+  "causa_probable": "Comportamiento esperado de esa instalación -- Server Core se instala deliberadamente sin GUI",
+  "recomendacion": "Administrar remotamente vía PowerShell/RSAT en vez de buscar cómo habilitar una interfaz gráfica que no está instalada por diseño",
+  "fuente": "CompTIA Server+ SK0-005 — 2.1 Server Administration"
+ },
+ {
+  "dominio": "siem_analisis",
+  "patron": "Un equipo envía tráfico saliente pequeño pero a intervalos muy regulares hacia la misma IP externa",
+  "causa_probable": "Beaconing -- malware con C2 'llamando a casa' periódicamente",
+  "recomendacion": "Aislar el equipo y analizar la IP destino en herramientas de reputación (WHOIS/AbuseIPDB) antes de descartarlo como tráfico normal",
+  "fuente": "CompTIA CySA+ CS0-003 — 1.2 Security Operations"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Un escaneo de vulnerabilidades no credenciado reporta un sistema como de bajo riesgo",
+  "causa_probable": "El escaneo no credenciado solo ve lo expuesto externamente, subestimando el riesgo real interno",
+  "recomendacion": "Repetir el escaneo en modo credenciado antes de confiar en una evaluación de bajo riesgo basada solo en vista externa",
+  "fuente": "CompTIA CySA+ CS0-003 — 2.1 Vulnerability Management"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Un sistema ICS/SCADA se cae o se comporta erráticamente durante un escaneo de vulnerabilidades",
+  "causa_probable": "Escaneo activo agresivo no tolerado por el equipo de infraestructura crítica",
+  "recomendacion": "Usar escaneo pasivo en sistemas OT/ICS/SCADA, o confirmar con el fabricante que el equipo tolera escaneo activo antes de repetirlo",
+  "fuente": "CompTIA CySA+ CS0-003 — 2.1 Vulnerability Management"
+ },
+ {
+  "dominio": "gestion_vulnerabilidades",
+  "patron": "Cambiar un número de ID en la URL de un sistema de reservas permite ver datos de otro huésped",
+  "causa_probable": "Broken access control -- la aplicación no verifica permiso del usuario sobre el recurso solicitado",
+  "recomendacion": "Reportar como hallazgo crítico al desarrollador del sistema -- requiere corrección en la lógica de autorización, no configuración de red",
+  "fuente": "CompTIA CySA+ CS0-003 — 2.4 Vulnerability Management"
+ },
+ {
+  "dominio": "respuesta_incidentes",
+  "patron": "Un sistema comprometido se 'limpia' de malware pero se reconecta sin reinstalación completa",
+  "causa_probable": "Confianza indebida en que el antivirus eliminó toda persistencia del atacante (ej. cuentas de puerta trasera no detectadas)",
+  "recomendacion": "Re-imaging completo (reinstalar desde cero) en vez de solo limpiar -- no se puede confiar en un sistema que estuvo bajo control de un atacante",
+  "fuente": "CompTIA CySA+ CS0-003 — 3.2 Incident Response and Management"
+ },
+ {
+  "dominio": "reportes_comunicacion",
+  "patron": "Una vulnerabilidad lleva mucho tiempo abierta sin remediar y sin explicación documentada",
+  "causa_probable": "Inhibidor de remediación real (sistema legacy/propietario) nunca se documentó formalmente como excepción",
+  "recomendacion": "Documentar el inhibidor específico con dueño y control compensatorio aplicado, en vez de dejarlo como una tarea pendiente sin contexto",
+  "fuente": "CompTIA CySA+ CS0-003 — 4.1 Reporting and Communication"
+ },
+ {
+  "dominio": "reportes_comunicacion",
+  "patron": "Un incidente se detecta rápido pero la respuesta/resolución tarda mucho más de lo esperado",
+  "causa_probable": "Buen MTTD (detección) pero mal MTTR (respuesta) -- el cuello de botella está en el proceso, no en el monitoreo",
+  "recomendacion": "Enfocar la mejora en el proceso de escalamiento y ejecución de respuesta, no en agregar más monitoreo que ya funciona bien",
+  "fuente": "CompTIA CySA+ CS0-003 — 4.2 Reporting and Communication"
+ }
+]

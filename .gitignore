@@ -3,6 +3,13 @@
 .env.*
 !.env.example
 data/
+# 12 sep 2026: core/data/ es CONTENIDO del producto (conocimiento validado,
+# generico para cualquier cliente), no datos de un sitio -- distinto del
+# "data/" de la raiz (devices.json, knowledge.db, descargas: eso si es por
+# sitio y nunca se versiona). Excepcion puntual, mismo criterio que
+# .env.example arriba.
+!core/data/
+!core/data/*.json
 *.db
 *.db-*
 *.sqlite

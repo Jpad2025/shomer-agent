@@ -4,6 +4,21 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.41.0 — 2026-09-13 — El conocimiento validado pasa a datos, sin cambiar una coma
+
+`conocimiento_general.py` tenía 5.330 líneas, 45% literales de texto: 263
+conceptos de teoría CompTIA y 173 reglas de diagnóstico. Movidos a
+`core/data/*.json`; el código de siembra, consulta y formateo para el
+cerebro no cambió una línea.
+
+Verificado de la forma más exigente posible, no solo comparando en memoria:
+se simuló la siembra completa en una base de datos vacía —el arranque real
+de un cliente nuevo— con el código de antes y el de ahora, y las filas
+resultantes salieron idénticas, una por una. 8 pruebas nuevas dejan esa
+verificación como guardia permanente.
+
+141/141 pruebas del agente.
+
 ## 1.40.0 — 2026-09-12 — El informe dice dónde ir, y si no se sabe, cómo reconocerlo
 
 Dos datáfonos figuraban como "ubicación por confirmar" y el técnico tendría
