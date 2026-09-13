@@ -1,11 +1,16 @@
 # Catálogo de tareas autónomas — TASK-001…010
 
-**Versión:** 1.1 · **Fecha:** 10 jun 2026  
+**Versión:** 1.2 · **Fecha:** 13 sep 2026 (corregido: TASK-007 ya está `approved`, no `off`)  
 **Audiencia:** ingeniería USB + técnico de campo  
-**Relacionado:** `POLITICAS_AGENTE.md`, `core/auto_tasks.py`, `core/learning.py`, `knowledge.db`
+**Relacionado:** `POLITICAS_AGENTE.md` (política y estado real completo), `core/auto_tasks.py`, `core/learning.py`, `knowledge.db`
 
 Documento maestro del **catálogo Capa D** del agente Telegram.  
 La IA **no inventa tareas** — solo ejecuta IDs de esta lista, cada uno con modo propio por sitio.
+
+> **Nota:** este documento describe el catálogo y la rúbrica de madurez de cada tarea.
+> Para el estado real verificado hoy (qué modo tiene cada TASK en Ópera, y por qué la
+> fase `authorize` de abajo nunca se implementó) ver `POLITICAS_AGENTE.md` §1.1 y §3.6,
+> que es la fuente de verdad actualizada.
 
 ---
 
@@ -51,17 +56,17 @@ La **política operativa del catálogo TASK-* en producción** aplica en **Óper
 | Tipo | Modo | Qué incluye |
 |------|------|-------------|
 | **Automático (`approved`)** | Ejecuta + Green State + aviso Telegram después | Mantenimiento del **propio Shomer** — disco, servicios, logs, zombie, Suricata, informe backups |
-| **Solo observar (`off`)** | Avisa, no ejecuta vía catálogo | TASK-007 (watch_backups ya alerta), TASK-010 (Guardian) |
+| **Solo observar (`off`)** | Avisa, no ejecuta vía catálogo | TASK-010 (Guardian) — único que sigue en `off` hoy |
 | **Con aprobación humana** | Botón / comando — **no son TASK** | Reboot AP bot, bloquear/desbloquear Hunter, auditoría nmap, cola impresora, restore, prune, UFW, credenciales |
 
 Guardian (reboot AP automático) y Hunter (auto-bloqueo) siguen en **Capa A** — panel Guardian/Hunter, no en `BOT_AUTO_TASKS_CONFIG`.
 
-### Configuración Ópera producción (`.env`)
+### Configuración Ópera producción (`.env`) — verificado 13 sep 2026
 
 ```bash
 BOT_LEARN_SUPERVISED=1
 # Una línea (copiar tal cual):
-BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved","TASK-002":"approved","TASK-003":"approved","TASK-004":"approved","TASK-005":"approved","TASK-006":"approved","TASK-008":"approved","TASK-009":"approved","TASK-007":"off","TASK-010":"off"}
+BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved","TASK-002":"approved","TASK-003":"approved","TASK-004":"approved","TASK-005":"approved","TASK-006":"approved","TASK-007":"approved","TASK-008":"approved","TASK-009":"approved","TASK-010":"off"}
 ```
 
 | TASK | Modo Ópera | Motivo |
@@ -72,10 +77,10 @@ BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved","TASK-002":"approved","TASK-003":"a
 | TASK-004 | **`approved`** | Restart nginx si :80 cae |
 | TASK-005 | **`approved`** | Truncar logs Shomer >50 MB (03:00, reversible) |
 | TASK-006 | **`approved`** | Auditoría muestral backups — solo lectura |
+| TASK-007 | **`approved`** | Alerta backup >26 h — promovida tras el piloto (era `off` en jun 2026) |
 | TASK-008 | **`approved`** | Kill zombie :8000/8001 + restart servicio |
 | TASK-009 | **`approved`** | Restart Suricata si pipeline degradado + inactive |
-| TASK-007 | `off` | Solo alerta — `watch_backups` ya informa |
-| TASK-010 | `off` | Siempre off — reboot AP = Guardian Capa A |
+| TASK-010 | `off` | Siempre off — reboot AP = Guardian Capa A, bloqueado también en código |
 
 Tras cambiar `.env`: `cd /storage/shomer-agent && sudo docker compose up -d`.
 
@@ -121,7 +126,7 @@ Revisar periódicamente en `knowledge.db` → `auto_task_stats` / `auto_task_run
 | ID | Nombre | Acción | Trigger | Remedia | Ópera |
 |----|--------|--------|---------|---------|-------|
 | **TASK-006** | Auditoría muestral Protector | 3 equipos al azar, revisa último backup | Dom **06:00** | ❌ Solo reporta | **`approved`** |
-| **TASK-007** | Alerta backup >26 h | Registro unificado | `watch_backups` | ❌ Solo alerta | `off` |
+| **TASK-007** | Alerta backup >26 h | Registro unificado | `watch_backups` | ❌ Solo alerta | **`approved`** |
 
 ### Grupo D — Prohibidas en catálogo
 
@@ -206,10 +211,10 @@ Estadísticas en `knowledge.db` → tablas `auto_task_stats`, `auto_task_runs`.
 
 ```bash
 # Editar .env del agente y reiniciar container — ver §2 bloque completo approved
-BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved",...,"TASK-009":"approved","TASK-007":"off","TASK-010":"off"}
+BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved",...,"TASK-009":"approved","TASK-010":"off"}
 
-# Override en BD (cuando exista /aprobar_task — pendiente)
-# set_task_mode("TASK-009", "off", updated_by="developer")
+# Override en BD — vía comando Telegram, ya implementado:
+# /aprobar_task TASK-009   (equivale a set_task_mode("TASK-009", "approved", updated_by=<user_id>))
 ```
 
 ---
@@ -217,12 +222,12 @@ BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved",...,"TASK-009":"approved","TASK-007
 ## 9. Resumen ejecutivo
 
 1. **Catálogo = TASK-001…010** — fijo, no negociable por la IA.
-2. **Ópera producción (v1.1):** TASK-001…006, 008 y **009 en `approved`** — mantenimiento Shomer automático con aviso post-acción.
-3. **TASK-007 y 010 en `off`.** Reboot AP / Hunter auto = Capa A (panel), no catálogo.
-4. **Con aprobación humana:** reboot AP bot, Hunter manual, nmap, impresora, restore/prune/credenciales — nunca `approved`.
-5. **Cadena opcional sitio nuevo:** `off` → `learning` → `authorize` → `approved` — en Ópera USB saltó directo a `approved` en tareas appliance.
-6. **Próximo paso código:** modo `authorize` para acciones T2/T3 fuera del catálogo + `/aprobar_task` + feedback al guardar solución.
+2. **Ópera producción (13 sep 2026):** TASK-001…009 (las 9) en **`approved`** — mantenimiento Shomer automático con aviso post-acción. TASK-007 se promovió después de la v1.1 (era `off` en jun 2026).
+3. **Solo TASK-010 en `off`**, y bloqueada también en código sin importar la config. Reboot AP = Capa A (Guardian), no catálogo.
+4. **Con aprobación humana:** reboot AP bot, Hunter manual, nmap, impresora, restore/prune/credenciales — nunca entran al catálogo, viven como comandos Telegram con confirmación.
+5. **Cadena opcional sitio nuevo:** `off` → `learning` → `approved` — en Ópera USB saltó directo a `approved` en todas las tareas appliance tras el piloto. La fase intermedia `authorize` (§5) nunca se implementó en código.
+6. **`/aprobar_task` ya está implementado** (`core/bot.py:cmd_aprobar_task`) — no es un próximo paso pendiente.
 
 ---
 
-*Actualizar este archivo cuando se agregue TASK-011+ o el modo `authorize` en código.*
+*Actualizar este archivo cuando se agregue TASK-011+ o el modo `authorize` en código. Para el estado operativo real y verificado, `POLITICAS_AGENTE.md` es la fuente de verdad — este documento es el catálogo de referencia técnica por tarea.*

@@ -1,5 +1,5 @@
 # Shomer Sentinel — Guía de operación para técnico de campo
-# Versión: junio 2026 | Idioma: español operacional
+# Versión: 13 sep 2026 (revisado y verificado contra código real) | Idioma: español operacional
 
 Este documento es para el técnico que instala y opera el sistema.
 NO contiene información de código ni arquitectura interna.
@@ -121,7 +121,7 @@ El bot puede responder preguntas como:
 
 **Sin `/start`** — entrada: `/consultas`, `/ayuda` o texto libre.
 
-Texto libre: OpenAI (si está en `.env`) o Groq como respaldo. **Monitores automáticos** (26 tareas): alertan solos en el chat.
+Texto libre: OpenAI (si está en `.env`) o Groq como respaldo. **Monitores automáticos** (41 tareas — ver `/monitores`): alertan solos en el chat.
 
 | Comando | Qué hace |
 |---------|----------|
@@ -156,6 +156,22 @@ Texto libre: OpenAI (si está en `.env`) o Groq como respaldo. **Monitores autom
 | `/puertos <IP>` | Puertos SNMP UP/DOWN, tráfico y errores (switch/router/server) |
 
 Panel web **Infraestructura** — agregar equipos y comunidad SNMP. Monitores Infra alertan: caída/recuperación · tóner/papel · TCP caído · SNMP DOWN · flapping cable/PoE.
+
+### Otros comandos útiles (no imprescindibles, pero disponibles)
+
+| Comando | Qué hace |
+|---------|----------|
+| `/menu` | Botones por categoría — para no tener que recordar nombres de comando |
+| `/monitores` | Estado de cada uno de los 41 monitores automáticos (igual que `/salud monitores`) |
+| `/pendientes` | Lista los problemas crónicos abiertos ahora mismo, sin esperar el recordatorio automático |
+| `/cerebro` | Últimos hallazgos que cruzan Guardian+Infra+Hunter con causa probable y recomendación (`/cerebro ahora` fuerza un ciclo manual) |
+| `/conocimiento <dominio>` | Consejos técnicos generales de redes/hardware/software/PMS (no es lo aprendido en este hotel — eso es `/skills`) |
+| `/skills` | Lista lo que el sistema aprendió que funciona **en este hotel específico** |
+| `/investigar <IP>` | Diagnóstico más profundo que `/diagnostico` para un caso difícil |
+| `/bitacora` | Últimos cambios de red relevantes (reconexiones, IPs nuevas) en las últimas 48 h |
+| `/criticidad <IP>` | Ver o cambiar si un equipo Infra avisa de inmediato al caer o espera al resumen |
+| `/silenciar <IP> <duración>` | Pausar alertas de un equipo puntual (ej. `/silenciar 192.168.0.140 2d`) |
+| `/version` | Versión del agente instalada en este Shomer |
 
 ---
 

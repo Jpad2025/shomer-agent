@@ -1,8 +1,15 @@
 # Protocolo — cambios al agente Telegram (comandos, TASK-*, tools)
 
-**Versión:** 1.1 · **Fecha:** 11 jun 2026  
+**Versión:** 1.2 · **Fecha:** 13 sep 2026 (revisado y verificado contra código real)  
 **Audiencia:** Juan Pablo + ingeniería USB (Cursor, Claude Code, cualquier IA)  
 **Objetivo:** agregar o cambiar comportamiento del bot **sin romper producción** ni duplicar documentación contradictoria.
+
+> **Corregido 13 sep 2026:** la dirección del deploy cambió desde que se escribió esto —
+> hoy **Ópera es el maestro** (produce el código y empuja hacia los labs), no `.205`.
+> Las herramientas reales son `tools/fleet_sync_core.sh` (core) y `tools/fleet_sync.sh`
+> (agente), no `deploy.sh`. Ver `CLAUDE.md` y `REGLAS_DEPLOY.md` del repo core. El resto
+> de este protocolo (qué archivo tocar por tipo de cambio) sigue vigente — solo cambió
+> el último paso.
 
 ---
 
@@ -45,7 +52,7 @@ Trabajás con **Cursor** y a veces **Claude Code** en la misma máquina o en `.2
 **Reglas:**
 
 1. **Código canónico del agente:** `/storage/shomer-agent/core/` en el Shomer donde desarrollás (lab `.205`).
-2. **Despliegue a otros sitios:** `bash /opt/network_monitor/tools/deploy.sh` desde `.205` — no copiar archivos a mano sin deploy.
+2. **Despliegue a otros sitios:** `bash tools/fleet_sync.sh` (agente) / `tools/fleet_sync_core.sh` (core) desde Ópera — no copiar archivos a mano sin sync. Verificar después con `tools/fleet_estado.py`.
 3. **Antes de cerrar sesión con cualquier IA:** actualizar **una** bitácora en `CLAUDE.md` (Parte AL, AM, …) con 3–5 líneas de qué cambió.
 4. **Config por hotel:** solo `SITE.md` + `.env` agente en **ese** servidor — no mezclar en `CLAUDE.md`.
 5. Si Cursor y Claude Code tocan lo mismo el mismo día → **git commit local** en `/opt/network_monitor` y/o nota en `CLAUDE.md` para no perder contexto.
@@ -64,7 +71,7 @@ Trabajás con **Cursor** y a veces **Claude Code** en la misma máquina o en `.2
 | 6 | Keywords correlación guardar solución | `core/learning.py` |
 | 7 | Modo default `off`; sitio activa en `.env` | `SITE.md` o nota despliegue |
 | 8 | **Botones feedback** post-acción (ver §5) | `core/bot.py` o `ui_notify` |
-| 9 | Deploy + reiniciar container | `deploy.sh` |
+| 9 | Deploy + reiniciar container | `tools/fleet_sync.sh` |
 | 10 | Entrada bitácora | `CLAUDE.md` |
 
 **Prohibido:** que el LLM invente un `task_id` en runtime. Solo IDs en `TASK_CATALOG`.
@@ -81,7 +88,7 @@ Trabajás con **Cursor** y a veces **Claude Code** en la misma máquina o en `.2
 | 4 | Documentar en `/ayuda` | `core/bot.py` (`_ayuda_text`) |
 | 5 | Manuales campo | `docs/campo/SOPORTE_TECNICO.md`, `MANUAL_CAMPO_AGENTE.md` |
 | 6 | Si es acción sensible → capa T2/T3 en `POLITICAS_AGENTE.md` | docs |
-| 7 | Deploy | `deploy.sh` |
+| 7 | Deploy | `tools/fleet_sync.sh` |
 
 **Aliases:** preferir **un** nombre canónico en menú; alias opcional sin duplicar lógica.
 
@@ -130,12 +137,14 @@ Solo TASK T1 si `BOT_AUTO_SAFE_ONLY=1`.
 
 ---
 
-## 7. Config Ópera — TASK approved (referencia)
+## 7. Config Ópera — TASK approved (verificado en `.env` real, 13 sep 2026)
 
 ```bash
 BOT_LEARN_SUPERVISED=1
-BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved","TASK-002":"approved","TASK-003":"approved","TASK-004":"approved","TASK-005":"approved","TASK-006":"approved","TASK-008":"approved","TASK-009":"approved","TASK-007":"off","TASK-010":"off"}
+BOT_AUTO_TASKS_CONFIG={"TASK-001":"approved","TASK-002":"approved","TASK-003":"approved","TASK-004":"approved","TASK-005":"approved","TASK-006":"approved","TASK-007":"approved","TASK-008":"approved","TASK-009":"approved","TASK-010":"off"}
 ```
+
+TASK-007 pasó de `off` a `approved` después de la v1.1 (11 jun 2026) — solo TASK-010 sigue en `off`, y esa además está bloqueada en código sin importar la config. Ver `POLITICAS_AGENTE.md` §3.6 para el detalle actualizado.
 
 Copiar a `/storage/shomer-agent/.env` en **shomer-hotelopera** → `sudo docker compose up -d`.
 
@@ -145,23 +154,15 @@ Registrar en **`SITE.md` de Ópera** (sección Agente) — no en `CLAUDE.md`.
 
 ## 8. Orden de lectura para IA nueva en el proyecto
 
-1. `CLAUDE.md` Parte N (agente) + Partes AL/AN/AO  
+1. `CLAUDE.md` Parte N (agente) del repo core  
 2. `docs/CATALOGO_TASK.md`  
 3. `docs/POLITICAS_AGENTE.md`  
 4. **Este protocolo**  
 5. `SITE.md` del servidor donde se trabaja  
 6. Código: `bot.py` → `monitor.py` → `auto_tasks.py`
 
----
-
-## 9. Bitácora reciente (11 jun 2026 — Sesión 53)
-
-| Cambio | Archivos | Deploy |
-|--------|----------|--------|
-| Anti-spam Hunter bot | `core/monitor.py` — `watch_active_threats`, `watch_network_audit`, `watch_hunter_verify` | Ópera + labs vía `deploy.sh` |
-| Fix APs duplicados Guardian↔Infra | `core/monitor.py` — `watch_infra` ignora `ap`; recuperado solo si hubo alerta | Ópera |
-| Hunter RouterOS verify DROP | `app/api/casador_support_firewall.py`, `hunter.html`, `HUNTER_MIKROTIK_ROUTEROS.md` | Ópera manual DROP; lab auto opcional |
+> La bitácora de sesión 53 (11 jun 2026) que vivía aquí se archivó en `AGENTE_historico.md` — ya no es información vigente, es historial de cambios ya desplegados hace meses.
 
 ---
 
-*Actualizar versión de este protocolo cuando cambie el flujo de deploy o se implemente modo `authorize`.*
+*Actualizar versión de este protocolo cuando cambie el flujo de deploy o se implemente modo `authorize` (sigue sin existir en código — ver `POLITICAS_AGENTE.md` §1.1).*
