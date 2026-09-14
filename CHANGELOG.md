@@ -4,6 +4,31 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.43.0 — 2026-09-13 — Poda de auto_task_runs + limpieza de huérfanos
+
+Revisión completa de los módulos de aprendizaje/memoria/cerebro pedida por
+Juan Pablo. `knowledge.db` no tenía ninguna retención (a diferencia de
+`memoria.db`, que sí poda automáticamente hace tiempo) — `auto_task_runs`
+crece con cada ejecución de las 9 tareas que hoy corren en `approved` todos
+los días, sin límite. Se agregó poda (`AUTO_TASK_RUNS_RETENTION_DAYS`,
+default 180 días) igual que la de `memoria.db`; los contadores acumulados de
+`auto_task_stats` no dependen de esas filas crudas, así que no se pierde
+ningún historial de decisión, solo el detalle fila por fila de ejecuciones
+viejas. 2 tests nuevos cubren esto.
+
+De paso, limpieza de huérfanos encontrados en la misma revisión:
+`core/memory.py.bak.20260523024112` (snapshot de mayo, trackeado en git por
+error, nadie lo importaba) y dos archivos de datos de 0 bytes en Ópera
+(`agent.db`, `memoria_alertas.db`) de un esquema de nombres anterior,
+sin ninguna referencia en el código actual.
+
+El resto de la arquitectura (memory.py=chat, memoria_central.py=bitácora
+unificada, agente_skills.py=soluciones aprendidas, brain.py=correlación) se
+revisó y quedó verificada como sana — el cerebro ya combina 10+ fuentes reales
+(verificación en vivo, topología LLDP, errores de puerto, estado WAN, historial
+de reinicios, skills aprendidas) para respaldar cada recomendación, así que no
+depende únicamente de que el técnico use los botones de feedback.
+
 ## 1.42.0 — 2026-09-13 — El cerebro habla en el idioma que el técnico ya conoce
 
 Juan Pablo señaló que los mensajes de Telegram, aunque técnicos, no siempre

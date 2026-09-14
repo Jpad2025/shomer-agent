@@ -25,6 +25,13 @@ KNOWLEDGE_DB = os.environ.get("KNOWLEDGE_DB_PATH", "/app/data/knowledge.db")
 VERIFY_SEC = float(os.environ.get("AUTO_TASK_VERIFY_SEC", "30"))
 COOLDOWN_SEC = float(os.environ.get("AUTO_TASK_COOLDOWN_SEC", "900"))
 PROMOTE_AFTER = int(os.environ.get("AUTO_TASK_SUGGEST_PROMOTE_AFTER", "5"))
+# 13 sep 2026: auto_task_runs es un log que crece con cada ejecución (9 tareas
+# corren en approved todos los días) y nunca se podaba, a diferencia de
+# memoria.db que sí tiene retención. auto_task_stats guarda los contadores
+# acumulados aparte (runs_total, runs_ok, green_ok_total), así que podar el
+# log detallado no pierde el historial de decisión, solo el detalle fila por
+# fila de ejecuciones viejas.
+RUNS_RETENTION_DAYS = int(os.environ.get("AUTO_TASK_RUNS_RETENTION_DAYS", "180"))
 
 _MODES = ("off", "learning", "approved")
 _last_run: Dict[str, float] = {}
@@ -245,6 +252,8 @@ def _log_run(result: TaskRunResult, mode: str) -> None:
                 mode,
             ),
         )
+        cutoff = f"-{RUNS_RETENTION_DAYS} days"
+        con.execute("DELETE FROM auto_task_runs WHERE created_at < datetime('now', ?)", (cutoff,))
         con.commit()
         con.close()
     except Exception as e:
