@@ -1100,15 +1100,16 @@ async def evening_summary(bot: Bot) -> None:
         await asyncio.sleep(60)
 
 
-_TICKET_REMINDER_HOURS = (10, 15, 20)
+_TICKET_REMINDER_HOURS = (10, 20)
 _last_ticket_reminder: Optional[str] = _bot_state_get("last_ticket_reminder")
 
 
 async def chronic_tickets_reminder(bot: Bot) -> None:
     """Pedido Juan Pablo (3 sep 2026): en vez de que un patrón crónico se
-    silencie para siempre, recordar los pendientes abiertos 3 veces al día
-    (10am/3pm/8pm) hasta que el técnico los cierre o los pause -- ver
-    chronic_tickets.py y _abrir_ticket_cronico()."""
+    silencie para siempre, recordar los pendientes abiertos hasta que el
+    técnico los cierre o los pause -- ver chronic_tickets.py y
+    _abrir_ticket_cronico(). Bajado de 3 a 2 avisos por día (10am/8pm,
+    14 sep 2026, pedido Juan Pablo) -- 3 veces resultaba excesivo."""
     global _last_ticket_reminder
     await asyncio.sleep(40)
     while True:

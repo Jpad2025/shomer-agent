@@ -4,6 +4,14 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.45.0 — 2026-09-14 — Recordatorio de pendientes: 3 → 2 veces al día
+
+`chronic_tickets_reminder` avisaba a las 10am, 3pm y 8pm. Juan Pablo pidió
+bajarlo a 2 — queda 10am y 8pm, se saca el de las 3pm. Sigue exactamente
+igual en todo lo demás: se cierra solo si el sistema comprueba que ya no
+tiene motivo, y el técnico puede cerrar o pausar cada uno con los botones
+del propio mensaje.
+
 ## 1.44.0 — 2026-09-13 — Cobertura de tests para learning/memory/memoria_central/agente_skills
 
 Estos 4 módulos no tenían ningún test propio, a diferencia de brain.py. El
