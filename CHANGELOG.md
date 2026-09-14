@@ -4,6 +4,37 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.44.0 — 2026-09-13 — Cobertura de tests para learning/memory/memoria_central/agente_skills
+
+Estos 4 módulos no tenían ningún test propio, a diferencia de brain.py. El
+riesgo real: los cuatro están escritos para fallar en silencio (cada función
+atrapa su propia excepción y sigue, a propósito, para no tumbar el chat ni el
+cerebro por un error en un módulo secundario) — así que un bug ahí no se
+nota en producción, se nota como un síntoma indirecto meses después ("el
+cerebro nunca aprendió nada de este equipo", "el bot dejó de responder sin
+razón"). 52 tests nuevos, agrupados por lo que de verdad importa:
+
+- `test_memory_budget.py` — historial de chat + los topes de gasto de
+  OpenAI (`check_openai_caps`, `check_token_budget`). Es el cinturón de
+  seguridad real contra una factura inesperada.
+- `test_agente_skills_aprendizaje.py` — que enseñarle lo mismo dos veces al
+  bot sume confianza en vez de duplicar filas, que el feedback negativo de
+  un técnico quede guardado aunque la tarea ya hubiera corrido sola antes,
+  y que las skills de un sitio no se mezclen con las de otro.
+- `test_learning_correlacion.py` — que las confirmaciones humanas y el
+  aprendizaje automático (Green State) solo ocurran cuando están prendidos
+  por `.env`, que TASK-010 nunca aprenda nada (está prohibida) y que
+  `BOT_AUTO_SAFE_ONLY` sí filtre las tareas fuera de T1 como se documenta.
+- `test_memoria_central_sync.py` — que cada fuente (Guardian/Infra, Hunter,
+  Protector, catálogo de tareas) llegue completa a la bitácora unificada sin
+  duplicarse al re-sincronizar, que la poda de `memoria.db` de verdad borre
+  solo lo viejo, y que si `network_monitor.db` no está disponible un
+  instante, el sync completo no se caiga por eso.
+
+De paso quedó reparado `.venv-test` (le faltaban las dependencias reales del
+proyecto — solo tenía pytest instalado, así que ningún test que importara
+`telegram` o `requests` podía siquiera cargar).
+
 ## 1.43.0 — 2026-09-13 — Poda de auto_task_runs + limpieza de huérfanos
 
 Revisión completa de los módulos de aprendizaje/memoria/cerebro pedida por
