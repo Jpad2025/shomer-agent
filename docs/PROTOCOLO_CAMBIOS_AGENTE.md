@@ -1,6 +1,6 @@
 # Protocolo — cambios al agente Telegram (comandos, TASK-*, tools)
 
-**Versión:** 1.2 · **Fecha:** 13 sep 2026 (revisado y verificado contra código real)  
+**Versión:** 1.3 · **Fecha:** 14 sep 2026 (revisado y verificado contra código real)  
 **Audiencia:** Juan Pablo + ingeniería USB (Cursor, Claude Code, cualquier IA)  
 **Objetivo:** agregar o cambiar comportamiento del bot **sin romper producción** ni duplicar documentación contradictoria.
 
@@ -10,6 +10,18 @@
 > (agente), no `deploy.sh`. Ver `CLAUDE.md` y `REGLAS_DEPLOY.md` del repo core. El resto
 > de este protocolo (qué archivo tocar por tipo de cambio) sigue vigente — solo cambió
 > el último paso.
+
+> **Corregido 14 sep 2026 — hallazgo importante:** `MANUAL_CAMPO_AGENTE.md` ya no
+> existe. Era un archivo generado **en build** (Dockerfile) concatenando
+> `TECNICO_OPERACION.md` + `SOPORTE_TECNICO.md`, pero `fleet_sync.sh` nunca
+> reconstruye la imagen del contenedor — solo la reinicia. Resultado verificado en
+> Ópera: la imagen llevaba desde el **20 de junio** sin reconstruirse, así que
+> ninguna edición a esos 2 archivos desde esa fecha (incluidas ediciones de esta
+> misma semana) llegaba nunca al chat real del bot. Se quitó el paso de build y
+> ahora `groq_helper.py` lee ambos archivos **en vivo** (montados como volumen en
+> `docker-compose.yml`, igual que `SITE.md`/`EQUIPOS.md`). Editar
+> `TECNICO_OPERACION.md` o `SOPORTE_TECNICO.md` ya no requiere reconstruir nada —
+> un `fleet_sync.sh` normal alcanza.
 
 ---
 
@@ -24,8 +36,7 @@
 | **`PROTOCOLO_CAMBIOS_AGENTE.md`** | `/storage/shomer-agent/docs/` | Dev (este doc) | Checklist al tocar bot |
 | **`BEHAVIOR.md`** | `/storage/shomer-agent/` (+ `docs/campo/`) | LLM del bot | Cómo debe pensar/responder la IA |
 | **`TECNICO_OPERACION.md`** | idem | LLM + técnico | Lenguaje operacional simple |
-| **`MANUAL_CAMPO_AGENTE.md`** | `docs/campo/` | Técnico campo | Comandos, flujos instalación |
-| **`SOPORTE_TECNICO.md`** | `docs/campo/` | Soporte USB | Procedimientos largos |
+| **`SOPORTE_TECNICO.md`** | `docs/campo/` | LLM + soporte USB | Procedimientos largos, instalación |
 | **`.env` agente** | `/storage/shomer-agent/.env` | Runtime | Tokens, `BOT_AUTO_TASKS_CONFIG` — **único por sitio, nunca al repo** |
 | **`knowledge.db`** | `/storage/shomer-agent/data/` | Bot + panel `/gestion` | `incident_knowledge`, `auto_task_stats`, acciones técnico |
 | **`conversations.db`** | `/storage/shomer-agent/data/` | Bot chat IA | Historial chat por usuario (`core/memory.py`) — **no es un .md** |
@@ -86,7 +97,7 @@ Trabajás con **Cursor** y a veces **Claude Code** en la misma máquina o en `.2
 | 2 | Registrar en tupla comandos + `CallbackQueryHandler` si hay botones | `core/bot.py` (`main()`) |
 | 3 | Agregar a `set_my_commands` (menú ⋮) | `core/bot.py` |
 | 4 | Documentar en `/ayuda` | `core/bot.py` (`_ayuda_text`) |
-| 5 | Manuales campo | `docs/campo/SOPORTE_TECNICO.md`, `MANUAL_CAMPO_AGENTE.md` |
+| 5 | Manuales campo | `TECNICO_OPERACION.md`, `docs/campo/SOPORTE_TECNICO.md` |
 | 6 | Si es acción sensible → capa T2/T3 en `POLITICAS_AGENTE.md` | docs |
 | 7 | Deploy | `tools/fleet_sync.sh` |
 

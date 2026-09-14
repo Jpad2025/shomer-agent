@@ -12,6 +12,13 @@ services:
       - TZ=America/Bogota
     volumes:
       - ./core:/app/core        # código Python — cambios en disco sin rebuild
+      # 14 sep 2026: manual de campo en vivo -- antes se horneaba una copia
+      # fusionada en build (MANUAL_CAMPO_AGENTE.md) que quedaba desactualizada
+      # en cuanto se editaba cualquiera de estos dos, porque el deploy normal
+      # (fleet_sync.sh) nunca reconstruye la imagen. Ver groq_helper.py.
+      - ./TECNICO_OPERACION.md:/app/docs/campo/TECNICO_OPERACION.md:ro
+      - ./docs/campo/SOPORTE_TECNICO.md:/app/docs/campo/SOPORTE_TECNICO.md:ro
+      - ./BEHAVIOR.md:/app/docs/campo/BEHAVIOR.md:ro
       - ./data:/app/data        # devices.json persiste aquí
       - ./data/agent_restart_key:/app/data/agent_restart_key:ro
       - /storage/db:/storage/db:ro  # BDs Shomer (tracker, network_monitor) solo lectura

@@ -1,8 +1,21 @@
-"""Helper Groq — prompts por nivel + manual único en /app/docs/campo/MANUAL_CAMPO_AGENTE.md.
+"""Helper Groq — prompts por nivel + manual de campo leído en vivo de
+TECNICO_OPERACION.md + SOPORTE_TECNICO.md.
 
-Generado en build desde TECNICO_OPERACION + SOPORTE_TECNICO; BEHAVIOR aparte si aplica.
-Documentación developer (CLAUDE, SISTEMA): solo si AGENT_TECHNICIAN_ONLY=0 y rutas montadas en
-/app/docs/developer/*.md (ver docker-compose comentario).
+14 sep 2026: existía un "manual único" (MANUAL_CAMPO_AGENTE.md) generado por
+un paso del Dockerfile que concatenaba estos dos archivos EN BUILD TIME. El
+problema: docker-compose.yml monta ./core en vivo pero nunca montó docs/campo/,
+y el pipeline normal de deploy (fleet_sync.sh + reinicio del servicio) nunca
+reconstruye la imagen -- solo reinicia el contenedor existente. Resultado
+verificado en Ópera: la imagen corriendo llevaba desde el 20 de junio sin
+reconstruirse, así que CUALQUIER edición a TECNICO_OPERACION.md o
+SOPORTE_TECNICO.md desde esa fecha (incluidas las de esta misma sesión) nunca
+llegó al chat real del bot -- seguía respondiendo con datos de junio. Se quita
+el paso de build y se lee siempre en vivo (con el mismo cache de 30 min de
+_load_doc), igual que ya se hacía como "fallback". BEHAVIOR.md tenía el mismo
+problema, mismo arreglo.
+
+Documentación developer (CLAUDE, SISTEMA): solo si AGENT_TECHNICIAN_ONLY=0 y
+rutas montadas en /app/docs/developer/*.md (ver docker-compose comentario).
 """
 import os
 import re
@@ -22,8 +35,6 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 _CAMPO_DIR = "/app/docs/campo"
 _DEV_DIR = "/app/docs/developer"
 
-DOC_CAMPO_UNICO = os.path.join(_CAMPO_DIR, "MANUAL_CAMPO_AGENTE.md")
-# Opcionales para regenerar MANUAL_CAMPO_AGENTE en build (no lectura runtime salvo fallback)
 DOC_CAMPO_TECNICO = os.path.join(_CAMPO_DIR, "TECNICO_OPERACION.md")
 DOC_CAMPO_SOPORTE = os.path.join(_CAMPO_DIR, "SOPORTE_TECNICO.md")
 DOC_CAMPO_BEHAVIOR = os.path.join(_CAMPO_DIR, "BEHAVIOR.md")
@@ -248,8 +259,9 @@ def _collapse_duplicate_paragraphs(text: str) -> str:
     return "\n\n".join(out_b)
 
 
-def _corpus_campo_fallback() -> str:
-    """Si falta el manual unificado, concatena los dos legados."""
+def _corpus_campo() -> str:
+    """Concatena los dos manuales de campo en vivo (ver docstring del módulo:
+    ya no existe un 'manual único' generado en build)."""
     t = _load_doc(DOC_CAMPO_TECNICO).strip()
     s = _load_doc(DOC_CAMPO_SOPORTE).strip()
     if not t and not s:
@@ -258,11 +270,10 @@ def _corpus_campo_fallback() -> str:
 
 
 def manual_search_content(query: str, max_chars: int | None = None) -> str:
-    """Búsqueda sobre un solo manual de campo (operación + soporte/instalación unificados)."""
+    """Búsqueda sobre el manual de campo (operación + soporte/instalación),
+    leído en vivo de disco -- ver docstring del módulo."""
     mc = max_chars or _MANUAL_SEARCH_DEFAULT
-    corp = _load_doc(DOC_CAMPO_UNICO).strip()
-    if not corp:
-        corp = _corpus_campo_fallback()
+    corp = _corpus_campo()
 
     if not corp:
         return _CORPUS_TECNICO_MIN[:mc]
