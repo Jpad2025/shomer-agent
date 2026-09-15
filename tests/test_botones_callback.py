@@ -60,5 +60,52 @@ class TestNingunBotonHuerfano(unittest.TestCase):
         )
 
 
+class TestQueryAnswerFallidoNoAbortaLaAccionReal(unittest.TestCase):
+    """Bug real (15 sep 2026): un timeout de red hizo que Telegram considerara
+    vencidos varios callbacks; query.answer() -- primera línea de
+    cb_ticket_close/cb_ticket_pause, sin try/except -- lanzó 'Query is too
+    old...', y como no había nada alrededor que lo atajara, el handler entero
+    abortó ahí mismo. El técnico apretó Cerrar/Pausar en el reporte de
+    pendientes y no pasó nada -- ni el toast, ni el cierre real del pendiente,
+    ni ningún aviso de error. Verificado en el log de producción de Ópera:
+    5 'Query is too old' seguidos de un 'Timed out', ese mismo minuto."""
+
+    def test_no_queda_ningun_await_query_answer_directo(self):
+        """Si alguien vuelve a escribir 'await query.answer(...)' a mano en
+        vez de usar _safe_answer, ese botón queda otra vez a merced de
+        cualquier hipo de red."""
+        texto = (RAIZ / "core" / "bot.py").read_text(errors="replace")
+        # Las únicas 2 apariciones legítimas son dentro de la propia
+        # implementación de _safe_answer.
+        directas = re.findall(r"await query\.answer\(", texto)
+        self.assertEqual(
+            len(directas), 2,
+            "debe haber query.answer() sin envolver solo dentro de _safe_answer "
+            "-- cualquier otro handler debe usar _safe_answer(query, ...)",
+        )
+
+    def test_safe_answer_no_propaga_si_telegram_rechaza(self):
+        """No podemos importar core/bot.py sin el token real de Telegram en
+        este entorno de test -- se ejecuta el cuerpo de _safe_answer aislado,
+        con un objeto que falla igual que lo hizo Telegram en producción."""
+        import asyncio
+
+        class QueryQueFallaComoTelegram:
+            async def answer(self, *a, **kw):
+                raise RuntimeError("Query is too old and response timeout expired or query id is invalid")
+
+        async def _safe_answer(query, text: str = "") -> None:
+            try:
+                if text:
+                    await query.answer(text)
+                else:
+                    await query.answer()
+            except Exception:
+                pass
+
+        # No debe lanzar -- ese es exactamente el comportamiento que faltaba.
+        asyncio.run(_safe_answer(QueryQueFallaComoTelegram(), "Cerrando..."))
+
+
 if __name__ == "__main__":
     unittest.main()

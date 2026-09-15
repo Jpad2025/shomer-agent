@@ -242,6 +242,24 @@ async def _guard(update: Update) -> str | None:
     return level
 
 
+async def _safe_answer(query, text: str = "") -> None:
+    """query.answer() sin try/except tumbaba el handler entero si Telegram
+    ya consideraba el callback vencido -- verificado en vivo (15 sep 2026):
+    un timeout de red hizo que 5 clics en los botones Cerrar/Pausar de
+    pendientes fallaran con 'Query is too old...' en cb_ticket_close, que
+    empieza justo con esa llamada sin nada alrededor -- la acción real
+    (cerrar/pausar) nunca llegaba a ejecutarse y el técnico no veía nada.
+    Esto envuelve las 20 llamadas del archivo para que un fallo acá nunca
+    aborte la acción real que sigue después."""
+    try:
+        if text:
+            await query.answer(text)
+        else:
+            await query.answer()
+    except Exception as e:
+        log.debug("query.answer() falló (callback vencido/red): %s", e)
+
+
 async def _typing(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await ctx.bot.send_chat_action(
@@ -432,7 +450,7 @@ async def cmd_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
     if not level:
         return
@@ -1497,7 +1515,7 @@ async def cmd_reiniciar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_reboot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
 
     if query.data == "reboot_cancel":
@@ -1572,7 +1590,7 @@ async def cmd_guardar_conocimiento(update: Update, ctx: ContextTypes.DEFAULT_TYP
 async def cb_save_knowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Callback: guarda solución rápida o abre flujo para nota custom (save_know:TIPO:IP)."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     parts = query.data.split(":", 2)
     if len(parts) < 3:
         return
@@ -1636,7 +1654,7 @@ async def cb_save_knowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_save_task_feedback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Feedback post-TASK automática — save_task:TIPO:TASK-ID."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     parts = query.data.split(":", 2)
     if len(parts) < 3:
         return
@@ -1896,7 +1914,7 @@ async def cmd_cerebro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_ticket_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("Cerrando...")
+    await _safe_answer(query, "Cerrando...")
     if not await _guard(update):
         return
     from core import chronic_tickets
@@ -1940,7 +1958,7 @@ async def cb_ticket_pause(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     -- no un sistema de pausa aparte. 3 días por defecto; para otro tiempo,
     usar /silenciar <ip> <duración> directamente."""
     query = update.callback_query
-    await query.answer("Pausando 3 días...")
+    await _safe_answer(query, "Pausando 3 días...")
     if not await _guard(update):
         return
     from core import chronic_tickets
@@ -2230,7 +2248,7 @@ async def cmd_seguro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_seguro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
     if not level:
         return
@@ -2291,7 +2309,7 @@ def _callback_ip(data: str, action: str) -> str | None:
 
 async def cb_unblock(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
 
     if query.data == "unblock_cancel":
@@ -2337,7 +2355,7 @@ async def cb_unblock(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_block(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
 
     if query.data == "block_cancel":
@@ -2755,7 +2773,7 @@ async def cmd_usuario(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_usuario(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
     if not level:
         return
@@ -2818,7 +2836,7 @@ async def cmd_instalar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_instalar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     if query.data == "instalar_done":
         await query.edit_message_text(
             f"{fmt.SEP_WIDE}\n✅ <b>Guía de instalación finalizada.</b>\n{fmt.SEP_WIDE}\n\n"
@@ -2891,7 +2909,7 @@ async def cmd_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = await _guard(update)
     if not level:
         return
@@ -2904,7 +2922,7 @@ async def cb_mantenimiento(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_salud(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
     if not level:
         return
@@ -2919,7 +2937,7 @@ async def cb_salud(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_diag_fix(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("⏳ Reparando…")
+    await _safe_answer(query, "⏳ Reparando…")
     level = acc.get_level(update)
     if not level:
         return
@@ -2933,7 +2951,7 @@ async def cb_ver_ip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     sep 2026: que el técnico no tenga que copiar la IP a mano). No borra los
     botones de la lista -- así puede revisar varios equipos seguidos."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = acc.get_level(update)
     if not level:
         return
@@ -2949,7 +2967,7 @@ async def cb_ver_ip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_dismiss(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Quita botones tras 'Entendido' en alertas consolidadas."""
     query = update.callback_query
-    await query.answer("✅ Registrado")
+    await _safe_answer(query, "✅ Registrado")
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except Exception:
@@ -2969,7 +2987,7 @@ async def cb_ack_incident(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     level = await _guard(update)
     if not level:
-        await query.answer()
+        await _safe_answer(query)
         return
     _, kind, ip = query.data.split(":", 2)
     tecnico = update.effective_user.first_name if update.effective_user else ""
@@ -2979,7 +2997,7 @@ async def cb_ack_incident(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     info = incident_escalation.acknowledge(ip, tecnico, kind=kind)
     if info:
         dur = _fmt_duracion((info["grace_until_at"] - _time.time()) / 3600)
-        await query.answer("✅ Anotado")
+        await _safe_answer(query, "✅ Anotado")
         try:
             await query.edit_message_reply_markup(reply_markup=None)
         except Exception:
@@ -3000,7 +3018,7 @@ async def cb_ack_incident(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     else:
-        await query.answer("Ese incidente ya no está activo")
+        await _safe_answer(query, "Ese incidente ya no está activo")
 
 
 async def cmd_silenciar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -3060,7 +3078,7 @@ async def cmd_silenciar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
     level = await _guard(update)
     if not level:
         return

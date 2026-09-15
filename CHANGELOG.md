@@ -4,6 +4,24 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.46.0 — 2026-09-15 — Botones Cerrar/Pausar de pendientes que no hacían nada
+
+Juan Pablo reportó: aprieta "Cerrar" o "Pausar" en el reporte de pendientes
+abiertos y no pasa nada. Verificado en el log real: a las 16:20 un timeout de
+red hizo que Telegram considerara vencidos varios callbacks -- `query.answer()`
+(primera línea de `cb_ticket_close`/`cb_ticket_pause`, sin nada alrededor)
+lanzó "Query is too old...", y sin try/except el handler entero abortaba ahí
+mismo. Ni el toast, ni el cierre/pausa real, ni ningún aviso de error.
+
+El mismo patrón (`await query.answer(...)` suelto) se repetía en 20 lugares
+del archivo, no solo en estos dos botones -- cualquiera podía fallar igual
+ante el mismo tipo de hipo de red. Se agregó `_safe_answer()` y se
+reemplazaron las 20 llamadas: si Telegram rechaza la respuesta, la acción
+real de cada botón sigue ejecutándose igual.
+
+2 pruebas nuevas en `test_botones_callback.py` (mismo archivo que ya cubría
+el bug de botones huérfanos del 8 sep). 213 pruebas pasan en total.
+
 ## 1.45.0 — 2026-09-14 — Recordatorio de pendientes: 3 → 2 veces al día
 
 `chronic_tickets_reminder` avisaba a las 10am, 3pm y 8pm. Juan Pablo pidió
