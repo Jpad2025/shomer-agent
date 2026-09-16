@@ -310,12 +310,36 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "find_infra_device",
+            "description": (
+                "Busca un equipo Infra por nombre o ubicación cuando lo mencionan por texto "
+                "('impresora de recepción', 'cámara del lobby', 'switch piso 3') en vez de por IP. "
+                "USAR SIEMPRE ESTA TOOL PRIMERO para resolver la IP real -- nunca adivinar cuál "
+                "de varios equipos similares (ej. 4 impresoras distintas) es el que preguntan. "
+                "Devuelve los equipos que coinciden con su IP real; si da más de uno, preguntar "
+                "cuál antes de reportar el estado de cualquiera."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Texto a buscar: nombre, ubicación o parte de ambos (ej. 'recepcion', 'bixolon', 'piso 3')",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_infra_device",
             "description": (
-                "Detalle de UN equipo Infra por IP: cámara, DVR, impresora, switch, servidor. "
+                "Detalle de UN equipo Infra por IP EXACTA: cámara, DVR, impresora, switch, servidor. "
                 "Incluye ping, puerto TCP, tóner/papel, puertos SNMP caídos y ubicación. "
-                "Usar cuando preguntan por un equipo concreto: '¿está la cámara del lobby?', "
-                "'estado del DVR', 'tóner impresora caja 1'."
+                "Si no tenés la IP exacta porque lo mencionaron por nombre/ubicación, usar primero "
+                "find_infra_device -- no adivinar la IP de la lista completa."
             ),
             "parameters": {
                 "type": "object",
@@ -774,6 +798,25 @@ def execute(name: str, args: dict) -> Any:
                         "snmp_ok":    d.get("snmp_ok"),
                     }
                     for d in devices
+                ],
+            }
+
+        elif name == "find_infra_device":
+            from core import shomer_api
+            query = (args.get("query") or "").strip()
+            if not query:
+                return {"error": "query requerida"}
+            matches = shomer_api.find_infra_devices_by_query(query)
+            return {
+                "count": len(matches),
+                "matches": [
+                    {
+                        "ip": d.get("ip"),
+                        "name": d.get("name"),
+                        "location": d.get("location"),
+                        "status": d.get("status"),
+                    }
+                    for d in matches[:10]
                 ],
             }
 

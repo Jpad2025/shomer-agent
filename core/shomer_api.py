@@ -929,6 +929,46 @@ def find_infra_device_by_ip(ip: str) -> Optional[dict]:
     return None
 
 
+def _normalizar_texto(s: str) -> str:
+    """Sin acentos y en minúsculas -- 'recepcion' debe encontrar 'Recepción'."""
+    import unicodedata
+    return unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+
+
+_PALABRAS_VACIAS = frozenset({
+    "de", "del", "la", "el", "los", "las", "que", "con", "sin", "en", "un", "una",
+    "esta", "esta", "como", "pasa", "hay", "tiene", "impresora", "equipo",
+})
+
+
+def find_infra_devices_by_query(query: str) -> list:
+    """Busca equipos por nombre o ubicación (16 sep 2026: no existía ninguna
+    forma de resolver 'impresora de recepción' a una IP -- todas las tools
+    de detalle piden la IP de entrada, así que el LLM tenía que adivinar
+    cuál de la lista completa era la correcta. Con 4 impresoras reales
+    (recepción, cocina, 2 Bixolon) adivinó mal: preguntaron por la de
+    recepción y contestó con el estado de la Bixolon .243. Esta función es
+    la búsqueda real que faltaba, insensible a acentos y mayúsculas.
+
+    Coincide por palabra, no por la frase completa: "impresora de recepcion"
+    no aparece literal en "IMP Recepción" (está abreviado a IMP), así que se
+    parte la consulta en palabras significativas y alcanza con que UNA
+    coincida -- "recepcion" sola ya es señal suficiente para no confundir
+    con la Bixolon."""
+    q = _normalizar_texto(query)
+    if not q:
+        return []
+    palabras = [p for p in q.split() if len(p) >= 3 and p not in _PALABRAS_VACIAS]
+    if not palabras:
+        palabras = q.split()
+    out = []
+    for d in get_infra_devices():
+        campo = _normalizar_texto(f"{d.get('name','')} {d.get('location','')}")
+        if any(p in campo for p in palabras):
+            out.append(d)
+    return out
+
+
 def edit_infra_device(device_id: int, *, name: str = None,
                        device_type: str = None, location: str = None) -> tuple[bool, Any]:
     """Editar nombre/tipo/ubicación de un equipo Inframonitor ya existente

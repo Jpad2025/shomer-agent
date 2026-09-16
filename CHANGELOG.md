@@ -4,6 +4,28 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.48.0 — 2026-09-16 — El chat confundía equipos con nombres parecidos
+
+Juan Pablo preguntó en el chat "que pasa con la impresora de recepcion"
+(192.168.0.240, IMP Recepción WF-M5899, online) y el bot respondió con el
+estado de la Impresora POS Bixolon .243 (192.168.0.243, esa sí offline) --
+un equipo completamente distinto. El dato en sí era real, solo que del
+equipo equivocado.
+
+Causa: ninguna herramienta del chat permitía buscar un equipo por nombre o
+ubicación -- `get_infra_device`/`get_printer_status` piden la IP exacta de
+entrada, así que el modelo tenía que adivinar cuál de la lista completa
+(4 impresoras: recepción, cocina, 2 Bixolon) era la correcta.
+
+Se agrega `find_infra_device` (nueva tool) + `find_infra_devices_by_query`
+en `shomer_api.py`: busca por palabra (no por frase exacta, ya que "IMP" no
+contiene "impresora"), insensible a acentos y mayúsculas -- "recepcion" sin
+tilde encuentra "Recepción". Los tools existentes ahora dicen explícitamente
+que hay que resolver la IP con esta tool primero, no adivinar.
+
+5 pruebas nuevas (`test_find_infra_device.py`), incluida la reproducción
+exacta del caso real. 221 pruebas pasan en total.
+
 ## 1.47.0 — 2026-09-15 — El chat decía "internet caído" con el WAN sano
 
 Juan Pablo preguntó en el chat de Ópera "cómo está el internet hoy" con el
