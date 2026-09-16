@@ -286,9 +286,11 @@ TOOLS = [
         "function": {
             "name": "get_wan_status",
             "description": (
-                "Estado de la conexión a internet del servidor Shomer: "
-                "si hay internet, latencia, si ha habido cortes recientes. "
-                "Usar cuando reportan problemas de internet o cuando el Guardian dice 'no-internet'."
+                "Estado real del internet del servidor Shomer (quorum WAN): "
+                "'internet' es true/false, 'estado_wan' es el valor crudo "
+                "('ok'/'down'/'unknown'), 'segundos_caido' cuánto lleva caído "
+                "si aplica. Usar cuando reportan problemas de internet o "
+                "cuando Guardian dice 'no-internet'."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -733,12 +735,21 @@ def execute(name: str, args: dict) -> Any:
             }
 
         elif name == "get_wan_status":
+            # 15 sep 2026: este handler leía wan.get("internet", False) --
+            # esa clave NUNCA existió en la respuesta real de /api/wan-status
+            # (que devuelve "status": "ok"/"down", no "internet"). Resultado:
+            # SIEMPRE caía al default False, sin importar el estado real --
+            # verificado en producción: le dijo a Juan Pablo "internet caído"
+            # con el WAN genuinamente sano. "latency_ms"/"provider" tampoco
+            # existen en la API; se quitan en vez de seguir prometiendo un
+            # dato que nunca estuvo.
             from core import shomer_api
             wan = shomer_api.get_wan_status() or {}
+            estado = (wan.get("status") or "unknown").lower()
             return {
-                "internet": wan.get("internet", False),
-                "latency_ms": wan.get("latency_ms"),
-                "provider": wan.get("provider"),
+                "internet": estado == "ok",
+                "estado_wan": estado,
+                "segundos_caido": wan.get("fail_elapsed_sec"),
                 "raw": wan,
             }
 

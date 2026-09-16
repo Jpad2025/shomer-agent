@@ -4,6 +4,28 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.47.0 — 2026-09-15 — El chat decía "internet caído" con el WAN sano
+
+Juan Pablo preguntó en el chat de Ópera "cómo está el internet hoy" con el
+WAN genuinamente sano (verificado en vivo: `/api/wan-status` → `status: ok`,
+sin caídas en la ventana) y el bot respondió "el servicio de internet está
+caído". No era un problema de entrega de mensaje -- la respuesta se generó y
+se envió bien, pero era falsa.
+
+Causa real: `get_wan_status` en `core/tools.py` leía `wan.get("internet",
+False)` -- esa clave **nunca existió** en la respuesta real de
+`/api/wan-status` (que devuelve `status: "ok"/"down"`, no `internet`). El
+`.get()` con default caía siempre en `False`, sin importar el estado real --
+este bug llevaba ahí desde que se escribió la tool, cualquier pregunta sobre
+internet por chat libre pudo haber recibido esta misma respuesta falsa.
+
+Arreglado: ahora lee el campo real (`status`) y lo traduce correctamente a
+`internet: true/false`, además de reportar cuántos segundos lleva caído si
+aplica. Se quitaron `latency_ms`/`provider`, que la tool prometía pero la
+API nunca entregó.
+
+3 pruebas nuevas (`test_tools_wan_status.py`). 216 pruebas pasan en total.
+
 ## 1.46.0 — 2026-09-15 — Botones Cerrar/Pausar de pendientes que no hacían nada
 
 Juan Pablo reportó: aprieta "Cerrar" o "Pausar" en el reporte de pendientes
