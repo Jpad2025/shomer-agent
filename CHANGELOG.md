@@ -4,6 +4,46 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.51.0 — 2026-09-16 — Pruebas reales de chat libre: cerebro conectado + 2 rondas de tools
+
+Se probaron ~20 preguntas reales contra el chat (llamadas reales a OpenAI,
+no simuladas) para encontrar lo que quedara. Aparecieron 4 hallazgos más:
+
+- **El chat libre nunca podía ver al cerebro.** Solo `/cerebro` llamaba a
+  `brain.list_recent()` -- si alguien preguntaba en texto libre "por qué
+  cayeron varios equipos juntos", el modelo no tenía cómo consultar lo que
+  el cerebro ya correlacionó. Se agrega `get_cerebro_findings`. Verificado
+  en vivo: la misma pregunta ahora responde con la causa real (switch
+  troncal compartido entre los dos Ingenico) en vez de reinventar el
+  análisis desde cero.
+- **El modelo podía decir "procedo a reiniciar/bloquear X" sin haber
+  ejecutado nada.** Un técnico pidió "reinicia el AP de recepción" -- no
+  existe ninguna tool de reinicio en el chat, y aun así contestó "procedo a
+  reiniciar". Verificado que el AP real no se tocó (`last_reboot: None`),
+  pero el aviso engañoso es igual de grave: alguien pudo creer que sí pasó.
+  Se agregó instrucción explícita en el prompt: nunca fingir una acción sin
+  tool real detrás, y derivar al comando correcto (`/reboot`, `/bloquear`,
+  `/desbloquear`, `/silenciar` -- antes confundía bloquear con silenciar,
+  son cosas distintas).
+- **El mismo patrón con consultas, no solo acciones**: "¿cuánto tráfico
+  tiene el switch principal?" contestaba "procedo a consultar..." y ahí
+  terminaba, sin el dato. Causa real encontrada en `openai_helper.py`: el
+  ciclo de function-calling solo permitía **una** ronda de tools y forzaba
+  texto final, aunque el propio prompt dice "nunca encadenes más de 2" --
+  el código solo dejaba hacer 1. Esa pregunta necesita 2 pasos reales
+  (encontrar el switch por nombre, después consultar su SNMP). Ahora el
+  ciclo permite hasta 2 rondas de verdad. Verificado en vivo: la misma
+  pregunta ahora trae tráfico y errores de puerto reales por switch.
+- **Dos tools con datos reales que el modelo no sabía cuándo usar**:
+  `get_system_status` sí tiene `low_toner_count` pero su descripción nunca
+  mencionaba "tóner" (el modelo decía "no tengo esa información" con el
+  dato ahí mismo); `get_network_audit_findings` tiene `ultimo_escaneo` pero
+  tampoco se mencionaba, ni `get_network_interfaces` dejaba claro que ahí
+  vive si el espejo de Hunter está activo. Se corrigieron las 3
+  descripciones con las frases exactas que fallaron.
+
+7 pruebas nuevas. 238 pruebas pasan en total.
+
 ## 1.50.0 — 2026-09-16 — Auditoría completa de las 29 herramientas del chat
 
 Después de encontrar 3 errores reales en un mismo día (internet, impresoras,

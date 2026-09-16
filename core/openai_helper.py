@@ -155,7 +155,23 @@ def chat(history: list[dict], level: str = "tecnico", user_id: int | str = "") -
     _record_usage(resp, user_id, endpoint="chat")
     choice = resp.choices[0]
 
-    if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+    # 16 sep 2026: antes esto ejecutaba UNA sola ronda de tools y forzaba
+    # texto final -- aunque el propio prompt dice "nunca encadenes más de 2
+    # tools", el código solo permitía 1. Verificado en producción: "¿cuánto
+    # tráfico tiene el switch principal?" necesita 2 pasos reales (encontrar
+    # el switch por nombre, después consultar su SNMP) y el modelo quedaba
+    # a mitad de camino, sin poder dar el segundo paso -- contestaba "voy a
+    # consultarlo" sin datos. Ahora permite hasta 2 rondas de verdad.
+    MAX_TOOL_ROUNDS = 2
+    round_num = 0
+    all_tool_names: list[str] = []
+
+    while (
+        choice.finish_reason == "tool_calls"
+        and choice.message.tool_calls
+        and round_num < MAX_TOOL_ROUNDS
+    ):
+        round_num += 1
         msg = choice.message
         messages.append({
             "role": "assistant",
@@ -172,31 +188,30 @@ def chat(history: list[dict], level: str = "tecnico", user_id: int | str = "") -
                 for tc in msg.tool_calls
             ],
         })
-        tool_names = []
         for tc in msg.tool_calls:
             try:
                 args = json.loads(tc.function.arguments or "{}") or {}
             except Exception:
                 args = {}
-            tool_names.append(tc.function.name)
+            all_tool_names.append(tc.function.name)
             result = _tools.execute(tc.function.name, args)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
                 "content": json.dumps(result, ensure_ascii=False),
             })
-        t2 = time.time()
+        use_tools_next = round_num < MAX_TOOL_ROUNDS
         try:
-            resp2 = _create(messages, use_tools=False)
-            t3 = time.time()
-            log.debug("PERF llm1=%.1fs tools=%.1fs llm2=%.1fs total=%.1fs tools_called=%s",
-                      t1-t0, t2-t1, t3-t2, t3-t0, tool_names)
-            _record_usage(resp2, user_id, endpoint="chat_tools")
-            out = (resp2.choices[0].message.content or "").strip()
-            return out or "Obtuve datos pero no pude redactar. Usa /salud o /estado."
+            resp = _create(messages, use_tools=use_tools_next)
         except Exception as e:
-            log.warning("OpenAI segunda llamada error: %s", e)
+            log.warning("OpenAI llamada de seguimiento (ronda %d) error: %s", round_num, e)
             return None
+        _record_usage(resp, user_id, endpoint="chat_tools")
+        choice = resp.choices[0]
 
+    t_end = time.time()
+    log.debug("PERF total=%.1fs rondas_tools=%d tools_called=%s", t_end - t0, round_num, all_tool_names)
     out = (choice.message.content or "").strip()
+    if not out and round_num > 0:
+        return "Obtuve datos pero no pude redactar. Usa /salud o /estado."
     return out or None

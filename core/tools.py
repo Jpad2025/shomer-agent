@@ -17,8 +17,11 @@ TOOLS = [
             "name": "get_system_status",
             "description": (
                 "Estado actual del sistema Shomer: nodos Guardian (online/offline/no-internet), "
+                "Infra (equipos caídos, low_toner_count -- impresoras con tóner bajo), "
                 "métricas del servidor (CPU, RAM, temperatura) e IPs bloqueadas. "
-                "Usar cuando preguntan por el estado general de la red o si hay problemas."
+                "Usar cuando preguntan por el estado general de la red, si hay problemas, "
+                "o si alguna impresora tiene tóner bajo -- el snapshot inyectado NO trae tóner, "
+                "hay que llamar esta tool."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -266,8 +269,10 @@ TOOLS = [
             "name": "get_network_interfaces",
             "description": (
                 "Estado de las interfaces de red del servidor: cuáles están UP/DOWN, "
-                "si la NIC espejo (Hunter) está activa. "
-                "Usar cuando hay problemas de red o cuando preguntan por el estado de las NICs."
+                "si la NIC espejo (Hunter/Suricata) está activa (campo mirror_up). "
+                "Usar SIEMPRE que pregunten '¿está funcionando el espejo?', "
+                "'¿el espejo de Hunter está activo?', o algo sobre las NICs -- "
+                "el snapshot general NO trae este dato, hay que llamar esta tool."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -441,8 +446,10 @@ TOOLS = [
                 "Hallazgos de auditoría de seguridad de red: puertos y servicios riesgosos detectados "
                 "en los activos del Tracker (Telnet, FTP, RDP, bases de datos expuestas, SNMP, etc.). "
                 "Cada hallazgo tiene severidad (critico/alto/medio/bajo) y estado (pendiente/en_revision/terminado). "
+                "El resultado también trae 'ultimo_escaneo' (fecha, estado, cantidad de hallazgos). "
                 "Usar cuando preguntan si hay vulnerabilidades, riesgos de seguridad, puertos abiertos peligrosos, "
-                "o el estado de la auditoría de red."
+                "el estado de la auditoría de red, O CUÁNDO FUE EL ÚLTIMO ESCANEO/ANÁLISIS DE RED -- "
+                "no decir 'no tengo esa información' sin llamar esta tool primero."
             ),
             "parameters": {
                 "type": "object",
@@ -498,6 +505,30 @@ TOOLS = [
                         "type": "string",
                         "description": "Filtrar por TASK-001…010 (opcional)",
                     },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_cerebro_findings",
+            "description": (
+                "16 sep 2026: el chat libre no tenía forma de ver esto -- solo el comando "
+                "/cerebro podía. Últimos hallazgos correlacionados del cerebro (causa común "
+                "entre varios equipos, con recomendación respaldada). Usar SIEMPRE que "
+                "pregunten por qué varios equipos fallaron juntos, o algo tipo 'qué está "
+                "pasando en la red' -- el cerebro ya cruzó Guardian+Infra+Hunter+Protector "
+                "y puede tener la causa que get_infra_devices por sí solo no ve."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Cuántos hallazgos recientes traer (default 5)",
+                    }
                 },
                 "required": [],
             },
@@ -1078,6 +1109,31 @@ def execute(name: str, args: dict) -> Any:
                 "incidentes": items,
                 "total":      len(items),
                 "mensaje":    f"Se encontraron {len(items)} incidente(s) previo(s)." + (f" Filtrado por IP {ip}." if ip else ""),
+            }
+
+        elif name == "get_cerebro_findings":
+            from core import brain
+            limit = min(int(args.get("limit", 5)), 15)
+            recientes = brain.list_recent(limit=limit)
+            if not recientes:
+                return {
+                    "total": 0,
+                    "mensaje": "El cerebro todavía no tiene hallazgos correlacionados registrados.",
+                }
+            return {
+                "total": len(recientes),
+                "hallazgos": [
+                    {
+                        "equipos": c.get("entities"),
+                        "sistemas": c.get("sources"),
+                        "causa_probable": c.get("root_cause"),
+                        "recomendacion": c.get("recommendation"),
+                        "urgencia": c.get("urgency"),
+                        "cuando": (c.get("ts") or "")[:16],
+                        "se_avisó_por_telegram": bool(c.get("sent_telegram")),
+                    }
+                    for c in recientes
+                ],
             }
 
         elif name == "consultar_memoria":
