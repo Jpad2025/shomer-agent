@@ -739,15 +739,23 @@ def execute(name: str, args: dict) -> Any:
             return shomer_api.get_server_logs(service, lines)
 
         elif name == "get_network_interfaces":
+            # 16 sep 2026: caía a "enp4s0" como default cuando no había
+            # base.mirror_interface configurado -- ese nombre es específico
+            # de una máquina, no un valor genérico válido para cualquier
+            # sitio (norma B.1: nunca hardcodear topología de cliente).
+            # Verificado en Ópera: el default no coincidía con ninguna
+            # interfaz real, así que "mirror_up" daba False con Suricata
+            # funcionando perfectamente en enx9c69d33bc55f -- exactamente
+            # lo contrario de la realidad.
             from core import shomer_api
             ifaces = shomer_api.get_interfaces()
-            mirror_iface = shomer_api.get_config("base.mirror_interface") or "enp4s0"
+            mirror_iface = shomer_api.get_config("base.mirror_interface")
             return {
                 "interfaces": ifaces,
-                "mirror_nic": mirror_iface,
-                "mirror_up": any(
-                    i["name"] == mirror_iface and i["state"] == "UP"
-                    for i in ifaces
+                "mirror_nic": mirror_iface or "sin configurar",
+                "mirror_up": (
+                    any(i["name"] == mirror_iface and i["state"] == "UP" for i in ifaces)
+                    if mirror_iface else None
                 ),
             }
 

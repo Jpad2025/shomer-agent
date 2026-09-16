@@ -392,15 +392,25 @@ def get_device_profile(identificador: str) -> dict:
 
 
 def get_recent_events(limit: int = 10) -> dict:
-    """Últimos eventos del log de Guardian (event_log)."""
+    """Últimos eventos reales (Guardian + Inframonitor).
+
+    16 sep 2026: apuntaba a "event_log" con columnas "node_ip"/"details" que
+    nunca existieron (las reales de esa tabla son ip_address/description) --
+    daba un error de SQL crudo al chat. Peor: "event_log" está vacía desde
+    siempre (0 filas) -- ya no es donde se guardan los eventos, quedó
+    reemplazada por "status_events" (la misma fuente canónica que usa
+    memoria_central.py), que sí tiene historial real."""
     DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
     try:
         con = _sq.connect(DB, timeout=5, uri=True)
         con.row_factory = _sq.Row
         try:
             rows = con.execute(
-                "SELECT id, event_type, node_ip, details, created_at "
-                "FROM event_log ORDER BY created_at DESC LIMIT ?",
+                "SELECT id, source, ip, name, event_type_calc AS event_type, "
+                "reason AS details, ts AS created_at FROM ("
+                "  SELECT *, prev_status || '→' || status AS event_type_calc "
+                "  FROM status_events"
+                ") ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             return {

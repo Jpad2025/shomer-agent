@@ -31,10 +31,18 @@ def build_local_digest(snapshot: dict, question: str = "") -> str:
     failed_backups = snapshot.get("failed_backups", [])
     maintenance    = snapshot.get("maintenance", False)
 
-    wan_ok = (not wan) or wan.lower() in ("online", "up", "ok")
+    # 16 sep 2026: "sin dato" se trataba como "todo bien" -- justo en el
+    # único momento en que este mensaje se usa (ambos proveedores de IA
+    # caídos a la vez), una caída real de internet del hotel es la
+    # explicación más probable, así que "no sé" nunca debería sonar a "ok".
+    wan_ok = wan is not None and wan.lower() in ("online", "up", "ok")
+    wan_desconocido = wan is None
 
     bullets: list[str] = []
-    bullets.append(f"WAN: {'`ok`' if wan_ok else '`caída`'}")
+    if wan_desconocido:
+        bullets.append("WAN: `desconocido` (sin dato)")
+    else:
+        bullets.append(f"WAN: {'`ok`' if wan_ok else '`caída`'}")
     if offline:
         nodes_str = " · ".join(f"`{n}`" for n in offline)
         bullets.append(f"Nodos offline ({len(offline)}): {nodes_str}")
@@ -51,7 +59,9 @@ def build_local_digest(snapshot: dict, question: str = "") -> str:
         bullets.append("⚠️ Modo mantenimiento ACTIVO")
 
     if any(k in q for k in ("servici", "internet", "caíd", "caid", "conexi", "red", "wan")):
-        if not wan_ok:
+        if wan_desconocido:
+            head = f"DIAGNÓSTICO: no hay dato confiable del WAN en este modo, {len(offline)} nodo(s) offline."
+        elif not wan_ok:
             head = f"DIAGNÓSTICO: WAN caída, {len(offline)} nodo(s) offline."
         elif offline:
             head = f"DIAGNÓSTICO: WAN ok pero {len(offline)} nodo(s) offline."

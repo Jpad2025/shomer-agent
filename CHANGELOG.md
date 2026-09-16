@@ -4,6 +4,42 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.50.0 — 2026-09-16 — Auditoría completa de las 29 herramientas del chat
+
+Después de encontrar 3 errores reales en un mismo día (internet, impresoras,
+ataques), se revisaron una por una las 29 herramientas del chat libre contra
+la API real, en vez de esperar a que el técnico tropezara con la siguiente.
+Aparecieron 3 más, los tres del mismo tipo: una clave o tabla que sonaba
+bien pero no era la real.
+
+- **`_local_context_struct()` (modo local de emergencia):** leía
+  `node_status:*` y `wan_status` en Redis -- ninguna de las dos existió
+  nunca. Las reales: `status:<ip>` (Guardian), `infra:<ip>:status`
+  (Inframonitor), `shomer:wan_status`. Resultado real en producción: el
+  único mensaje que ve el técnico cuando **ambos** proveedores de IA fallan
+  a la vez decía "Nodos online: 0" y "WAN: ok" siempre, sin importar la
+  realidad -- justo el peor momento para que ese dato esté mal, porque una
+  caída real de internet del hotel es la explicación más probable de por
+  qué cayeron los dos proveedores juntos. Ahora, sin dato, dice
+  "desconocido" en vez de asumir que todo está bien.
+- **`get_network_interfaces`:** caía a `"enp4s0"` como interfaz espejo por
+  defecto cuando el sitio no tenía `base.mirror_interface` configurado --
+  ese nombre es de una máquina específica, nunca debería ser un default
+  genérico (viola la norma de no hardcodear topología de cliente).
+  Verificado en Ópera: la interfaz real es `enx9c69d33bc55f` (activa,
+  confirmada en el propio `suricata.yaml`), pero el default no coincidía
+  con ninguna interfaz real -- decía "mirror caído" con Suricata funcionando
+  perfectamente. Se configuró el valor real en Ópera y se quitó el default
+  inventado del código.
+- **`get_recent_events`:** apuntaba a la tabla `event_log` con columnas
+  `node_ip`/`details` que nunca existieron (las reales de esa tabla son
+  `ip_address`/`description`) -- daba un error de SQL crudo al chat. Peor:
+  esa tabla está vacía desde siempre, reemplazada hace tiempo por
+  `status_events` (la misma fuente que ya usa `memoria_central.py`). Ahora
+  lee de ahí.
+
+10 pruebas nuevas entre los tres arreglos. 232 pruebas pasan en total.
+
 ## 1.49.0 — 2026-09-16 — "Cuántos ataques ha detenido Shomer" no tenía respuesta real
 
 Revisando qué pasaría con esa pregunta, encontré que el chat solo tenía

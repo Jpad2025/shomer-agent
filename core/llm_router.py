@@ -42,10 +42,22 @@ def _local_context_struct() -> dict:
     try:
         import redis as _redis
         r = _redis.Redis(host="127.0.0.1", port=6379, decode_responses=True, socket_timeout=1)
-        keys = r.keys("node_status:*")
-        d["online"]  = [k.split(":")[-1] for k in keys if r.get(k) == "online"]
-        d["offline"] = [k.split(":")[-1] for k in keys if r.get(k) in ("offline", "no-internet")]
-        d["wan"] = r.get("wan_status")
+        # 16 sep 2026: "node_status:*" y "wan_status" NUNCA existieron en Redis
+        # -- las claves reales son "status:<ip>" (Guardian), "infra:<ip>:status"
+        # (Inframonitor) y "shomer:wan_status" (verificado en vivo). Resultado:
+        # el modo local (el único momento en que esto se usa -- ambos
+        # proveedores de IA caídos a la vez) siempre reportaba "0 nodos
+        # online" y, peor, "WAN: ok" SIEMPRE sin importar la realidad, porque
+        # wan=None se trataba como "todo bien" -- justo en el momento en que
+        # una caída real de internet del hotel es la explicación más probable
+        # de por qué ambos proveedores cloud fallaron a la vez.
+        guardian_keys = r.keys("status:*")
+        d["online"]  = [k.split(":", 1)[1] for k in guardian_keys if r.get(k) == "online"]
+        d["offline"] = [k.split(":", 1)[1] for k in guardian_keys if r.get(k) in ("offline", "no-internet")]
+        infra_keys = r.keys("infra:*:status")
+        d["online"]  += [k.split(":")[1] for k in infra_keys if r.get(k) == "online"]
+        d["offline"] += [k.split(":")[1] for k in infra_keys if r.get(k) == "offline"]
+        d["wan"] = r.get("shomer:wan_status")
         d["maintenance"] = r.get("shomer_maintenance") == "1"
     except Exception:
         pass
