@@ -133,12 +133,19 @@ def get_wan_hotel():
     return _get("/api/wan-hotel") or {}
 
 def get_hunter_alerts(limit: int = 10):
-    """Combina stats + historial reciente de Hunter (no hay endpoint /alerts dedicado)."""
+    """Combina stats + historial reciente de Hunter (no hay endpoint /alerts dedicado).
+
+    16 sep 2026: "cuántos ataques ha detenido Shomer" no lo responde ni
+    alerts_today (solo hoy) ni active_blocks (solo lo que sigue bloqueado
+    ahora, excluye lo ya liberado solo) -- se agrega el total histórico real
+    (total_blocks_historico), que sí cuenta cada bloqueo que hubo alguna vez.
+    """
     stats = _get("/remedies/stats") or {}
     history = _get(f"/remedies/history?limit={limit}") or {}
     return {
         "alerts_today": stats.get("alerts_today", 0),
         "active_blocks": stats.get("active_blocks", 0),
+        "total_blocks_historico": stats.get("total_blocks_historico", 0),
         "pipeline_ok": stats.get("pipeline_ok"),
         "recent_blocks": (history.get("history") or [])[:limit],
     }

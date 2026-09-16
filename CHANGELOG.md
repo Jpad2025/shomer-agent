@@ -4,6 +4,20 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.49.0 — 2026-09-16 — "Cuántos ataques ha detenido Shomer" no tenía respuesta real
+
+Revisando qué pasaría con esa pregunta, encontré que el chat solo tenía
+`alerts_today` (solo hoy) y `active_blocks` (solo lo que sigue bloqueado
+ahora, excluye lo que se bloqueó y ya se liberó solo) -- ninguno responde
+un total histórico real. Verificado en Ópera: 156 bloqueos de siempre
+contra 118 activos hoy.
+
+Se agregó `total_blocks_historico` en `/remedies/stats` (repo núcleo) y se
+pasa a través de `get_hunter_alerts()` hasta la tool del chat, con la
+descripción actualizada para que el modelo no confunda los 3 números.
+
+1 prueba nueva. 222 pruebas pasan en total.
+
 ## 1.48.0 — 2026-09-16 — El chat confundía equipos con nombres parecidos
 
 Juan Pablo preguntó en el chat "que pasa con la impresora de recepcion"

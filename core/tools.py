@@ -60,9 +60,12 @@ TOOLS = [
         "function": {
             "name": "get_hunter_alerts",
             "description": (
-                "Últimas alertas de seguridad detectadas por Suricata/Hunter: "
-                "firma del ataque, IP de origen, severidad. "
-                "Usar cuando preguntan por alertas, ataques o amenazas."
+                "Alertas y contadores de seguridad de Suricata/Hunter. Trae 3 totales "
+                "distintos, no confundirlos: 'alerts_today' es SOLO de hoy, "
+                "'active_blocks' es SOLO lo que sigue bloqueado ahora mismo (no cuenta lo "
+                "que se bloqueó y ya se liberó solo), 'total_blocks_historico' es el total "
+                "real desde siempre -- usar ESTE cuando preguntan 'cuántos ataques ha "
+                "detenido Shomer' o algo histórico/acumulado, no active_blocks."
             ),
             "parameters": {
                 "type": "object",
