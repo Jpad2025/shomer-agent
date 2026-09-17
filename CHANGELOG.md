@@ -4,6 +4,27 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.54.0 — 2026-09-16 — El chat nunca veía el internet REAL de los huéspedes
+
+`get_wan_hotel()`/`get_wan_hotel_historial()` existen hace tiempo en
+`shomer_api.py` -- miden el internet real del hotel desde el gateway/router,
+algo completamente distinto de `get_wan_status` (que solo mide si el
+SERVIDOR Shomer navega, y puede estar sano mientras el hotel real está
+caído para los huéspedes, o al revés). Nunca se habían expuesto al chat --
+justo la pregunta que causó un bug real esta misma sesión ("cómo está el
+internet hoy" contestando con el dato equivocado). Se agrega
+`get_internet_huespedes`: estado actual (sesiones activas, pérdida de
+paquetes) + resumen de historial, dejando explícito que "0 lecturas" es
+"nadie midió", no "todo bien" (mismo criterio que ya usa el endpoint).
+
+Se verificaron también en vivo, contra datos reales, 3 preguntas de
+cobertura completa del stack (Hunter: "cuántos ataques ha detenido" → 157,
+coincide con `total_blocks_historico`; Tracker: "cuántos equipos tiene
+registrados" → 69, coincide con el inventario real; Protector: estado de
+backups) -- las 3 correctas, sin cambios de código necesarios ahí.
+
+3 pruebas nuevas. 254 pruebas pasan en total.
+
 ## 1.53.0 — 2026-09-16 — Investigación de fallas reales de Ópera: 2 tools nuevas + 2 bugs de identidad de equipo
 
 Se investigaron las fallas reales de Ópera (chronic_tickets, top ofensores

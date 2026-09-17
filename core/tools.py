@@ -294,13 +294,41 @@ TOOLS = [
         "function": {
             "name": "get_wan_status",
             "description": (
-                "Estado real del internet del servidor Shomer (quorum WAN): "
+                "Estado real del internet del SERVIDOR Shomer (quorum WAN, no el del hotel): "
                 "'internet' es true/false, 'estado_wan' es el valor crudo "
                 "('ok'/'down'/'unknown'), 'segundos_caido' cuánto lleva caído "
-                "si aplica. Usar cuando reportan problemas de internet o "
-                "cuando Guardian dice 'no-internet'."
+                "si aplica. Usar cuando preguntan si el servidor mismo perdió internet, o "
+                "cuando Guardian dice 'no-internet'. Que el servidor navegue NO prueba que el "
+                "hotel navegue (huéspedes salen por otra VLAN/hotspot) -- para 'cómo está el "
+                "internet de los huéspedes/del hotel hoy' usar get_internet_huespedes, no esta."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_internet_huespedes",
+            "description": (
+                "16 sep 2026: nunca se exponía al chat -- mide el internet REAL de los "
+                "huéspedes, desde el gateway/router del hotel (no desde el servidor Shomer). "
+                "Usar SIEMPRE que pregunten 'cómo está el internet hoy/de los huéspedes/del "
+                "hotel', no get_wan_status para eso -- esa es la conexión del servidor, una cosa "
+                "distinta (el servidor puede navegar bien mientras el hotel real está caído, y "
+                "viceversa). Trae estado actual (sesiones activas, pérdida de paquetes) y un "
+                "resumen de las últimas horas -- 'lecturas: 0' en el historial significa que "
+                "nadie midió en ese período, no que todo estuviera bien; decirlo así, no asumir OK."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "horas": {
+                        "type": "integer",
+                        "description": "Ventana de horas hacia atrás para el historial (default 24)",
+                    },
+                },
+                "required": [],
+            },
         },
     },
     {
@@ -860,6 +888,32 @@ def execute(name: str, args: dict) -> Any:
                 "estado_wan": estado,
                 "segundos_caido": wan.get("fail_elapsed_sec"),
                 "raw": wan,
+            }
+
+        elif name == "get_internet_huespedes":
+            from core import shomer_api
+            horas = int(args.get("horas", 24))
+            actual = shomer_api.get_wan_hotel() or {}
+            historial = shomer_api.get_wan_hotel_historial(horas) or {}
+            lecturas = historial.get("lecturas", 0)
+            return {
+                "ahora_mismo": {
+                    "internet_arriba": actual.get("wan_arriba"),
+                    "sesiones_activas": actual.get("sesiones"),
+                    "usuarios_hotspot": actual.get("hotspot"),
+                    "perdida_paquetes": actual.get("perdida"),
+                    "problemas": actual.get("problemas") or [],
+                },
+                "historial": {
+                    "horas": horas,
+                    "lecturas": lecturas,
+                    "lecturas_ok": historial.get("ok", 0),
+                    "lecturas_con_problemas": historial.get("con_problemas", 0),
+                    "mensaje": (
+                        f"Sin lecturas registradas en las últimas {horas}h -- no confirmado, no asumir OK."
+                        if lecturas == 0 else None
+                    ),
+                },
             }
 
         elif name == "get_infra_devices":
