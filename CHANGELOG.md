@@ -4,6 +4,33 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.56.0 — 2026-09-17 — Auditoría del bot/cerebro/procesos: /silenciar y /version invisibles en el menú
+
+Revisión pedida por Juan Pablo de todo Shomer (bot, cerebro, procesos de
+fondo), no solo del chat libre -- con énfasis en confirmar que ningún fix
+rompe algo que ya funcionaba (suite completa corrida después de cada
+cambio, en cero casos bajó de verde).
+
+- `auto_tasks.py` (acciones automáticas reales: reinicios de servicios,
+  limpieza de disco, kill de zombies, auditoría de Protector): historial
+  real de ejecuciones revisado, mapeo TASK↔servicio correcto, sin hallazgos.
+- `brain.py` (cerebro): `aporta_algo` (filtro de qué interrumpe por
+  Telegram) y `_verificar_en_vivo` (re-chequeo real antes de concluir) están
+  bien pensados, sin hallazgos.
+- `incident_escalation.py` (quién recibe avisos y cuándo): flapping,
+  gracia, escalamiento a coordinador -- lógica correcta, sin hallazgos.
+- **Bug real encontrado en `bot.py`**: `/silenciar` y `/version` tienen
+  handler registrado y funcionan perfecto si se escriben, pero NUNCA
+  aparecían en el menú de comandos de Telegram (el autocompletado al
+  escribir "/") -- un técnico no tenía cómo descubrirlos sin que alguien se
+  lo dijera. Justo hoy se le pidió al chat libre que recomendara
+  `/silenciar` activamente (v1.51.0) -- inconsistente si el comando ni
+  aparece en el menú. Se agregan ambos, y se agrega una prueba que compara
+  el menú contra los comandos realmente registrados, para que esta clase de
+  desincronización se detecte sola en el futuro.
+
+3 pruebas nuevas. 263 pruebas pasan en total.
+
 ## 1.55.0 — 2026-09-17 — Usuarios del panel + Hunter dejó de sobre-afirmar amenazas
 
 Probando preguntas reales sobre inventario (Tracker), Hunter, Inframonitor
