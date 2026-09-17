@@ -4,6 +4,37 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.52.0 — 2026-09-16 — El conocimiento CompTIA no llegaba a preguntas sin marca
+
+Probando en vivo 3 preguntas armadas directo del contenido CompTIA real
+(263 conceptos de teoría + 173 reglas de diagnóstico en 45 dominios), 2 de
+3 funcionaron perfecto -- "la Bixolon marca sin papel con papel puesto" y
+"el datáfono Ingenico está lento sin error" trajeron exactamente la causa
+real del KB (sensor óptico incompatible / fallback silencioso a canal de
+respaldo). La tercera falló: "toda la red se puso lenta y no hay nada
+caído en el panel" -- el KB SÍ tiene la regla exacta para esto (dominio
+`switching`: "Toda la red se pone lenta de golpe sin ningún equipo
+reportado como caído" -> loop de red), pero nunca se le mostró al modelo.
+
+Causa real: `_matching_domains()` en `conocimiento_general.py` solo
+reconoce nombres de marca/equipo en el texto ("switch", "bixolon",
+"ingenico") -- una pregunta de síntoma sin ninguna marca no matcheaba
+ningún dominio. El chat, sin la regla real, improvisó con datos sueltos
+del panel y culpó a un AP que ya estaba offline por otra razón --
+contradiciendo la propia premisa de la pregunta ("no hay nada caído").
+
+Se agregó un segundo paso de matching (`_reglas_por_similitud_texto`):
+compara las palabras significativas de la pregunta contra el campo
+`patron` de cada regla (mismo patrón que `find_infra_devices_by_query` ya
+usa para resolver "impresora de recepción"), exige al menos 2 palabras en
+común para evitar ruido. Sigue siendo determinístico por palabra clave,
+nunca decidido por el LLM -- solo que ahora compara contra el texto libre
+completo, no una lista fija de marcas. Verificado en vivo: la misma
+pregunta ahora responde "loop de red (bucle)... revisa spanning tree y
+conexiones redundantes" en vez de culpar al AP.
+
+4 pruebas nuevas. 242 pruebas pasan en total.
+
 ## 1.51.0 — 2026-09-16 — Pruebas reales de chat libre: cerebro conectado + 2 rondas de tools
 
 Se probaron ~20 preguntas reales contra el chat (llamadas reales a OpenAI,

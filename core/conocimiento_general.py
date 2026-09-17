@@ -265,6 +265,56 @@ _DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _normalizar_texto(s: str) -> str:
+    """Sin acentos y en minúsculas -- igual que shomer_api.py, para que
+    "lenta"/"lentitud" o "caído"/"caido" no dependan de tildes exactas."""
+    import unicodedata
+    return unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+
+
+_PALABRAS_VACIAS_SINTOMA = frozenset({
+    "de", "del", "la", "el", "los", "las", "que", "con", "sin", "en", "un",
+    "una", "esta", "estan", "como", "pasa", "hay", "tiene", "todo", "toda",
+    "todos", "todas", "por", "para", "and", "the", "sera", "será", "que",
+    "no", "se", "puso", "momento", "otro", "algun", "algún", "reviso",
+})
+
+
+def _reglas_por_similitud_texto(texto: str, con: sqlite3.Connection,
+                                 excluir_ids: set[int], max_n: int) -> list[dict]:
+    """16 sep 2026: _matching_domains solo reconoce nombres de marca/equipo
+    ("switch", "bixolon", "ingenico") -- una pregunta sin marca como "toda
+    la red se puso lenta y no hay nada caído en el panel" no matcheaba
+    NINGÚN dominio, aunque existe una regla casi idéntica en 'switching'
+    ("Toda la red se pone lenta de golpe sin ningún equipo reportado como
+    caído -> loop de red"). Verificado en producción: esa pregunta exacta
+    hizo que el chat ignorara la regla real y culpara a un AP caído sin
+    relación, contradiciendo la propia premisa de la pregunta. Este
+    complemento matchea por PALABRAS del síntoma contra el campo `patron`
+    de cada regla, no solo por nombre de marca -- determinístico igual,
+    solo que compara contra el texto libre en vez de una lista fija de
+    keywords."""
+    q = _normalizar_texto(texto)
+    palabras_q = {p for p in q.split() if len(p) >= 4 and p not in _PALABRAS_VACIAS_SINTOMA}
+    if not palabras_q:
+        return []
+    candidatas = con.execute(
+        "SELECT * FROM conocimiento_general WHERE id NOT IN "
+        f"({','.join('?' * len(excluir_ids)) if excluir_ids else '-1'})",
+        tuple(excluir_ids),
+    ).fetchall()
+    puntuadas = []
+    for row in candidatas:
+        r = dict(row)
+        patron_norm = _normalizar_texto(r.get("patron", ""))
+        palabras_r = {p for p in patron_norm.split() if len(p) >= 4}
+        overlap = len(palabras_q & palabras_r)
+        if overlap >= 2:
+            puntuadas.append((overlap, r))
+    puntuadas.sort(key=lambda x: x[0], reverse=True)
+    return [r for _, r in puntuadas[:max_n]]
+
+
 def _matching_domains(entity_names: list[str], strict: bool = False) -> set[str]:
     """`strict=True` no aplica el fallback a 'metodologia' -- pensado para
     texto libre de chat (7 sep 2026), donde un saludo o pregunta no técnica
@@ -333,7 +383,12 @@ def registrar_refutacion(dominios: list[str]) -> int:
 def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int = 4,
                    strict: bool = False) -> tuple[list[dict], list[dict]]:
     """Reglas + teoría relevante para un grupo de entidades, por nombre.
-    Determinístico (coincidencia de palabra clave), nunca decidido por el LLM."""
+    Determinístico (coincidencia de palabra clave), nunca decidido por el LLM.
+
+    16 sep 2026: se agrega un segundo paso de matching por SÍNTOMO (palabras
+    del texto contra el campo `patron` de cada regla), porque el match por
+    dominio/marca se queda ciego ante preguntas sin nombre de equipo. Ver
+    _reglas_por_similitud_texto -- caso real que lo motivó."""
     dominios_match = _matching_domains(entity_names, strict=strict)
     con = sqlite3.connect(KNOWLEDGE_DB)
     con.row_factory = sqlite3.Row
@@ -347,6 +402,13 @@ def find_relevant(entity_names: list[str], max_reglas: int = 6, max_teoria: int 
             teoria.extend(dict(r) for r in con.execute(
                 "SELECT * FROM conocimiento_teoria WHERE dominio=? LIMIT 2", (d,)
             ).fetchall())
+        if len(reglas) < max_reglas:
+            texto = " | ".join((n or "") for n in entity_names)
+            ids_ya = {r["id"] for r in reglas}
+            extra = _reglas_por_similitud_texto(
+                texto, con, ids_ya, max_reglas - len(reglas)
+            )
+            reglas.extend(extra)
         return reglas[:max_reglas], teoria[:max_teoria]
     finally:
         con.close()
