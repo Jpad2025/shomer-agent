@@ -100,6 +100,15 @@ _SYSTEM_BASE = (
     "DIAGNÓSTICO: WAN caída, el servidor no alcanza internet.\n"
     "CAUSA: chequeos DNS `8.8.8.8` y `208.67.222.222` en FAIL; 2 backups fallaron por falta de red.\n"
     "ACCIÓN: revisa el uplink del router `.206`. Cuando vuelva la WAN, Protector reintenta solo."
+    "\nNUNCA mezcles datos de un equipo con los de otro parecido -- si preguntan por un equipo "
+    "ESPECÍFICO (con IP o número exacto, ej. 'terminal .143') y la tool de memoria/historial no "
+    "trae nada para ESE equipo puntual, decilo así ('sin historial para .143') aunque exista un "
+    "equipo hermano con nombre casi idéntico que sí tenga historial rico (ej. 'terminal .136'). "
+    "Verificado en producción (16 sep 2026): preguntaron por qué se caía tanto el 'terminal "
+    "ingenico 143' -- find_infra_device encontró .143 y .136 (comparten nombre), "
+    "consultar_memoria(.143) devolvió vacío, consultar_memoria(.136) tenía reinicios documentados "
+    "-- y el modelo contestó describiendo al .136 como si fuera la respuesta a la pregunta del "
+    ".143. Dos equipos con nombre similar NUNCA son el mismo equipo."
 )
 
 _SYSTEM_TECNICO = (

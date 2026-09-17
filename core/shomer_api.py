@@ -423,6 +423,38 @@ def get_recent_events(limit: int = 10) -> dict:
         return {"error": str(e)}
 
 
+def get_top_fallas(dias: int = 30, limit: int = 10) -> dict:
+    """Ranking real de qué equipo se ha caído MÁS veces, contando eventos
+    reales de status_events -- no confundir con chronic_tickets (que solo
+    dice si un problema sigue abierto, no cuántas veces pasó).
+
+    16 sep 2026: verificado en producción -- preguntar "cuál es el equipo
+    que más se ha caído" contestaba con el ticket crónico más VIEJO (más
+    días abierto), no el que más veces cayó. El peor real (Terminal
+    Ingenico .136, 40 caídas en 30 días) ni se mencionaba, porque no existía
+    ninguna tool que contara caídas -- solo tickets abiertos/cerrados."""
+    DB = "file:/storage/db/network_monitor.db?mode=ro&immutable=1"
+    try:
+        con = _sq.connect(DB, timeout=5, uri=True)
+        con.row_factory = _sq.Row
+        try:
+            rows = con.execute(
+                "SELECT name, ip, COUNT(*) AS caidas FROM status_events "
+                "WHERE status='offline' AND ts >= datetime('now', ?) "
+                "GROUP BY name, ip ORDER BY caidas DESC LIMIT ?",
+                (f"-{int(dias)} days", limit),
+            ).fetchall()
+            return {
+                "periodo_dias": dias,
+                "equipos": [dict(r) for r in rows],
+                "total": len(rows),
+            }
+        finally:
+            con.close()
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def get_server_logs(service: str = "guardian", lines: int = 30) -> dict:
     """Últimas N líneas del log de un servicio Shomer vía SSH al host."""
     import subprocess, shutil
@@ -971,19 +1003,30 @@ def find_infra_devices_by_query(query: str) -> list:
     no aparece literal en "IMP Recepción" (está abreviado a IMP), así que se
     parte la consulta en palabras significativas y alcanza con que UNA
     coincida -- "recepcion" sola ya es señal suficiente para no confundir
-    con la Bixolon."""
+    con la Bixolon.
+
+    16 sep 2026: con 2+ equipos que comparten una palabra ("Terminal pago
+    Ingenico .136" y "...143"), el match por "cualquier palabra coincide"
+    los devolvía en el orden crudo de get_infra_devices(), sin distinguir
+    cuál es más específico. Verificado en producción: preguntar por
+    "terminal ingenico 143" devolvía ambos y el modelo contestaba con datos
+    del .136 -- el número exacto que sí distingue a los equipos (143) se
+    perdía en el empate. Ahora se ordena por CANTIDAD de palabras que
+    coinciden, así el que además matchea "143" queda primero."""
     q = _normalizar_texto(query)
     if not q:
         return []
     palabras = [p for p in q.split() if len(p) >= 3 and p not in _PALABRAS_VACIAS]
     if not palabras:
         palabras = q.split()
-    out = []
+    puntuados = []
     for d in get_infra_devices():
         campo = _normalizar_texto(f"{d.get('name','')} {d.get('location','')}")
-        if any(p in campo for p in palabras):
-            out.append(d)
-    return out
+        score = sum(1 for p in palabras if p in campo)
+        if score > 0:
+            puntuados.append((score, d))
+    puntuados.sort(key=lambda x: x[0], reverse=True)
+    return [d for _, d in puntuados]
 
 
 def edit_infra_device(device_id: int, *, name: str = None,

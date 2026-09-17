@@ -537,6 +537,49 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_top_fallas",
+            "description": (
+                "16 sep 2026: ranking REAL de qué equipo se cayó más veces (cuenta eventos de "
+                "caída históricos). Usar SIEMPRE que pregunten 'cuál equipo falla más', 'el que "
+                "más se cae', 'el peor equipo del mes' o similar -- NO usar get_chronic_tickets "
+                "para esto, ese solo dice si un ticket sigue abierto, no cuántas veces cayó (son "
+                "cosas distintas: un ticket puede llevar 12 días abierto por UNA sola caída sin "
+                "resolver, mientras otro equipo cayó 40 veces y se recuperó solo cada vez)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dias": {
+                        "type": "integer",
+                        "description": "Ventana de días hacia atrás (default 30)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_chronic_tickets",
+            "description": (
+                "16 sep 2026: chronic_tickets nunca se exponía al chat -- es el registro real de "
+                "problemas RECURRENTES que el sistema ya está rastreando con recordatorios (no una "
+                "alerta puntual, es 'este equipo/IP sigue fallando y nadie lo ha cerrado'). Usar "
+                "SIEMPRE que pregunten 'qué problemas crónicos/recurrentes hay', 'qué sigue "
+                "pendiente', 'qué tickets están abiertos' o similar -- distinto de get_hunter_alerts "
+                "(bloqueos de seguridad) y get_cerebro_findings (análisis de causa puntual)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "consultar_memoria",
             "description": (
                 "Memoria operativa del técnico (/guardar y botones): soluciones previas, "
@@ -1135,6 +1178,40 @@ def execute(name: str, args: dict) -> Any:
                     for c in recientes
                 ],
             }
+
+        elif name == "get_top_fallas":
+            from core import shomer_api
+            dias = int(args.get("dias", 30))
+            r = shomer_api.get_top_fallas(dias=dias)
+            if "error" in r:
+                return r
+            if not r["equipos"]:
+                return {"total": 0, "mensaje": f"Sin caídas registradas en los últimos {dias} días."}
+            return r
+
+        elif name == "get_chronic_tickets":
+            from core import chronic_tickets
+            from datetime import datetime
+            abiertos = chronic_tickets.list_open()
+            if not abiertos:
+                return {"total": 0, "mensaje": "No hay problemas crónicos abiertos ahora mismo."}
+            items = []
+            for t in abiertos:
+                nombre = (t.get("entity_name") or "").lstrip("🧠 ").strip()
+                dias = None
+                try:
+                    abierto = datetime.strptime(t["opened_at"][:19], "%Y-%m-%d %H:%M:%S")
+                    dias = (datetime.now() - abierto).days
+                except Exception:
+                    pass
+                items.append({
+                    "equipo_o_grupo": nombre,
+                    "ip_principal": t.get("ip"),
+                    "detectado_por": t.get("fuente"),
+                    "abierto_desde": (t.get("opened_at") or "")[:16],
+                    "dias_abierto": dias,
+                })
+            return {"total": len(items), "tickets_abiertos": items}
 
         elif name == "consultar_memoria":
             import ipaddress

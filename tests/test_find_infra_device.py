@@ -57,3 +57,36 @@ def test_tool_find_infra_device_devuelve_el_formato_esperado(equipos):
     assert r["count"] == 1
     assert r["matches"][0]["ip"] == "192.168.0.240"
     assert r["matches"][0]["status"] == "online"
+
+
+_TERMINALES_INGENICO = [
+    {"ip": "192.168.0.136", "name": "Terminal pago Ingenico .136", "location": "Recepción", "status": "online"},
+    {"ip": "192.168.0.143", "name": "Terminal pago Ingenico .143", "location": "Recepción", "status": "offline"},
+]
+
+
+class TestOrdenPorEspecificidad:
+    """16 sep 2026: verificado en producción -- con 2 terminales Ingenico
+    que comparten nombre y ubicación, preguntar por "terminal ingenico 143"
+    devolvía ambos sin distinguir cuál es más específico, y el chat contestó
+    con datos del .136 (el que NO se preguntó). El número exacto (143) sí
+    aparece en la consulta -- debe pesar en el orden del resultado."""
+
+    @pytest.fixture()
+    def terminales(self, monkeypatch):
+        monkeypatch.setattr(shomer_api, "get_infra_devices", lambda: _TERMINALES_INGENICO)
+
+    def test_numero_exacto_pone_ese_equipo_primero(self, terminales):
+        r = shomer_api.find_infra_devices_by_query("terminal ingenico 143")
+        assert len(r) == 2
+        assert r[0]["ip"] == "192.168.0.143"
+
+    def test_sin_numero_siguen_apareciendo_ambos(self, terminales):
+        """Sin nada que desambigüe, ambos deben seguir devolviéndose --
+        no es tarea de esta función inventar cuál querían."""
+        r = shomer_api.find_infra_devices_by_query("terminal ingenico")
+        assert {d["ip"] for d in r} == {"192.168.0.136", "192.168.0.143"}
+
+    def test_tool_find_infra_device_trae_el_especifico_primero(self, terminales):
+        r = tools.execute("find_infra_device", {"query": "terminal ingenico 143"})
+        assert r["matches"][0]["ip"] == "192.168.0.143"

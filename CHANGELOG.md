@@ -4,6 +4,39 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.53.0 — 2026-09-16 — Investigación de fallas reales de Ópera: 2 tools nuevas + 2 bugs de identidad de equipo
+
+Se investigaron las fallas reales de Ópera (chronic_tickets, top ofensores
+de `status_events`, agente_skills) para armar preguntas de prueba con datos
+reales del hotel, no hipotéticos. Aparecieron 2 huecos y 2 bugs:
+
+- **`chronic_tickets` (14 tickets, 8 abiertos hoy) nunca se exponía al
+  chat** -- es el registro real de "este problema sigue sin resolver", con
+  recordatorios automáticos. Se agrega `get_chronic_tickets`.
+- **No existía ninguna forma de preguntar "qué equipo falla más"** con datos
+  reales -- el chat solo tenía `chronic_tickets` (antigüedad del ticket) y
+  lo confundió con frecuencia de caídas: preguntado "cuál es el equipo que
+  más se ha caído este mes" contestó con el ticket más VIEJO (un AP), ni
+  mencionó al peor real (Terminal Ingenico .136, 40 caídas/30 días). Se
+  agrega `get_top_fallas`, que sí cuenta caídas reales de `status_events`.
+  Verificado en vivo: ahora responde correctamente "Terminal Ingenico .136,
+  40 caídas".
+- **Bug de identidad de equipo (variante nueva del bug de la impresora de
+  recepción)**: con 2 terminales que comparten nombre (Ingenico .136 y
+  .143), `find_infra_devices_by_query` los devolvía sin ordenar -- "terminal
+  ingenico 143" no priorizaba al que además matchea el número exacto. Se
+  corrigió para ordenar por cantidad de palabras coincidentes.
+- **Segunda capa del mismo bug, en el prompt**: aun con el orden corregido,
+  el chat seguía contestando sobre el .136 al preguntar por el .143 --
+  `consultar_memoria(.143)` no tiene historial (nadie ha usado /guardar en
+  ese equipo), y el modelo rellenó con el historial rico del .136 en vez de
+  decir honestamente "sin historial para .143". Se agregó guardrail
+  explícito: nunca mezclar datos entre dos equipos con nombre parecido.
+  Verificado en vivo: ahora contesta "el .143 está online, sin historial de
+  incidentes registrado" -- correcto y honesto.
+
+9 pruebas nuevas. 251 pruebas pasan en total.
+
 ## 1.52.0 — 2026-09-16 — El conocimiento CompTIA no llegaba a preguntas sin marca
 
 Probando en vivo 3 preguntas armadas directo del contenido CompTIA real
