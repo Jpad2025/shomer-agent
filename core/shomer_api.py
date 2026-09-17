@@ -150,6 +150,43 @@ def get_hunter_alerts(limit: int = 10):
         "recent_blocks": (history.get("history") or [])[:limit],
     }
 
+def check_ip_hunter(ip: str) -> dict:
+    """Estado real de UNA IP puntual contra Hunter -- si está bloqueada AHORA
+    y su historial real de bloqueos/motivo, no la lista completa cruda.
+
+    17 sep 2026: verificado en producción -- preguntar "el hunter bloqueó la
+    8.8.8.8, es una amenaza real?" contestó "sí, amenaza real" con el mismo
+    nivel de certeza que un bloqueo confirmado, cuando: (a) esa IP NO está
+    bloqueada ahora mismo (se liberó sola hace días), y (b) el propio
+    registro real la clasifica como riesgo 'medio' con acción 'confirmar en
+    panel', no como amenaza confirmada. No existía ninguna tool para
+    consultar el historial real de UNA ip -- el modelo respondió sin datos
+    en vez de decir que no tenía forma de verificarlo."""
+    actual = _get(f"/remedies/check_blocked?ip={ip}") or {}
+    historial_completo = _get("/remedies/history?limit=1000") or {}
+    coincidencias = [
+        h for h in (historial_completo.get("history") or [])
+        if h.get("ip") == ip
+    ]
+    return {
+        "ip": ip,
+        "bloqueada_ahora": actual.get("blocked"),
+        "es_ip_externa": actual.get("external"),
+        "veces_bloqueada_historico": len(coincidencias),
+        "ultimos_bloqueos": coincidencias[:3],
+    }
+
+
+def get_panel_users() -> list:
+    """Usuarios reales con acceso al panel Shomer (login web), con su rol
+    (admin/operator). 17 sep 2026: nunca se exponía al chat -- "quién tiene
+    acceso al panel" no tenía forma de responderse con datos reales."""
+    data = _get("/auth/users")
+    if isinstance(data, dict):
+        return data.get("users", [])
+    return []
+
+
 def get_health():
     return _get("/health")
 

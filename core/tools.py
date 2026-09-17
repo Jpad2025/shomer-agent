@@ -541,6 +541,43 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "check_ip_hunter",
+            "description": (
+                "17 sep 2026: no existía forma de preguntar por UNA IP puntual contra Hunter. "
+                "Usar SIEMPRE que pregunten si una IP específica está/estuvo bloqueada, si un "
+                "bloqueo fue 'amenaza real' o falso positivo, o el historial de una IP concreta -- "
+                "NUNCA afirmes 'amenaza real' o 'falso positivo' de una IP sin llamar esto primero. "
+                "get_blocked_ips/get_hunter_alerts traen listas generales, no el historial de una "
+                "IP en particular."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ip": {"type": "string", "description": "La IP a consultar"},
+                },
+                "required": ["ip"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_panel_users",
+            "description": (
+                "17 sep 2026: nunca se exponía al chat. Usuarios reales con acceso al panel web "
+                "de Shomer (login), con su rol (admin puede crear/borrar usuarios y cambiar "
+                "config; operator solo opera lo diario). Usar cuando pregunten 'quién tiene "
+                "acceso al panel', 'cuántos usuarios hay', o para verificar si alguien en "
+                "particular ya tiene cuenta antes de pedir que le creen una. Esto es DISTINTO de "
+                "los usuarios de Windows/dominio (Tracker no expone eso todavía) y de quién "
+                "recibe mensajes de Telegram (eso es config del bot, no de este panel)."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_cerebro_findings",
             "description": (
                 "16 sep 2026: el chat libre no tenía forma de ver esto -- solo el comando "
@@ -1206,6 +1243,31 @@ def execute(name: str, args: dict) -> Any:
                 "incidentes": items,
                 "total":      len(items),
                 "mensaje":    f"Se encontraron {len(items)} incidente(s) previo(s)." + (f" Filtrado por IP {ip}." if ip else ""),
+            }
+
+        elif name == "check_ip_hunter":
+            import ipaddress
+            from core import shomer_api
+            ip = (args.get("ip") or "").strip()
+            if not ip:
+                return {"error": "IP requerida"}
+            try:
+                ipaddress.ip_address(ip)
+            except ValueError:
+                return {"error": "IP inválida"}
+            return shomer_api.check_ip_hunter(ip)
+
+        elif name == "get_panel_users":
+            from core import shomer_api
+            usuarios = shomer_api.get_panel_users()
+            if not usuarios:
+                return {"total": 0, "mensaje": "No se pudo consultar la lista de usuarios del panel."}
+            return {
+                "total": len(usuarios),
+                "usuarios": [
+                    {"usuario": u.get("username"), "rol": u.get("role")}
+                    for u in usuarios
+                ],
             }
 
         elif name == "get_cerebro_findings":

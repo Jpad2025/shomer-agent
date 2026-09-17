@@ -4,6 +4,32 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.55.0 — 2026-09-17 — Usuarios del panel + Hunter dejó de sobre-afirmar amenazas
+
+Probando preguntas reales sobre inventario (Tracker), Hunter, Inframonitor
+y usuarios del sistema:
+
+- **`/auth/users` del panel (quién tiene acceso, admin/root/tecnico1/mauricio)
+  nunca se exponía al chat.** Se agrega `get_panel_users` -- ahora "¿mauricio
+  ya tiene usuario en el panel?" se responde con el dato real (sí, rol
+  operator) en vez de no poder saberlo.
+- **Bug real de sobre-confianza en Hunter**: preguntado si el bloqueo de
+  `8.8.8.8` (Google DNS) fue una amenaza real, el chat contestó "sí, amenaza
+  real" -- pero esa IP NI SIQUIERA está bloqueada ahora mismo (se liberó
+  sola hace días) y el propio registro la clasifica como riesgo "medio,
+  confirmar en panel", no como amenaza confirmada. No existía ninguna tool
+  para consultar el historial real de UNA ip puntual -- `get_blocked_ips`/
+  `get_hunter_alerts` solo traen listas generales. Se agrega
+  `check_ip_hunter(ip)`, con instrucción explícita de nunca afirmar "amenaza
+  real"/"falso positivo" sin consultarla primero. Verificado en vivo: ahora
+  responde "riesgo medio... confirma en el panel" -- honesto, no
+  sobre-confiado.
+- Inventario (distribución real de sistemas operativos, 45/69 equipos
+  "desconocido") e Inframonitor (conteo de NVR/cámaras) verificados en vivo,
+  ambos correctos sin cambios de código.
+
+6 pruebas nuevas. 260 pruebas pasan en total.
+
 ## 1.54.0 — 2026-09-16 — El chat nunca veía el internet REAL de los huéspedes
 
 `get_wan_hotel()`/`get_wan_hotel_historial()` existen hace tiempo en
