@@ -4,6 +4,26 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.58.0 — 2026-09-18 — Preguntas vagas y equipos inexistentes
+
+Prueba con 6 mensajes: 4 vagos sin ningún equipo/síntoma ("está mal", "no
+funciona", "hay un problema", "algo anda raro por acá") y 2 sobre equipos
+que NO existen en Ópera ("switch del piso 10", "impresora de la suite
+presidencial").
+
+- Los 2 casos de equipo inexistente salieron bien desde el primer intento:
+  el chat dice honestamente que no encuentra ese equipo, sin inventar uno.
+- Los 4 vagos salieron **inconsistentes entre sí**: "no funciona" y "hay un
+  problema" contestaron en lenguaje natural pidiendo detalles (bien);
+  "está mal" devolvió un DIAGNÓSTICO/CAUSA/ACCIÓN completo diciendo en el
+  fondo "no sé qué está mal" -- forzado y robótico para un mensaje sin
+  ningún dato. Se agrega regla explícita: mensaje vago sin equipo/síntoma
+  concreto → una línea natural pidiendo qué falla, sin forzar el formato;
+  mensaje vago que SÍ pide un pantallazo general ("cómo va todo", "algo
+  anda raro") → sigue usando el formato con el snapshot real, como
+  cualquier consulta de estado. Verificado en vivo: los 3 casos ahora se
+  comportan de forma consistente y predecible.
+
 ## 1.57.0 — 2026-09-17 — Primera prueba real de conversación de varios turnos (no solo preguntas sueltas)
 
 Toda la auditoría de esta semana probó preguntas AISLADAS (un mensaje, una
