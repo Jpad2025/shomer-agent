@@ -4,6 +4,29 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.57.0 — 2026-09-17 — Primera prueba real de conversación de varios turnos (no solo preguntas sueltas)
+
+Toda la auditoría de esta semana probó preguntas AISLADAS (un mensaje, una
+respuesta, usuario nuevo cada vez) -- nunca una conversación real de varios
+turnos con la MISMA persona, que es como de verdad se usa el chat. Se probó
+por primera vez usando la memoria real (`_memory.get_history`) tal como la
+usa `bot.py`.
+
+- Turno 1: "¿por qué se cae tanto el switch Amalfi?" -- respuesta correcta.
+- Turno 2: "¿esa causa la confirmaste o es una suposición?" -- el modelo
+  **ignoró la pregunta** y devolvió un DIAGNÓSTICO/CAUSA/ACCIÓN nuevo,
+  re-consultando el equipo desde cero como si fuera una pregunta distinta,
+  sin decir si la causa anterior salió de una tool real o fue inferencia.
+
+Causa: el formato DIAGNÓSTICO/CAUSA/ACCIÓN se aplicaba a toda pregunta
+técnica, sin distinguir un pedido de diagnóstico nuevo de una pregunta
+sobre la respuesta ANTERIOR del propio chat. Se agrega guardrail: ante
+preguntas tipo "¿confirmaste eso?", "¿estás seguro?", "¿de dónde salió ese
+dato?", contestar directo en lenguaje natural sobre la respuesta previa, sin
+forzar el formato ni re-disparar tools como si fuera consulta nueva.
+Verificado en vivo: la misma conversación ahora responde la pregunta real
+("la causa fue confirmada al verificar que...") en vez de ignorarla.
+
 ## 1.56.0 — 2026-09-17 — Auditoría del bot/cerebro/procesos: /silenciar y /version invisibles en el menú
 
 Revisión pedida por Juan Pablo de todo Shomer (bot, cerebro, procesos de
