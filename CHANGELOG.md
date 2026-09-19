@@ -4,6 +4,39 @@ Formato libre, una entrada por release. La versión activa vive en `VERSION`
 (consultable también con `/version` en el bot). Fecha = cuando se desplegó
 en Ópera (maestro), no cuando se escribió el código.
 
+## 1.59.0 — 2026-09-18 — Incidente real: el bot completo quedó mudo por 30 min, y el respaldo Groq tampoco funcionaba
+
+Juan Pablo reportó en vivo un mensaje real sin respuesta de IA ("modo
+local") con aviso de "cuota de Groq detenida". Investigado de punta a
+punta contra los logs reales:
+
+- **Causa raíz #1 (error de configuración propio, 17 sep 2026):** al subir
+  `OPENAI_LIMIT_DAILY` a 150,000 como límite "óptimo", no se ajustó un
+  segundo límite GLOBAL separado (`TOKEN_LIMIT_DAILY`, sin definir en
+  `.env`, default de código 120,000 -- más bajo que el que se acababa de
+  subir). Al pasar de 120,000 tokens reales en el día, ese límite global
+  paraba el bot COMPLETO por 30 minutos (ni OpenAI ni Groq), en vez de
+  solo pasar a Groq con elegancia. Se agrega `TOKEN_LIMIT_DAILY=250000`
+  explícito en `.env`, con margen real sobre el de OpenAI.
+- **Causa raíz #2 (bug de capacidad real, no de configuración):** con el
+  bot ya en fallback a Groq, la llamada real falló con 413 (tokens por
+  minuto) -- el esquema de las 35 tools (~4,400 tokens) + el prompt del
+  sistema + las reglas de comportamiento (~3,400 más) ya ocupan casi los
+  8,000 TPM del tier gratis de Groq, sin dejar espacio para la
+  conversación real. Quitar el parámetro `tools` de la llamada no bastó
+  por sí solo: el propio texto del prompt (lleno de nombres literales de
+  tools, necesarios para guiar tool-calling real con OpenAI) hacía que el
+  modelo de Groq igual intentara emitir una llamada a tool sin que se le
+  diera ningún esquema -- rechazada con 400 (tool_use_failed). Se agrega
+  `_SYSTEM_SIN_TOOLS`, un prompt corto sin nombres de tools para este modo,
+  y `chat(usar_tools=False)` por default -- Groq como respaldo de
+  emergencia responde desde el snapshot ya inyectado, sin tool-calling
+  completo: menos preciso para datos en vivo puntuales, pero real en vez
+  de fallar. Verificado en vivo de punta a punta con el mismo camino real
+  que usa `llm_router`.
+
+4 pruebas nuevas. 267 pruebas pasan en total.
+
 ## 1.58.0 — 2026-09-18 — Preguntas vagas y equipos inexistentes
 
 Prueba con 6 mensajes: 4 vagos sin ningún equipo/síntoma ("está mal", "no

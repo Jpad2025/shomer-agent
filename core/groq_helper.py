@@ -145,6 +145,25 @@ _SYSTEM_DEVELOPER = (
     "Si no está en el contexto, dilo — no inventes."
 )
 
+# 18 sep 2026: _SYSTEM_BASE menciona nombres literales de tools por todos
+# lados ("get_system_status", "find_infra_device", etc. -- necesario para
+# guiar a un modelo CON tool-calling real). Verificado en producción:
+# usando ese mismo prompt en una llamada SIN tools (Groq de emergencia,
+# ver chat(usar_tools=False)), el modelo (`openai/gpt-oss-20b`) igual
+# intenta emitir una llamada a tool -- Groq rechaza la respuesta mal
+# formada (400 tool_use_failed) y el chat termina en modo local sin
+# ninguna respuesta real. Este prompt corto y sin nombres de tools evita
+# el patrón que dispara la alucinación -- responde solo desde el
+# contexto/snapshot ya inyectado por llm_router.
+_SYSTEM_SIN_TOOLS = (
+    "Eres Shomer, agente de soporte IT del appliance de red del cliente. "
+    "Hablas con un técnico de campo. Responde SIEMPRE en español técnico directo, "
+    "máximo 4 líneas, basándote SOLO en el contexto/snapshot que se te da en este mensaje. "
+    "No tenés forma de consultar nada en vivo en este modo -- si te falta un dato, decilo "
+    "así y sugerí un comando directo (/salud, /diagnostico <ip>, /alertas, /equipos). "
+    "Nunca inventes datos que no estén en el contexto. Sin relleno, sin disculpas."
+)
+
 
 _RULES_EMBEDDED_FALLBACK = """
 IDENTIDAD: Shomer Sentinel, precisión sin inventar.
@@ -573,14 +592,45 @@ def explain(
     return out
 
 
-def chat(history: list[dict], level: str = "tecnico") -> str:
+def chat(history: list[dict], level: str = "tecnico", usar_tools: bool = False) -> str:
+    """18 sep 2026: el tier gratis de Groq tiene un límite de 8,000 tokens por
+    minuto -- el esquema de las 35 tools ya pesa ~4,400 tokens, más el
+    system prompt y las reglas de comportamiento (~3,400 más) dejan
+    prácticamente sin espacio para la conversación real. Verificado en
+    producción: una pregunta real de Juan Pablo mandó 10,766 tokens y Groq
+    la rechazó (413 tokens_per_minute) -- el chat, que ya estaba en
+    fallback por tope de OpenAI, terminó en "modo local" total sin ninguna
+    respuesta de IA. `usar_tools=False` por default: Groq responde desde el
+    snapshot/contexto ya inyectado por llm_router, sin pedir tool-calling
+    completo -- menos preciso para preguntas que necesitan un dato en vivo,
+    pero real en vez de fallar. Pasar usar_tools=True solo si se sabe que
+    el tier de Groq de ese sitio soporta más de 8k TPM."""
     import json
     from core import tools as _tools
 
     effective_dev = level == "developer" and not technician_only_mode()
+    max_tokens = 700 if effective_dev else 550
+
+    if not usar_tools:
+        budget_msg = _check_budget_before_call()
+        if budget_msg:
+            return budget_msg
+        # Prompt corto sin nombres de tools -- ver docstring de _SYSTEM_SIN_TOOLS.
+        messages: list[dict] = [{"role": "system", "content": _SYSTEM_SIN_TOOLS}]
+        messages.extend(history)
+        resp = None
+        try:
+            resp = _get_client().chat.completions.create(
+                model=GROQ_MODEL, messages=messages, max_tokens=max_tokens, temperature=0.1,
+            )
+            _register_usage(resp, endpoint="chat")
+            return (resp.choices[0].message.content or "").strip() or \
+                "Sin datos suficientes en el contexto. Usa /salud o /diagnostico <ip>."
+        except Exception as e:
+            log.warning("Groq chat() sin tools error: %s — %s", type(e).__name__, e)
+            return "⚠️ No pude procesar la consulta. Usa /salud · /alertas · /diagnostico <ip>."
 
     system = _SYSTEM_DEVELOPER if effective_dev else _SYSTEM_TECNICO
-    max_tokens = 700 if effective_dev else 550
 
     messages: list[dict] = [{"role": "system", "content": system}]
     messages.append({"role": "system", "content": "Reglas de comportamiento:\n" + _behavior_rules_text()})
@@ -629,12 +679,12 @@ def chat(history: list[dict], level: str = "tecnico") -> str:
         return budget_msg
 
     try:
-        resp = _do_create(messages, use_tools=True)
+        resp = _do_create(messages, use_tools=usar_tools)
     except RateLimitError:
         log.warning("Groq rate-limit en chat() — reintentando")
         time.sleep(4)
         try:
-            resp = _do_create(messages, use_tools=True)
+            resp = _do_create(messages, use_tools=usar_tools)
         except RateLimitError:
             from core import maintenance as _mnt
 
@@ -659,7 +709,7 @@ def chat(history: list[dict], level: str = "tecnico") -> str:
             log.warning("Groq sobrecargado (%s) en chat() — reintentando en 6s", e.status_code)
             time.sleep(6)
             try:
-                resp = _do_create(messages, use_tools=True)
+                resp = _do_create(messages, use_tools=usar_tools)
                 _register_usage(resp, endpoint="chat")
                 choice = resp.choices[0]
                 if choice.finish_reason != "tool_calls":

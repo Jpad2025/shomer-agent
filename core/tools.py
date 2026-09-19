@@ -310,14 +310,12 @@ TOOLS = [
         "function": {
             "name": "get_internet_huespedes",
             "description": (
-                "16 sep 2026: nunca se exponía al chat -- mide el internet REAL de los "
-                "huéspedes, desde el gateway/router del hotel (no desde el servidor Shomer). "
-                "Usar SIEMPRE que pregunten 'cómo está el internet hoy/de los huéspedes/del "
-                "hotel', no get_wan_status para eso -- esa es la conexión del servidor, una cosa "
-                "distinta (el servidor puede navegar bien mientras el hotel real está caído, y "
-                "viceversa). Trae estado actual (sesiones activas, pérdida de paquetes) y un "
-                "resumen de las últimas horas -- 'lecturas: 0' en el historial significa que "
-                "nadie midió en ese período, no que todo estuviera bien; decirlo así, no asumir OK."
+                "Internet REAL de los huéspedes, medido desde el gateway/router del hotel (no "
+                "desde el servidor Shomer). Usar SIEMPRE para 'cómo está el internet hoy/de los "
+                "huéspedes/del hotel' -- no usar get_wan_status para eso (esa es la conexión del "
+                "servidor, distinta: puede navegar bien con el hotel caído, y viceversa). Trae "
+                "estado actual (sesiones, pérdida de paquetes) y resumen de últimas horas -- "
+                "'lecturas: 0' significa que nadie midió, no que todo estuvo bien."
             ),
             "parameters": {
                 "type": "object",
@@ -543,12 +541,11 @@ TOOLS = [
         "function": {
             "name": "check_ip_hunter",
             "description": (
-                "17 sep 2026: no existía forma de preguntar por UNA IP puntual contra Hunter. "
-                "Usar SIEMPRE que pregunten si una IP específica está/estuvo bloqueada, si un "
-                "bloqueo fue 'amenaza real' o falso positivo, o el historial de una IP concreta -- "
-                "NUNCA afirmes 'amenaza real' o 'falso positivo' de una IP sin llamar esto primero. "
-                "get_blocked_ips/get_hunter_alerts traen listas generales, no el historial de una "
-                "IP en particular."
+                "Historial real de UNA IP puntual contra Hunter: si está/estuvo bloqueada y por "
+                "qué. Usar SIEMPRE que pregunten si una IP específica está/estuvo bloqueada, o si "
+                "un bloqueo fue 'amenaza real' o falso positivo -- NUNCA afirmar eso de una IP sin "
+                "llamar esto primero. get_blocked_ips/get_hunter_alerts traen listas generales, no "
+                "el historial de una IP en particular."
             ),
             "parameters": {
                 "type": "object",
@@ -564,13 +561,11 @@ TOOLS = [
         "function": {
             "name": "get_panel_users",
             "description": (
-                "17 sep 2026: nunca se exponía al chat. Usuarios reales con acceso al panel web "
-                "de Shomer (login), con su rol (admin puede crear/borrar usuarios y cambiar "
-                "config; operator solo opera lo diario). Usar cuando pregunten 'quién tiene "
-                "acceso al panel', 'cuántos usuarios hay', o para verificar si alguien en "
-                "particular ya tiene cuenta antes de pedir que le creen una. Esto es DISTINTO de "
-                "los usuarios de Windows/dominio (Tracker no expone eso todavía) y de quién "
-                "recibe mensajes de Telegram (eso es config del bot, no de este panel)."
+                "Usuarios reales con acceso al panel web de Shomer (login), con su rol (admin "
+                "puede crear/borrar usuarios y cambiar config; operator solo opera lo diario). "
+                "Usar para 'quién tiene acceso al panel', 'cuántos usuarios hay', o para "
+                "verificar si alguien ya tiene cuenta antes de pedir que se la creen. Distinto de "
+                "usuarios de Windows/dominio y de quién recibe mensajes de Telegram."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -580,12 +575,11 @@ TOOLS = [
         "function": {
             "name": "get_cerebro_findings",
             "description": (
-                "16 sep 2026: el chat libre no tenía forma de ver esto -- solo el comando "
-                "/cerebro podía. Últimos hallazgos correlacionados del cerebro (causa común "
-                "entre varios equipos, con recomendación respaldada). Usar SIEMPRE que "
-                "pregunten por qué varios equipos fallaron juntos, o algo tipo 'qué está "
-                "pasando en la red' -- el cerebro ya cruzó Guardian+Infra+Hunter+Protector "
-                "y puede tener la causa que get_infra_devices por sí solo no ve."
+                "Últimos hallazgos correlacionados del cerebro (causa común entre varios "
+                "equipos, con recomendación respaldada). Usar SIEMPRE que pregunten por qué "
+                "varios equipos fallaron juntos, o 'qué está pasando en la red' -- el cerebro "
+                "ya cruzó Guardian+Infra+Hunter+Protector y puede tener la causa que "
+                "get_infra_devices por sí solo no ve."
             ),
             "parameters": {
                 "type": "object",
@@ -604,12 +598,11 @@ TOOLS = [
         "function": {
             "name": "get_top_fallas",
             "description": (
-                "16 sep 2026: ranking REAL de qué equipo se cayó más veces (cuenta eventos de "
-                "caída históricos). Usar SIEMPRE que pregunten 'cuál equipo falla más', 'el que "
-                "más se cae', 'el peor equipo del mes' o similar -- NO usar get_chronic_tickets "
-                "para esto, ese solo dice si un ticket sigue abierto, no cuántas veces cayó (son "
-                "cosas distintas: un ticket puede llevar 12 días abierto por UNA sola caída sin "
-                "resolver, mientras otro equipo cayó 40 veces y se recuperó solo cada vez)."
+                "Ranking REAL de qué equipo se cayó más veces (cuenta eventos de caída "
+                "históricos). Usar para 'cuál equipo falla más', 'el que más se cae' -- NO usar "
+                "get_chronic_tickets para esto: ese solo dice si un ticket sigue abierto, no "
+                "cuántas veces cayó (un ticket puede llevar 12 días abierto por UNA sola caída "
+                "sin resolver, mientras otro equipo cayó 40 veces y se recuperó solo cada vez)."
             ),
             "parameters": {
                 "type": "object",
@@ -628,11 +621,9 @@ TOOLS = [
         "function": {
             "name": "get_chronic_tickets",
             "description": (
-                "16 sep 2026: chronic_tickets nunca se exponía al chat -- es el registro real de "
-                "problemas RECURRENTES que el sistema ya está rastreando con recordatorios (no una "
-                "alerta puntual, es 'este equipo/IP sigue fallando y nadie lo ha cerrado'). Usar "
-                "SIEMPRE que pregunten 'qué problemas crónicos/recurrentes hay', 'qué sigue "
-                "pendiente', 'qué tickets están abiertos' o similar -- distinto de get_hunter_alerts "
+                "Registro real de problemas RECURRENTES aún sin resolver, con recordatorio "
+                "activo ('este equipo/IP sigue fallando y nadie lo ha cerrado'). Usar para 'qué "
+                "problemas crónicos hay', 'qué sigue pendiente' -- distinto de get_hunter_alerts "
                 "(bloqueos de seguridad) y get_cerebro_findings (análisis de causa puntual)."
             ),
             "parameters": {
